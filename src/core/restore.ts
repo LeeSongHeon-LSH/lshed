@@ -1,0 +1,101 @@
+import { promises as fs } from "node:fs";
+import path from "node:path";
+import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS } from "./context.js";
+import { readState, writeState, LSHED_DIR } from "../state.js";
+import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
+import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
+
+export interface RestoreOptions { dryRun?: boolean; backup?: boolean }
+export interface RestoreResult {
+  profile: string;
+  placed: string[];
+  removed: string[];
+  backedUp: string[];
+  backupDir: string | null;
+}
+
+/**
+ * 프로필 적용 (§3.5).
+ *  - 새 계획에 있는 항목은 복사한다 (기존 파일이 다르면 백업 후).
+ *  - 이전 관리 집합에 있었지만 새 계획에 없는 항목만 제거한다 (백업 후).
+ *  - 관리 집합에 없는 사용자 파일은 건드리지 않는다.
+ */
+export async function restore(ctx: Ctx, profileArg: string | undefined, opts: RestoreOptions = {}): Promise<RestoreResult> {
+  const backup = opts.backup ?? true;
+  const state = await readState(ctx.adapter);
+  const profile = profileArg ?? state?.profile;
+  if (!profile) throw new Error("프로필을 지정하세요: lshed restore <profile>  (이전에 적용한 프로필이 없습니다)");
+
+  const m = await loadManifest(ctx);
+  const plan = planProfile(ctx, m, profile);
+  for (const it of plan) {
+    if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: 창고에 파일이 없습니다: ${it.src}`);
+  }
+
+  const instrRel = ctx.adapter.instructionsFileName();
+  const fragments = plan.filter((p) => p.category === INSTRUCTIONS);
+  const newManaged = new Set(plan.map((p) => p.rel));
+  if (fragments.length) newManaged.add(instrRel);
+  const oldManaged = new Set(state?.managed ?? []);
+  const toRemove = [...oldManaged].filter((r) => !newManaged.has(r)).sort();
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupDir = path.join(ctx.adapter.root, LSHED_DIR, "backups", stamp);
+  const backedUp: string[] = [];
+  const placed: string[] = [];
+
+  async function backUp(rel: string) {
+    const from = abs(ctx, rel);
+    if (!(await exists(from))) return;
+    backedUp.push(rel);
+    if (opts.dryRun || !backup) return;
+    await copyTree(from, path.join(backupDir, ...rel.split("/")));
+  }
+
+  // 1) 제거 대상 (이전 프로필에만 있던 것)
+  for (const rel of toRemove) {
+    ctx.log(`  - ${rel}`);
+    await backUp(rel);
+    if (!opts.dryRun) await removeTree(abs(ctx, rel));
+  }
+
+  // 2) 배치
+  for (const it of plan) {
+    const target = abs(ctx, it.rel);
+    const same = (await hashTree(target)) === (await hashTree(it.src));
+    const mark = same ? "=" : (await exists(target)) ? "~" : "+";
+    ctx.log(`  ${mark} ${it.rel}`);
+    if (same) { placed.push(it.rel); continue; }
+    if (await exists(target)) await backUp(it.rel); // 관리 여부와 무관하게 내용이 다르면 백업
+    if (!opts.dryRun) await copyTree(it.src, target);
+    placed.push(it.rel);
+  }
+
+  // 3) 지침 파일
+  const instrPath = instructionsFile(ctx);
+  if (fragments.length) {
+    const contents: { id: string; content: string }[] = [];
+    for (const f of fragments) contents.push({ id: f.id, content: await fs.readFile(f.src, "utf8") });
+    const rendered = renderInstructions(ctx, profile, contents);
+    const existing = (await exists(instrPath)) ? await fs.readFile(instrPath, "utf8") : null;
+    if (existing !== rendered) {
+      const mark = existing === null ? "+" : "~";
+      ctx.log(`  ${mark} ${instrRel}${existing !== null && !isGenerated(existing) ? "  (기존 파일은 lshed 생성물이 아님 → 백업)" : ""}`);
+      if (existing !== null) await backUp(instrRel);
+      if (!opts.dryRun) await fs.writeFile(instrPath, rendered);
+    } else {
+      ctx.log(`  = ${instrRel}`);
+    }
+    placed.push(instrRel);
+  }
+
+  if (opts.dryRun) {
+    ctx.log(`\n(dry-run) 변경 없음. 배치 ${placed.length}, 제거 ${toRemove.length}, 백업 예정 ${backedUp.length}`);
+    return { profile, placed, removed: toRemove, backedUp, backupDir: null };
+  }
+
+  await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString() });
+  const bdir = backup && backedUp.length ? backupDir : null;
+  ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
+  return { profile, placed, removed: toRemove, backedUp, backupDir: bdir };
+}

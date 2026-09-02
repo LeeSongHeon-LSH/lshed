@@ -1,0 +1,59 @@
+{
+  "name": "lshed",
+  "version": "0.1.0",
+  "description": "Portable harness environment manager for coding agents",
+  "license": "MIT",
+  "author": "leesongheon <leesongheon1209@gmail.com>",
+  "type": "module",
+  "bin": {
+    "lshed": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "keywords": [
+    "claude-code",
+    "harness",
+    "dotfiles",
+    "skills",
+    "mcp",
+    "cli"
+  ],
+  "dependencies": {
+    "commander": "^15.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeeSongHeon-LSH/lshed.git"
+  },
+  "homepage": "https://github.com/LeeSongHeon-LSH/lshed#readme",
+  "bugs": {
+    "url": "https://github.com/LeeSongHeon-LSH/lshed/issues"
+  }
+}

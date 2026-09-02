@@ -10,6 +10,9 @@ import { status, formatStatus } from "./core/status.js";
 import { diff, formatDiff } from "./core/diff.js";
 import { save } from "./core/save.js";
 import { readState } from "./state.js";
+import { loadManifest } from "./core/context.js";
+import { packagesOf } from "./manifest.js";
+import { updatePackages, reportPending } from "./core/packages.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -61,9 +64,33 @@ program
   .description("apply a profile (defaults to the last applied one)")
   .option("--dry-run", "print what would change without touching anything")
   .option("--no-backup", "skip backing up files that get replaced or removed")
-  .action((profile: string | undefined, o: { dryRun?: boolean; backup: boolean }) => run(async () => {
+  .option("--yes", "run package install commands (they are shown, not run, without this)")
+  .action((profile: string | undefined, o: { dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
-    await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup });
+    await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes });
+  }));
+
+program
+  .command("update [ids...]")
+  .description("pull packages to their latest upstream and refresh lshed.lock")
+  .option("--dry-run", "show what would be updated")
+  .option("--yes", "run package install commands after updating")
+  .action((ids: string[], o: { dryRun?: boolean; yes?: boolean }) => run(async () => {
+    const ctx = await ctxFor("other");
+    const state = await readState(ctx.adapter);
+    if (!state) throw new Error("적용된 프로필이 없습니다. 먼저 'lshed restore <profile>' 을 실행하세요.");
+    const m = await loadManifest(ctx);
+    let pkgs = packagesOf(m, state.profile);
+    if (ids.length) {
+      pkgs = ids.map((id) => {
+        const p = m.packages.find((x) => x.id === id);
+        if (!p) throw new Error(`패키지 "${id}" 가 없습니다`);
+        return p;
+      });
+    }
+    if (!pkgs.length) { console.log("갱신할 패키지가 없습니다."); return; }
+    const res = await updatePackages(ctx, pkgs, { dryRun: o.dryRun, yes: o.yes });
+    reportPending(ctx, res);
   }));
 
 program
@@ -72,7 +99,7 @@ program
   .action(() => run(async () => {
     const adapter = adapterFromOpts();
     const state = await readState(adapter);
-    if (!state) { console.log(formatStatus({ state: null, drifted: [] }, adapter.root)); return; }
+    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [] }, adapter.root)); return; }
     const ctx = await ctxFor("other");
     console.log(formatStatus(await status(ctx), adapter.root));
   }));

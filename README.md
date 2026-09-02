@@ -76,25 +76,56 @@ profiles:
     instructions: [base]
 ```
 
-- `source` accepts `file:<path relative to the shed>`. `github:owner/repo@ref` is parsed and reserved for a future release; using it today is an error, not silent misbehaviour.
+- Component `source` accepts `file:<path relative to the shed>`. Package `source` accepts `github:owner/repo@ref` or `git:<url>#ref`.
 - Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`.
 - `ignore:` at the top level adds to the built-in list of things never copied: `node_modules`, `.git`, `__pycache__`, `.venv`, cache directories, `*.log`. Build output like `dist/` is not ignored by default, since some skills ship it. Add it yourself if your parts rebuild from source.
 - Instructions are not merged. `restore` writes a `CLAUDE.md` that `@`-imports each fragment in order, so a fragment edit shows up without re-running anything. Your original `CLAUDE.md` is backed up the first time.
 
-### Leaving things out
+## Three kinds of things
 
-Not everything under `~/.claude/skills` belongs in a shed. A toolkit that ships its own installer and 400 MB of build output is better reinstalled than carried:
+A real `~/.claude` mixes three kinds of content, and they need different handling:
+
+| Kind | Example | What lshed does |
+|---|---|---|
+| **Authored** | a skill you wrote, your `CLAUDE.md` | copies it into the shed |
+| **Installed** | a toolkit you `git clone`d, a plugin | records source + commit; `restore` clones it back |
+| **Generated** | stub skills an installer wrote for you | skips them; they return when the installer runs |
+
+`init` sorts this out for you. A directory with a `.git` and a remote becomes a **package**. A skill whose symlink points inside a package is treated as generated and skipped. Everything else is authored and copied.
+
+```yaml
+packages:
+  - id: gstack
+    source: github:garrytan/gstack@main   # git:<url>#ref for other hosts
+    into: skills/gstack                   # where it lives under ~/.claude
+    install: ./setup                      # optional; run after clone, only with --yes
+
+profiles:
+  default:
+    packages: [gstack]
+    skills: [add-drivers, domain-modeling]
+```
+
+`lshed.lock` pins each package to a commit, so a fresh machine gets the same version you had. `lshed update` moves it forward.
+
+Rules that keep this safe:
+
+- A package that is already present is never touched by `restore`. Your local checkout is yours.
+- `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`.
+- Packages are not part of the managed set. Switching profiles never deletes a clone.
+- Installers sometimes create aliases without symlinks, which `init` cannot tell from authored skills. Leave those out with `--exclude`:
 
 ```bash
-lshed init --shed ~/harness --exclude gstack
+lshed init --shed ~/harness --exclude _gstack-command connect-chrome
 ```
 
 ## Commands
 
 ```
 lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
-lshed restore [profile] [--dry-run] [--no-backup]
-lshed status                                    applied profile, managed paths, drift
+lshed restore [profile] [--dry-run] [--no-backup] [--yes]
+lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh lshed.lock
+lshed status                                    applied profile, managed paths, drift, packages
 lshed diff                                      files that differ between local and shed
 lshed save [ids...]                             copy local edits back into the shed
 ```
@@ -103,6 +134,7 @@ Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed r
 
 ### What `restore` does
 
+0. Clones any package in the profile that is missing, at the commit in `lshed.lock`.
 1. Removes paths that the **previous** profile placed and the new one doesn't need.
 2. Copies every part of the new profile into place.
 3. Regenerates the instructions file.
@@ -111,7 +143,7 @@ Anything it overwrites or removes is backed up first under `~/.claude/lshed/back
 
 ### Ownership
 
-The shed is the source of truth. `save` copies local edits back for `file:` parts only. Remote parts will be read-only and refreshed with `update` once remote sources land.
+The shed is the source of truth for authored parts: `save` copies local edits back for `file:` components. Packages are owned by their upstream: `update` pulls them, `save` ignores them.
 
 ## Where things live
 
@@ -133,7 +165,8 @@ The shed is the source of truth. `save` copies local edits back for `file:` part
 
 - MCP servers and secrets. Planned: the manifest names the keys, values are injected locally, nothing secret enters the shed.
 - `settings.json` merging (hooks, permissions).
-- Remote sources (`github:`), lock file, `update`, `list --unused`, `prune`.
+- `list --unused`, `remove`, `prune`, `sync`.
+- Plugins installed through Claude Code's marketplace. They are packages too; recording them is next.
 - Windows and macOS have not been tested. The code avoids platform-specific paths, but treat 0.1 as Linux/WSL.
 
 ## Troubleshooting

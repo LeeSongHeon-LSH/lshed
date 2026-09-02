@@ -70,3 +70,31 @@ describe("ignore", () => {
     expect(m.ignore).toEqual(["dist"]);
   });
 });
+
+describe("packages", () => {
+  const P = `
+version: 1
+packages:
+  - id: gstack
+    source: github:garrytan/gstack@main
+    into: skills/gstack
+    install: ./setup
+profiles:
+  default:
+    packages: [gstack]
+`;
+  it("정상", () => {
+    const m = parseManifest(P);
+    expect(m.packages[0].install).toBe("./setup");
+    expect(m.profiles.default.packages).toEqual(["gstack"]);
+  });
+  it("file: 출처는 패키지가 될 수 없다", () => {
+    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "file:./x"))).toThrow(/github: 또는 git:/);
+  });
+  it("프로필이 없는 패키지를 참조", () => {
+    expect(() => parseManifest(P.replace("packages: [gstack]", "packages: [nope]"))).toThrow(/"nope" 는 packages 에 없음/);
+  });
+  it("packages 는 어댑터 카테고리 검사에 걸리지 않는다", () => {
+    expect(() => parseManifest(P, ["skills"])).not.toThrow();
+  });
+});

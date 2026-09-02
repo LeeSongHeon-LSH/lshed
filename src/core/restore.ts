@@ -4,8 +4,10 @@ import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, 
 import { readState, writeState, LSHED_DIR } from "../state.js";
 import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
+import { ensurePackages, reportPending } from "./packages.js";
+import { packagesOf } from "../manifest.js";
 
-export interface RestoreOptions { dryRun?: boolean; backup?: boolean }
+export interface RestoreOptions { dryRun?: boolean; backup?: boolean; yes?: boolean }
 export interface RestoreResult {
   profile: string;
   placed: string[];
@@ -31,6 +33,9 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   for (const it of plan) {
     if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: 창고에 파일이 없습니다: ${it.src}`);
   }
+
+  // 0) 패키지 먼저. 생성물이 있어야 하는 부품이 있을 수 있다. 관리 집합에는 넣지 않는다.
+  const pkgRes = await ensurePackages(ctx, packagesOf(m, profile), { dryRun: opts.dryRun, yes: opts.yes });
 
   const instrRel = ctx.adapter.instructionsFileName();
   const fragments = plan.filter((p) => p.category === INSTRUCTIONS);
@@ -91,11 +96,13 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
 
   if (opts.dryRun) {
     ctx.log(`\n(dry-run) 변경 없음. 배치 ${placed.length}, 제거 ${toRemove.length}, 백업 예정 ${backedUp.length}`);
+    reportPending(ctx, pkgRes);
     return { profile, placed, removed: toRemove, backedUp, backupDir: null };
   }
 
   await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString() });
   const bdir = backup && backedUp.length ? backupDir : null;
-  ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
+  ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.cloned.length ? `, 패키지 clone ${pkgRes.cloned.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
+  reportPending(ctx, pkgRes);
   return { profile, placed, removed: toRemove, backedUp, backupDir: bdir };
 }

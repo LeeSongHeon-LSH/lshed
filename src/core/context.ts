@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { AgentAdapter, Category } from "../adapters/types.js";
-import { parseManifest, type Manifest, type Component, effectiveSource } from "../manifest.js";
+import { parseManifest, type Manifest, type Component, effectiveSource, PACKAGES } from "../manifest.js";
 import { resolveSource } from "../resolvers/file.js";
 import { LSHED_DIR } from "../state.js";
 import { DEFAULT_IGNORE } from "../ignore.js";
@@ -81,6 +81,7 @@ export function planProfile(ctx: Ctx, m: Manifest, profile: string): PlanItem[] 
   }
   const items: PlanItem[] = [];
   for (const [category, ids] of Object.entries(p)) {
+    if (category === PACKAGES) continue;
     const cat = category === INSTRUCTIONS ? INSTRUCTIONS : ctx.adapter.categories().find((k) => k.name === category);
     if (!cat) throw new Error(`프로필 "${profile}": 어댑터 ${ctx.adapter.name} 은 카테고리 "${category}" 를 모릅니다`);
     for (const id of ids) {

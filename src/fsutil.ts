@@ -63,9 +63,14 @@ export async function copyTree(src: string, dst: string, ignore: Ignore = DEFAUL
   await fs.cp(src, dst, {
     recursive: true,
     dereference: true,
-    filter: (from) => {
+    filter: async (from) => {
       const rel = path.relative(srcRoot, path.resolve(from)).split(path.sep).join("/");
-      return !isIgnored(rel, ignore);
+      if (isIgnored(rel, ignore)) return false;
+      // 끊어진 심볼릭 링크는 건너뛴다 (dereference 가 ENOENT 로 터지지 않게)
+      try {
+        if ((await fs.lstat(from)).isSymbolicLink()) await fs.stat(from);
+      } catch { return false; }
+      return true;
     },
   });
 }

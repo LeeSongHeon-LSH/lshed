@@ -5,8 +5,11 @@ import { stringifyManifest, type Manifest } from "../manifest.js";
 import { copyTree, exists } from "../fsutil.js";
 import { writeState } from "../state.js";
 import { isGenerated, instructionsFile } from "./instructions.js";
+import { detectPackages, detectGenerated } from "./packages.js";
+import { writeLock } from "../lock.js";
+import { PACKAGES } from "../manifest.js";
 
-export interface InitResult { manifest: Manifest; copied: number; skipped: string[] }
+export interface InitResult { manifest: Manifest; copied: number; skipped: string[]; packages: string[]; generated: string[] }
 
 /**
  * 현재 환경 스캔 → 창고에 복사 + lshed.yaml 생성 + state 기록.
@@ -19,10 +22,21 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
   if (await exists(manifestPath(ctx))) {
     throw new Error(`이미 초기화된 창고입니다: ${manifestPath(ctx)}\n  다른 환경의 설정을 이 창고로 가져오려면 'lshed restore' 후 'lshed save' 를 쓰세요.`);
   }
-  const found = await ctx.adapter.scan();
-  const m: Manifest = { version: 1, agent: ctx.adapter.name, components: {}, profiles: { [profileName]: {} } };
+  const all = await ctx.adapter.scan();
+  const m: Manifest = { version: 1, agent: ctx.adapter.name, components: {}, packages: [], profiles: { [profileName]: {} } };
   const isExcluded = (cat: string, id: string) =>
     exclude.some((e) => e === id || e === `${cat}/${id}`);
+
+  // 세 종류로 가른다 (§3.7): 설치한 것 / 설치가 만들어낸 것 / 내가 쓴 것
+  const pkgs = (await detectPackages(ctx, all)).filter((p) => !isExcluded("", p.id));
+  const generated = await detectGenerated(all, pkgs);
+  const found = all.filter((f) => !pkgs.some((p) => p.path === f.path) && !generated.has(`${f.category}/${f.id}`));
+  for (const p of pkgs) {
+    m.packages.push({ id: p.id, source: p.source, into: p.into });
+    ctx.log(`  ≡ package ${p.id}  ${p.source} @${p.commit.slice(0, 7)}  (참조만 기록)`);
+  }
+  if (pkgs.length) m.profiles[profileName][PACKAGES] = pkgs.map((p) => p.id);
+  for (const [key, by] of generated) ctx.log(`  · ${key}  (${by} 가 생성한 것 → 건너뜀)`);
   const managed: string[] = [];
   let copied = 0;
 
@@ -66,8 +80,21 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
   }
 
   await fs.mkdir(ctx.shed, { recursive: true });
-  await fs.writeFile(manifestPath(ctx), `# lshed manifest — edit freely. Reference: https://github.com/LeeSongHeon-LSH/lshed\n` + stringifyManifest(m));
+  let yamlText = stringifyManifest(m);
+  // 설치 명령은 자동으로 알 수 없다. 사용자가 채울 자리를 남긴다.
+  for (const p of pkgs) {
+    yamlText = yamlText.replace(`    into: ${p.into}\n`, `    into: ${p.into}\n    # install: ./setup    # ← 복원 후 실행할 명령이 있으면 채우세요 (--yes 로 실행)\n`);
+  }
+  await fs.writeFile(manifestPath(ctx), `# lshed manifest — edit freely. Reference: https://github.com/LeeSongHeon-LSH/lshed\n` + yamlText);
+  if (pkgs.length) {
+    await writeLock(ctx.shed, { version: 1, packages: Object.fromEntries(pkgs.map((p) => [p.id, { source: p.source, commit: p.commit }])) });
+  }
   await writeState(ctx.adapter, { profile: profileName, shed: ctx.shed, managed, appliedAt: new Date().toISOString() });
-  ctx.log(`\n${MANIFEST_FILE} 생성: ${manifestPath(ctx)}  (부품 ${copied}개${skipped.length ? `, 제외 ${skipped.length}개` : ""}, 프로필 "${profileName}")`);
-  return { manifest: m, copied, skipped };
+  const parts = [`부품 ${copied}개`];
+  if (pkgs.length) parts.push(`패키지 ${pkgs.length}개`);
+  if (generated.size) parts.push(`생성물 ${generated.size}개 건너뜀`);
+  if (skipped.length) parts.push(`제외 ${skipped.length}개`);
+  ctx.log(`\n${MANIFEST_FILE} 생성: ${manifestPath(ctx)}  (${parts.join(", ")}, 프로필 "${profileName}")`);
+  if (pkgs.length) ctx.log(`패키지의 설치 명령(install:)은 lshed.yaml 에서 직접 채우세요.`);
+  return { manifest: m, copied, skipped, packages: pkgs.map((p) => p.id), generated: [...generated.keys()] };
 }

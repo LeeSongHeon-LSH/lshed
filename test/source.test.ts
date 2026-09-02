@@ -25,3 +25,19 @@ describe("parseSource", () => {
     }
   });
 });
+
+describe("git: 스킴과 원격 URL 변환", () => {
+  it("git: URL#ref", () => {
+    expect(parseSource("git:https://gitlab.com/a/b.git#main")).toEqual({ scheme: "git", url: "https://gitlab.com/a/b.git", ref: "main" });
+    expect(parseSource("git:file:///tmp/repo")).toEqual({ scheme: "git", url: "file:///tmp/repo", ref: undefined });
+    expect(formatSource(parseSource("git:ssh://x/y#v1"))).toBe("git:ssh://x/y#v1");
+  });
+  it("GitHub 원격은 github: 로 줄인다", async () => {
+    const { sourceFromRemote, cloneTarget } = await import("../src/source.js");
+    expect(sourceFromRemote("https://github.com/garrytan/gstack.git", "main")).toBe("github:garrytan/gstack@main");
+    expect(sourceFromRemote("git@github.com:garrytan/gstack.git")).toBe("github:garrytan/gstack");
+    expect(sourceFromRemote("https://gitlab.com/a/b.git", "dev")).toBe("git:https://gitlab.com/a/b.git#dev");
+    expect(cloneTarget(parseSource("github:a/b@v1"))).toEqual({ url: "https://github.com/a/b.git", ref: "v1" });
+    expect(() => cloneTarget(parseSource("file:./x"))).toThrow();
+  });
+});

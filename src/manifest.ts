@@ -17,6 +17,8 @@ const ProfileSchema = z.record(z.string(), z.array(z.string()));
 export const ManifestSchema = z.object({
   version: z.literal(1),
   agent: z.string().default("claude-code"),
+  /** 창고에 담지 않을 이름들. 기본값(DEFAULT_IGNORE)에 더해진다. */
+  ignore: z.array(z.string()).optional(),
   components: ComponentsSchema.default({}),
   profiles: z.record(z.string(), ProfileSchema).default({}),
 });

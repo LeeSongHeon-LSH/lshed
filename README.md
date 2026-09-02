@@ -78,12 +78,21 @@ profiles:
 
 - `source` accepts `file:<path relative to the shed>`. `github:owner/repo@ref` is parsed and reserved for a future release; using it today is an error, not silent misbehaviour.
 - Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`.
+- `ignore:` at the top level adds to the built-in list of things never copied: `node_modules`, `.git`, `__pycache__`, `.venv`, cache directories, `*.log`. Build output like `dist/` is not ignored by default, since some skills ship it. Add it yourself if your parts rebuild from source.
 - Instructions are not merged. `restore` writes a `CLAUDE.md` that `@`-imports each fragment in order, so a fragment edit shows up without re-running anything. Your original `CLAUDE.md` is backed up the first time.
+
+### Leaving things out
+
+Not everything under `~/.claude/skills` belongs in a shed. A toolkit that ships its own installer and 400 MB of build output is better reinstalled than carried:
+
+```bash
+lshed init --shed ~/harness --exclude gstack
+```
 
 ## Commands
 
 ```
-lshed init [--shed <dir>] [--profile <name>]   scan the current environment into a shed
+lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
 lshed restore [profile] [--dry-run] [--no-backup]
 lshed status                                    applied profile, managed paths, drift
 lshed diff                                      files that differ between local and shed

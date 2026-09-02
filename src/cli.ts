@@ -48,10 +48,11 @@ program
   .command("init")
   .description("scan the current environment into a shed and write lshed.yaml")
   .option("--profile <name>", "name of the initial profile", "default")
-  .action((o: { profile: string }) => run(async () => {
+  .option("--exclude <id...>", "components to leave out (id or category/id)")
+  .action((o: { profile: string; exclude?: string[] }) => run(async () => {
     const ctx = await ctxFor("init");
     console.log(`스캔: ${ctx.adapter.root}  →  창고: ${ctx.shed}`);
-    await init(ctx, { profile: o.profile });
+    await init(ctx, { profile: o.profile, exclude: o.exclude });
     console.log(`\n다음: 창고를 git 으로 관리하세요.  cd ${ctx.shed} && git init`);
   }));
 

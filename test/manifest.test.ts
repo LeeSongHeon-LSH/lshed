@@ -53,3 +53,20 @@ describe("parseManifest", () => {
     expect(parseManifest(stringifyManifest(m))).toEqual(m);
   });
 });
+
+describe("ignore", () => {
+  it("경로의 어느 구간이든 걸리면 무시", async () => {
+    const { isIgnored, DEFAULT_IGNORE } = await import("../src/ignore.js");
+    expect(isIgnored("node_modules/x/y.js", DEFAULT_IGNORE)).toBe(true);
+    expect(isIgnored("a/.git/config", DEFAULT_IGNORE)).toBe(true);
+    expect(isIgnored("a/b.log", DEFAULT_IGNORE)).toBe(true);
+    expect(isIgnored("src/index.ts", DEFAULT_IGNORE)).toBe(false);
+    expect(isIgnored("dist/bundle.js", DEFAULT_IGNORE)).toBe(false); // dist 는 기본 무시 대상이 아니다
+    expect(isIgnored("dist/bundle.js", [...DEFAULT_IGNORE, "dist"])).toBe(true);
+    expect(isIgnored("", DEFAULT_IGNORE)).toBe(false);
+  });
+  it("매니페스트의 ignore 는 선택 항목", () => {
+    const m = parseManifest("version: 1\nignore: [dist]\n");
+    expect(m.ignore).toEqual(["dist"]);
+  });
+});

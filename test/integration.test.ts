@@ -149,3 +149,45 @@ describe("diff / save / status", () => {
     expect(await save(ctx, ["agents/alpha"])).toEqual([]);
   });
 });
+
+describe("ignore / symlink (실환경에서 발견된 문제)", () => {
+  it("node_modules 와 .git 은 창고에 담기지 않는다", async () => {
+    await w(path.join(root, "skills/heavy/SKILL.md"), "h");
+    await w(path.join(root, "skills/heavy/node_modules/dep/index.js"), "junk");
+    await w(path.join(root, "skills/heavy/.git/config"), "junk");
+    await w(path.join(root, "skills/heavy/src/a.ts"), "keep");
+    await init(ctx);
+    expect(await listFiles(path.join(shed, "skills/heavy"), [])).toEqual(["SKILL.md", "src/a.ts"]);
+  });
+
+  it("심볼릭 링크로 걸린 스킬도 잡고 내용으로 복사한다", async () => {
+    const outside = path.join(tmp, "elsewhere/linked");
+    await w(path.join(outside, "SKILL.md"), "linked content");
+    await fs.symlink(outside, path.join(root, "skills/linked"));
+    const { manifest } = await init(ctx);
+    expect(manifest.components.skills.map((c) => c.id)).toContain("linked");
+    const copied = path.join(shed, "skills/linked");
+    expect((await fs.lstat(copied)).isSymbolicLink()).toBe(false);
+    expect(await r(path.join(copied, "SKILL.md"))).toBe("linked content");
+  });
+
+  it("끊어진 링크는 건너뛴다", async () => {
+    await fs.symlink(path.join(tmp, "gone"), path.join(root, "skills/broken"));
+    const { manifest } = await init(ctx);
+    expect(manifest.components.skills.map((c) => c.id)).not.toContain("broken");
+  });
+
+  it("--exclude 로 무거운 부품을 통째로 뺀다", async () => {
+    const res = await init(ctx, { exclude: ["beta"] });
+    expect(res.skipped).toEqual(["skills/beta"]);
+    expect(res.manifest.components.skills.map((c) => c.id)).toEqual(["alpha"]);
+    expect(await exists(path.join(shed, "skills/beta"))).toBe(false);
+  });
+
+  it("ignore 는 diff 에도 적용된다", async () => {
+    await init(ctx);
+    await restore(ctx, "default");
+    await w(path.join(root, "skills/alpha/node_modules/x.js"), "junk");
+    expect(await diff(ctx)).toEqual([]);
+  });
+});

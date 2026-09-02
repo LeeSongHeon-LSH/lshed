@@ -1,4 +1,4 @@
-import { type Ctx, loadManifest, planProfile, abs, type PlanItem } from "./context.js";
+import { type Ctx, loadManifest, planProfile, abs, type PlanItem, ignoreOf } from "./context.js";
 import { readState } from "../state.js";
 import { diffTrees, type FileChange } from "../fsutil.js";
 
@@ -11,7 +11,7 @@ export async function diff(ctx: Ctx): Promise<ComponentDiff[]> {
   const m = await loadManifest(ctx);
   const out: ComponentDiff[] = [];
   for (const item of planProfile(ctx, m, state.profile)) {
-    const changes = await diffTrees(abs(ctx, item.rel), item.src);
+    const changes = await diffTrees(abs(ctx, item.rel), item.src, ignoreOf(ctx));
     if (changes.length) out.push({ item, changes });
   }
   return out;

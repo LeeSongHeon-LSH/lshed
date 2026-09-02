@@ -4,11 +4,14 @@ import type { AgentAdapter, Category } from "../adapters/types.js";
 import { parseManifest, type Manifest, type Component, effectiveSource } from "../manifest.js";
 import { resolveSource } from "../resolvers/file.js";
 import { LSHED_DIR } from "../state.js";
+import { DEFAULT_IGNORE } from "../ignore.js";
 
 export interface Ctx {
   adapter: AgentAdapter;
   shed: string;
   log: (line: string) => void;
+  /** 창고에 담지 않을 이름들. loadManifest 가 매니페스트 값으로 채운다. */
+  ignore?: readonly string[];
 }
 
 export const MANIFEST_FILE = "lshed.yaml";
@@ -31,7 +34,13 @@ export async function loadManifest(ctx: Ctx): Promise<Manifest> {
   } catch {
     throw new Error(`창고에 ${MANIFEST_FILE} 이 없습니다: ${ctx.shed}\n  먼저 'lshed init --shed ${ctx.shed}' 를 실행하세요.`);
   }
-  return parseManifest(text, knownCategories(ctx.adapter));
+  const m = parseManifest(text, knownCategories(ctx.adapter));
+  ctx.ignore = [...DEFAULT_IGNORE, ...(m.ignore ?? [])];
+  return m;
+}
+
+export function ignoreOf(ctx: Ctx): readonly string[] {
+  return ctx.ignore ?? DEFAULT_IGNORE;
 }
 
 /** 카테고리 하나의 부품이 로컬(어댑터 루트)에서 차지하는 상대 경로 */

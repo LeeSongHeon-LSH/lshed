@@ -1,6 +1,6 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS } from "./context.js";
+import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf } from "./context.js";
 import { readState, writeState, LSHED_DIR } from "../state.js";
 import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
@@ -49,7 +49,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     if (!(await exists(from))) return;
     backedUp.push(rel);
     if (opts.dryRun || !backup) return;
-    await copyTree(from, path.join(backupDir, ...rel.split("/")));
+    await copyTree(from, path.join(backupDir, ...rel.split("/")), ignoreOf(ctx));
   }
 
   // 1) 제거 대상 (이전 프로필에만 있던 것)
@@ -62,12 +62,12 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   // 2) 배치
   for (const it of plan) {
     const target = abs(ctx, it.rel);
-    const same = (await hashTree(target)) === (await hashTree(it.src));
+    const same = (await hashTree(target, ignoreOf(ctx))) === (await hashTree(it.src, ignoreOf(ctx)));
     const mark = same ? "=" : (await exists(target)) ? "~" : "+";
     ctx.log(`  ${mark} ${it.rel}`);
     if (same) { placed.push(it.rel); continue; }
     if (await exists(target)) await backUp(it.rel); // 관리 여부와 무관하게 내용이 다르면 백업
-    if (!opts.dryRun) await copyTree(it.src, target);
+    if (!opts.dryRun) await copyTree(it.src, target, ignoreOf(ctx));
     placed.push(it.rel);
   }
 

@@ -42,10 +42,18 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       }
       for (const e of entries) {
         if (e.name.startsWith(".")) continue;
-        if (cat.kind === "dir" && e.isDirectory()) {
-          out.push({ category: cat.name, id: e.name, path: path.join(dir, e.name) });
-        } else if (cat.kind === "file" && e.isFile() && e.name.endsWith(".md")) {
-          out.push({ category: cat.name, id: e.name.slice(0, -3), path: path.join(dir, e.name) });
+        const full = path.join(dir, e.name);
+        // 심볼릭 링크로 걸린 부품도 잡아야 하므로 Dirent 대신 stat 으로 판정한다
+        let st: import("node:fs").Stats;
+        try {
+          st = await fs.stat(full);
+        } catch {
+          continue; // 끊어진 링크
+        }
+        if (cat.kind === "dir" && st.isDirectory()) {
+          out.push({ category: cat.name, id: e.name, path: full });
+        } else if (cat.kind === "file" && st.isFile() && e.name.endsWith(".md")) {
+          out.push({ category: cat.name, id: e.name.slice(0, -3), path: full });
         }
       }
     }

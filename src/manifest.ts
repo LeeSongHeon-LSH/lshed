@@ -101,7 +101,11 @@ export function effectiveSource(category: string, c: Component, kind: "dir" | "f
 }
 
 export function stringifyManifest(m: Manifest): string {
-  return YAML.stringify(m, { lineWidth: 0 });
+  // 빈 목록은 쓰지 않는다. 사용자가 손으로 고치는 파일이라 잡음을 줄인다.
+  const out: Record<string, unknown> = { ...m };
+  if (!m.packages.length) delete out.packages;
+  if (!m.ignore?.length) delete out.ignore;
+  return YAML.stringify(out, { lineWidth: 0 });
 }
 
 /** 프로필이 요구하는 패키지 목록 */

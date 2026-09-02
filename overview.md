@@ -3,7 +3,7 @@
 > **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13)
 > **프로젝트명**: `lshed` (읽기: 엘셰드 / *el-shed*)
 > **성격**: 오픈소스 CLI 도구 / 개인 취미 프로젝트로 시작
-> **상태**: v0.2.0 구현 완료(패키지·락·update), 실환경 적용 완료. 발행 대기
+> **상태**: v0.2.1 구현 완료(패키지·락·update·list/remove/prune), 실환경 적용·새 기기 복원 검증 완료. npm 발행 대기
 > **이름 확보**: npm `lshed@0.0.0` 선점 완료 · `which lshed` 충돌 없음 · GitHub `lshed` 저장소는 미생성
 > **배경 기록**(비용·수익·연구 연결·폐기 대안): `notes/background.md`
 
@@ -423,9 +423,10 @@ v0.1  최소 동작 — 본인이 매일 쓸 수 있는 수준
 
 v0.2  남이 쓸 수 있는 수준
    ✓ packages (github:/git: 출처, lshed.lock, update, install --yes)  ← 0.2.0
+   ✓ list --unused / remove / prune                                    ← 0.2.1
    - MCP (시크릿은 키 이름만)
    - 플러그인을 packages 로 (어댑터 제공 설치기)
-   - list --unused / remove / prune / sync
+   - sync
 
 v0.3
    - settings.json 병합 (hooks, permissions)
@@ -503,7 +504,9 @@ v0.3
 - [x] 0.1.1 도그푸딩 수정 (무시 목록·심볼릭 링크) — 2026-09-02
 - [x] 0.2.0 패키지·락·update — 2026-09-02
 - [x] 실환경 재적용: 부품 6개 + 패키지 1개, 창고 192KB
-- [ ] npm `lshed@0.2.0` 발행
+- [x] 새 기기 시뮬레이션: 빈 루트 + 실제 창고 → 부품 6개 배치, gstack 락 커밋 clone, install 은 표시만 (10.7초)
+- [x] 0.2.1 list / remove / prune — 2026-09-02
+- [ ] npm `lshed@0.2.1` 발행
 
 ---
 

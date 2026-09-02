@@ -128,7 +128,12 @@ lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh l
 lshed status                                    applied profile, managed paths, drift, packages
 lshed diff                                      files that differ between local and shed
 lshed save [ids...]                             copy local edits back into the shed
+lshed list [--unused]                           what is in the shed, and which profiles use it
+lshed remove <key>                              drop a component or package from the shed
+lshed prune [--yes]                             drop everything no profile uses
 ```
+
+`remove` and `prune` delete from the shed without a backup. The shed is meant to live in git; commit before you prune. Both refuse to touch anything a profile still lists, so the way to retire a part is to take it out of the profiles first.
 
 Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed remembers it), `--root <dir>` (agent config root, default `~/.claude`).
 
@@ -165,7 +170,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 - MCP servers and secrets. Planned: the manifest names the keys, values are injected locally, nothing secret enters the shed.
 - `settings.json` merging (hooks, permissions).
-- `list --unused`, `remove`, `prune`, `sync`.
+- `sync` (a git pull/push wrapper). Use git in the shed directly for now.
 - Plugins installed through Claude Code's marketplace. They are packages too; recording them is next.
 - Windows and macOS have not been tested. The code avoids platform-specific paths, but treat 0.1 as Linux/WSL.
 

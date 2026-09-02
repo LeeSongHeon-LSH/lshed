@@ -13,6 +13,8 @@ import { readState } from "./state.js";
 import { loadManifest } from "./core/context.js";
 import { packagesOf } from "./manifest.js";
 import { updatePackages, reportPending } from "./core/packages.js";
+import { listRows, formatRows } from "./core/list.js";
+import { remove, prune } from "./core/remove.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -118,6 +120,34 @@ program
   .action((ids: string[]) => run(async () => {
     const ctx = await ctxFor("other");
     await save(ctx, ids);
+  }));
+
+program
+  .command("list")
+  .description("everything in the shed and which profiles use it")
+  .option("--unused", "only things no profile uses")
+  .action((o: { unused?: boolean }) => run(async () => {
+    const ctx = await ctxFor("other");
+    const m = await loadManifest(ctx);
+    const rows = listRows(m).filter((r) => !o.unused || !r.usedBy.length);
+    console.log(o.unused && !rows.length ? "미사용 항목이 없습니다." : formatRows(rows, m));
+  }));
+
+program
+  .command("remove <key>")
+  .description("delete a component or package from the shed (refused while a profile uses it)")
+  .action((key: string) => run(async () => {
+    const ctx = await ctxFor("other");
+    await remove(ctx, key);
+  }));
+
+program
+  .command("prune")
+  .description("remove everything no profile uses")
+  .option("--yes", "actually delete; without it, just list")
+  .action((o: { yes?: boolean }) => run(async () => {
+    const ctx = await ctxFor("other");
+    await prune(ctx, { yes: o.yes });
   }));
 
 program

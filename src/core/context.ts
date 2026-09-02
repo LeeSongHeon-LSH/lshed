@@ -1,5 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import type { Installer } from "../installers/types.js";
+import { gitInstaller } from "../installers/git.js";
+import { parseSource } from "../source.js";
 import type { AgentAdapter, Category } from "../adapters/types.js";
 import { parseManifest, type Manifest, type Component, effectiveSource, PACKAGES } from "../manifest.js";
 import { resolveSource } from "../resolvers/file.js";
@@ -10,8 +14,31 @@ export interface Ctx {
   adapter: AgentAdapter;
   shed: string;
   log: (line: string) => void;
+  /** 외부 명령 실행 (설치기용). 테스트에서 가짜로 바꾼다. 출력은 터미널로 흘린다. */
+  exec: (cmd: string, args: string[], cwd?: string) => Promise<void>;
   /** 창고에 담지 않을 이름들. loadManifest 가 매니페스트 값으로 채운다. */
   ignore?: readonly string[];
+}
+
+/** 기본 exec: 자식 프로세스, stdio 상속 */
+export function spawnExec(cmd: string, args: string[], cwd?: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { cwd, stdio: "inherit" });
+    p.on("error", reject);
+    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} 가 ${code} 로 끝났습니다`))));
+  });
+}
+
+export function installersFor(ctx: Ctx): Installer[] {
+  return [gitInstaller, ...ctx.adapter.installers()].sort((a, b) => a.priority - b.priority);
+}
+
+export function installerFor(ctx: Ctx, source: string): Installer {
+  const s = parseSource(source);
+  const scheme = s.scheme === "other" ? s.name : s.scheme;
+  const inst = installersFor(ctx).find((i) => i.schemes.includes(scheme));
+  if (!inst) throw new Error(`"${source}": 스킴 ${scheme} 을 다룰 설치기가 없습니다`);
+  return inst;
 }
 
 export const MANIFEST_FILE = "lshed.yaml";
@@ -34,7 +61,7 @@ export async function loadManifest(ctx: Ctx): Promise<Manifest> {
   } catch {
     throw new Error(`창고에 ${MANIFEST_FILE} 이 없습니다: ${ctx.shed}\n  먼저 'lshed init --shed ${ctx.shed}' 를 실행하세요.`);
   }
-  const m = parseManifest(text, knownCategories(ctx.adapter));
+  const m = parseManifest(text, knownCategories(ctx.adapter), installersFor(ctx).flatMap((i) => [...i.schemes]));
   ctx.ignore = [...DEFAULT_IGNORE, ...(m.ignore ?? [])];
   return m;
 }

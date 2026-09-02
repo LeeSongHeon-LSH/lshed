@@ -3,7 +3,7 @@
 > **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13)
 > **프로젝트명**: `lshed` (읽기: 엘셰드 / *el-shed*)
 > **성격**: 오픈소스 CLI 도구 / 개인 취미 프로젝트로 시작
-> **상태**: v0.2.1 구현 완료(패키지·락·update·list/remove/prune), 실환경 적용·새 기기 복원 검증 완료. npm 발행 대기
+> **상태**: v0.3.0 구현 완료(패키지·락·update·list/remove/prune·플러그인 설치기), 실환경 적용·새 기기 복원 검증 완료. npm 발행 대기
 > **이름 확보**: npm `lshed@0.0.0` 선점 완료 · `which lshed` 충돌 없음 · GitHub `lshed` 저장소는 미생성
 > **배경 기록**(비용·수익·연구 연결·폐기 대안): `notes/background.md`
 
@@ -403,10 +403,23 @@ Claude Code는 계속 새 개념(plugins, subagents 등)을 추가한다.
 Claude Code의 사용자 레벨 MCP는 `~/.claude.json`에 다른 상태값(machineID, 세션 기록 등)과 함께 있다.
 이 파일을 통째로 덮어쓰면 안 된다. `mcpServers` 키만 병합하거나 `claude mcp add` CLI를 호출한다. v0.2 설계 과제.
 
-### 7.5 플러그인 — 패키지의 한 종류
+### 7.5 플러그인 — 패키지의 한 종류 (v0.3 구현)
 
-Claude Code 플러그인은 §3.7의 "설치한 것"이다. 다만 clone이 아니라 `claude plugin install`로 설치되므로
-`packages` 틀은 같되 설치 방법을 어댑터가 제공해야 한다. v0.2.x 과제.
+Claude Code 플러그인은 §3.7의 "설치한 것"이다. clone이 아니라 `claude plugin install`로 설치되므로
+**설치기(installer) 인터페이스**를 두고 어댑터가 자기 설치기를 제공한다.
+
+```
+Installer { schemes, priority, detect, status, install, update }
+├── git              core      github: / git:            priority 0
+├── claude-marketplace  어댑터  claude-marketplace:<owner/repo>   10
+└── claude-plugin       어댑터  claude-plugin:<name>@<marketplace> 20
+```
+
+- 설치 순서는 priority. 마켓플레이스가 플러그인보다 먼저다.
+- 플러그인은 버전 고정이 안 된다. 락은 "실제 설치된 것"을 적고, 다르면 status가 알린다.
+- 플러그인 설치는 에이전트 자신의 패키지 관리자이므로 `--yes` 없이 실행한다. `--yes`는 `-y`로 넘어간다.
+- 프로젝트 범위 플러그인은 그 프로젝트의 몫이라 기록하지 않는다(§1.3).
+- 이 사용자 환경에서는 exa·notion 플러그인이 MCP 서버를 실어 온다. 손으로 넣은 MCP는 여전히 미지원.
 
 ---
 
@@ -424,8 +437,8 @@ v0.1  최소 동작 — 본인이 매일 쓸 수 있는 수준
 v0.2  남이 쓸 수 있는 수준
    ✓ packages (github:/git: 출처, lshed.lock, update, install --yes)  ← 0.2.0
    ✓ list --unused / remove / prune                                    ← 0.2.1
-   - MCP (시크릿은 키 이름만)
-   - 플러그인을 packages 로 (어댑터 제공 설치기)
+   ✓ 플러그인·마켓플레이스를 packages 로 (설치기 인터페이스)            ← 0.3.0
+   - MCP (손으로 넣은 것. 시크릿은 키 이름만)
    - sync
 
 v0.3
@@ -506,7 +519,8 @@ v0.3
 - [x] 실환경 재적용: 부품 6개 + 패키지 1개, 창고 192KB
 - [x] 새 기기 시뮬레이션: 빈 루트 + 실제 창고 → 부품 6개 배치, gstack 락 커밋 clone, install 은 표시만 (10.7초)
 - [x] 0.2.1 list / remove / prune — 2026-09-02
-- [ ] npm `lshed@0.2.1` 발행
+- [x] 0.3.0 플러그인 설치기 — 2026-09-02
+- [ ] npm `lshed@0.3.0` 발행
 
 ---
 

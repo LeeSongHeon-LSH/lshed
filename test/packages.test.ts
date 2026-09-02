@@ -15,7 +15,7 @@ import { git, head } from "../src/git.js";
 let tmp: string, remote: string, rootA: string, rootB: string, shed: string, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
 const r = (p: string) => fs.readFile(p, "utf8");
-const ctxFor = (root: string): Ctx => ({ adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l) });
+const ctxFor = (root: string): Ctx => ({ adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l), exec: async () => {} });
 
 /** 가짜 "업스트림": bare 저장소 + 커밋 하나 */
 async function makeRemote(): Promise<string> {
@@ -63,7 +63,7 @@ describe("init: 설치한 것 / 생성물 / 내가 쓴 것 을 가른다", () =>
     expect(await exists(path.join(shed, "skills/toolkit"))).toBe(false);
     expect(await exists(path.join(shed, "skills/browse"))).toBe(false);
     const lock = await readLock(shed);
-    expect(lock.packages.toolkit.commit).toBe(await head(path.join(rootA, "skills/toolkit")));
+    expect(lock.packages.toolkit.rev).toBe(await head(path.join(rootA, "skills/toolkit")));
     expect(await r(path.join(shed, "lshed.yaml"))).toContain("# install: ./setup");
   });
 });
@@ -81,7 +81,7 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     const res = await restore(ctx, "default");
     const dir = path.join(rootB, "skills/toolkit");
     expect(await exists(path.join(dir, "SKILL.md"))).toBe(true);
-    expect(await head(dir)).toBe((await readLock(shed)).packages.toolkit.commit);
+    expect(await head(dir)).toBe((await readLock(shed)).packages.toolkit.rev);
     expect(await exists(path.join(dir, "installed"))).toBe(false);
     expect(logs.join("\n")).toMatch(/설치 명령 1개를 실행하지 않았습니다/);
     expect(res.placed).toEqual(["skills/mine"]);           // 패키지는 관리 집합 밖
@@ -108,11 +108,11 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     const s = await status(ctx);
     expect(s.packages).toHaveLength(1);
     expect(s.packages[0].present).toBe(true);
-    expect(s.packages[0].head).toBe(s.packages[0].locked);
+    expect(s.packages[0].rev).toBe(s.packages[0].locked);
   });
 
   it("락의 커밋으로 맞춘다: 업스트림이 앞서가도 락 커밋을 받는다", async () => {
-    const locked = (await readLock(shed)).packages.toolkit.commit;
+    const locked = (await readLock(shed)).packages.toolkit.rev;
     const work = path.join(tmp, "upstream-work");
     await w(path.join(work, "SKILL.md"), "toolkit v2");
     await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "v2"], work);
@@ -130,7 +130,7 @@ describe("update", () => {
     await fs.writeFile(path.join(shed, "lshed.yaml"), y.replace("    # install: ./setup", "    install: ./setup"));
     const ctx = ctxFor(rootB);
     await restore(ctx, "default");
-    const before = (await readLock(shed)).packages.toolkit.commit;
+    const before = (await readLock(shed)).packages.toolkit.rev;
 
     const work = path.join(tmp, "upstream-work");
     await w(path.join(work, "SKILL.md"), "toolkit v2");
@@ -141,7 +141,7 @@ describe("update", () => {
     const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
     const res = await updatePackages(ctx, m.packages, { yes: true });
     expect(res.lockChanged).toBe(true);
-    const after = (await readLock(shed)).packages.toolkit.commit;
+    const after = (await readLock(shed)).packages.toolkit.rev;
     expect(after).not.toBe(before);
     expect(await r(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe("toolkit v2");
     expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);

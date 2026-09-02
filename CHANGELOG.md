@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-09-02
+
+Claude Code plugins are packages now. On the machine this was built against, the five installed plugins were the only thing a fresh `restore` still left out, and two of them carry MCP servers.
+
+- `init` records each user-scope plugin as `claude-plugin:<name>@<marketplace>` and each GitHub-backed marketplace as `claude-marketplace:<owner/repo>`. Project-scope plugins belong to their project and are skipped.
+- `restore` adds missing marketplaces first, then installs missing plugins through `claude plugin install`. Both are the agent's own package manager, so they run without `--yes`; `--yes` is forwarded as `-y` to accept a marketplace-declared install command.
+- Plugins cannot be pinned. `lshed.lock` records the version that actually got installed and `status` shows when it differs from what another machine had. `update` runs `claude plugin update`.
+- Installers are an interface now. `github:`/`git:` live in core; an adapter contributes its own (`ClaudeCodeAdapter` provides the two above). Install order follows installer priority, then manifest order.
+- Lock entries use `rev` instead of `commit`. Old locks still read.
+
 ## 0.2.1 — 2026-09-02
 
 - `lshed list [--unused]` shows everything in the shed and which profiles use it.

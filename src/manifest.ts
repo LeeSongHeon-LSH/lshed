@@ -1,6 +1,6 @@
 import { z } from "zod";
 import YAML from "yaml";
-import { parseSource } from "./source.js";
+import { parseSource, isComponentSource } from "./source.js";
 
 /** 부품 하나. source 생략 시 file:./<category>/<id> (§3.2 관례). */
 const ComponentSchema = z.object({
@@ -17,7 +17,9 @@ export type Component = z.infer<typeof ComponentSchema>;
 const PackageSchema = z.object({
   id: z.string().regex(/^[\w.-]+$/, "id는 영문·숫자·._- 만 허용"),
   source: z.string(),
-  into: z.string().regex(/^[^/\\][^\\]*$/, "into 는 루트 기준 상대 경로 (POSIX)"),
+  /** git 계열 패키지의 위치 (어댑터 루트 기준). 어댑터 설치기 스킴은 필요 없다 */
+  into: z.string().regex(/^[^/\\][^\\]*$/, "into 는 루트 기준 상대 경로 (POSIX)").optional(),
+  /** 설치 후 실행할 셸 명령. --yes 일 때만 실행 */
   install: z.string().optional(),
 });
 export type Package = z.infer<typeof PackageSchema>;
@@ -41,7 +43,7 @@ export type Manifest = z.infer<typeof ManifestSchema>;
 export class ManifestError extends Error {}
 
 /** YAML 문자열 → 검증된 매니페스트. 참조 무결성까지 확인한다. */
-export function parseManifest(text: string, knownCategories?: readonly string[]): Manifest {
+export function parseManifest(text: string, knownCategories?: readonly string[], knownSchemes?: readonly string[]): Manifest {
   const raw = YAML.parse(text);
   const result = ManifestSchema.safeParse(raw);
   if (!result.success) {
@@ -60,7 +62,7 @@ export function parseManifest(text: string, knownCategories?: readonly string[])
       if (seen.has(c.id)) problems.push(`${cat}: id "${c.id}" 중복`);
       seen.add(c.id);
       try {
-        parseSource(effectiveSource(cat, c));
+        if (!isComponentSource(parseSource(effectiveSource(cat, c)))) problems.push(`${cat}/${c.id}: 부품 출처는 file:/github:/git: 이어야 합니다`);
       } catch (e) {
         problems.push(`${cat}/${c.id}: ${(e as Error).message}`);
       }
@@ -72,7 +74,11 @@ export function parseManifest(text: string, knownCategories?: readonly string[])
     if (pkgIds.has(p.id)) problems.push(`packages: id "${p.id}" 중복`);
     pkgIds.add(p.id);
     try {
-      if (parseSource(p.source).scheme === "file") problems.push(`packages/${p.id}: 패키지 출처는 github: 또는 git: 이어야 합니다`);
+      const src = parseSource(p.source);
+      const scheme = src.scheme === "other" ? src.name : src.scheme;
+      if (scheme === "file") problems.push(`packages/${p.id}: 패키지 출처는 file: 일 수 없습니다`);
+      else if (knownSchemes && !knownSchemes.includes(scheme)) problems.push(`packages/${p.id}: 스킴 "${scheme}" 을 다룰 설치기가 없습니다 (${knownSchemes.join(", ")})`);
+      if ((scheme === "github" || scheme === "git") && !p.into) problems.push(`packages/${p.id}: ${scheme}: 패키지는 into 가 필요합니다`);
     } catch (e) {
       problems.push(`packages/${p.id}: ${(e as Error).message}`);
     }

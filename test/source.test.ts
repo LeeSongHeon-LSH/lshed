@@ -16,8 +16,10 @@ describe("parseSource", () => {
   it("스킴 없으면 거부 (§6.2)", () => {
     expect(() => parseSource("./skills/x")).toThrow(/스킴/);
   });
-  it("알 수 없는 스킴 거부", () => {
-    expect(() => parseSource("registry:foo")).toThrow(/알 수 없는 스킴/);
+  it("모르는 스킴은 other 로 통과시키고 설치기가 판단한다", () => {
+    expect(parseSource("claude-plugin:exa@official")).toEqual({ scheme: "other", name: "claude-plugin", rest: "exa@official" });
+    expect(formatSource(parseSource("claude-plugin:exa@official"))).toBe("claude-plugin:exa@official");
+    expect(() => parseSource("Bad Scheme:x")).toThrow(/알 수 없는 스킴/);
   });
   it("round-trip", () => {
     for (const s of ["file:./a", "github:a/b", "github:a/b@v1", "github:a/b@v1#c/d"]) {

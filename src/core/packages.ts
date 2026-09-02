@@ -1,38 +1,32 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { ScannedComponent } from "../adapters/types.js";
-import { type Ctx, abs } from "./context.js";
+import { type Ctx, installersFor, installerFor } from "./context.js";
 import type { Package } from "../manifest.js";
-import { parseSource, cloneTarget, sourceFromRemote } from "../source.js";
-import * as g from "../git.js";
 import { readLock, writeLock, type Lock } from "../lock.js";
-import { exists } from "../fsutil.js";
+import { runShell } from "../git.js";
+import type { DetectedPackage, InstallOpts } from "../installers/types.js";
 
-/** 스캔 결과 중 "설치한 것": 안에 .git 이 있고 origin 이 있는 부품 */
-export interface DetectedPackage { id: string; into: string; source: string; commit: string; path: string }
+export type { DetectedPackage } from "../installers/types.js";
 
+/** 모든 설치기에게 "설치한 것" 을 묻는다 */
 export async function detectPackages(ctx: Ctx, found: ScannedComponent[]): Promise<DetectedPackage[]> {
   const out: DetectedPackage[] = [];
-  for (const f of found) {
-    if (!(await g.isRepo(f.path))) continue;
-    const url = await g.remoteUrl(f.path);
-    if (!url) continue; // 원격 없는 로컬 저장소는 그냥 내가 쓴 것으로 본다
-    const into = path.relative(ctx.adapter.root, f.path).split(path.sep).join("/");
-    out.push({ id: f.id, into, source: sourceFromRemote(url, await g.branch(f.path)), commit: await g.head(f.path), path: f.path });
-  }
+  for (const inst of installersFor(ctx)) out.push(...(await inst.detect(ctx, found)));
   return out;
 }
 
 /**
  * "설치가 만들어낸 것": 최상위 항목 중 심볼릭 링크가 어떤 패키지 디렉터리 안을 가리키는 부품.
- * 반환값: 부품 키("category/id") → 만든 패키지 id
+ * 반환값: 부품 키("category/id") → 만든 패키지 id. 디스크 위치가 있는 패키지(git 계열)만 본다.
  */
 export async function detectGenerated(found: ScannedComponent[], pkgs: DetectedPackage[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  if (!pkgs.length) return out;
-  const roots = await Promise.all(pkgs.map(async (p) => ({ id: p.id, real: await fs.realpath(p.path) })));
+  const located = pkgs.filter((p) => p.path);
+  if (!located.length) return out;
+  const roots = await Promise.all(located.map(async (p) => ({ id: p.id, real: await fs.realpath(p.path!) })));
   for (const f of found) {
-    if (pkgs.some((p) => p.path === f.path)) continue;
+    if (located.some((p) => p.path === f.path)) continue;
     let entries: string[];
     try {
       if (!(await fs.stat(f.path)).isDirectory()) continue;
@@ -53,59 +47,60 @@ export async function detectGenerated(found: ScannedComponent[], pkgs: DetectedP
   return out;
 }
 
-export interface PackageStatus { pkg: Package; dir: string; present: boolean; head?: string; locked?: string }
+export interface PackageStatus { pkg: Package; present: boolean; rev?: string; locked?: string }
 
 export async function packageStatus(ctx: Ctx, pkg: Package, lock: Lock): Promise<PackageStatus> {
-  const dir = abs(ctx, pkg.into);
-  const present = await g.isRepo(dir);
-  return { pkg, dir, present, head: present ? await g.head(dir) : undefined, locked: lock.packages[pkg.id]?.commit };
+  const st = await installerFor(ctx, pkg.source).status(ctx, pkg);
+  return { pkg, ...st, locked: lock.packages[pkg.id]?.rev || undefined };
 }
 
-export interface EnsureOptions { dryRun?: boolean; yes?: boolean }
-export interface EnsureResult { cloned: string[]; pendingInstalls: { id: string; dir: string; cmd: string }[]; lockChanged: boolean }
+export type EnsureOptions = InstallOpts;
+export interface EnsureResult { installed: string[]; pendingInstalls: { id: string; dir: string; cmd: string }[]; lockChanged: boolean }
+
+const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
+
+/** 설치 순서: 설치기 우선순위(마켓플레이스 < 플러그인), 같으면 매니페스트 순서 */
+function ordered(ctx: Ctx, pkgs: Package[]): Package[] {
+  return pkgs.map((p, i) => ({ p, i, pr: installerFor(ctx, p.source).priority })).sort((a, b) => a.pr - b.pr || a.i - b.i).map((x) => x.p);
+}
 
 /**
  * 프로필의 패키지를 갖춘다 (§3.7).
- *  - 없으면 clone 하고 락의 커밋으로 맞춘다 (락이 없으면 지금 HEAD 를 락에 기록).
- *  - 이미 있으면 건드리지 않는다. 사용자가 올렸을 수 있다. 락과 다르면 status 가 알려준다.
- *  - install 은 --yes 일 때만 실행한다. 아니면 명령을 보여주고 넘어간다.
+ *  - 없으면 설치기에 맡긴다. 락이 있으면 맞추려 하고, 못 맞추면 실제 버전을 락에 적는다.
+ *  - 이미 있으면 건드리지 않는다. 락과 다르면 알려만 준다.
+ *  - install: 셸 명령은 --yes 일 때만 실행한다.
  */
 export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
-  const res: EnsureResult = { cloned: [], pendingInstalls: [], lockChanged: false };
-  for (const pkg of pkgs) {
+  const res: EnsureResult = { installed: [], pendingInstalls: [], lockChanged: false };
+  for (const pkg of ordered(ctx, pkgs)) {
+    const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);
     if (st.present) {
-      const note = st.locked && st.head !== st.locked ? `  (HEAD ${st.head!.slice(0, 7)} ≠ lock ${st.locked.slice(0, 7)})` : "";
+      const note = st.locked && st.rev !== st.locked ? `  (${short(st.rev)} ≠ lock ${short(st.locked)})` : "";
       ctx.log(`  = package ${pkg.id}${note}`);
       continue;
     }
-    if (await exists(st.dir)) throw new Error(`package ${pkg.id}: ${st.dir} 가 있지만 git 저장소가 아닙니다. 치우거나 into 를 바꾸세요.`);
-    const { url, ref } = cloneTarget(parseSource(pkg.source));
-    ctx.log(`  + package ${pkg.id}  (clone ${url}${ref ? ` @${ref}` : ""}${st.locked ? ` → ${st.locked.slice(0, 7)}` : ""})`);
+    ctx.log(`  + package ${pkg.id}  (${inst.describe(pkg, st.locked)})`);
     if (opts.dryRun) continue;
-    await fs.mkdir(path.dirname(st.dir), { recursive: true });
-    await g.clone(url, st.dir, ref);
-    if (st.locked) {
-      await g.resetHard(st.dir, st.locked).catch(() => {
-        throw new Error(`package ${pkg.id}: 락의 커밋 ${st.locked!.slice(0, 7)} 을 찾을 수 없습니다. 'lshed update ${pkg.id}' 로 락을 갱신하세요.`);
-      });
-    } else {
-      lock.packages[pkg.id] = { source: pkg.source, commit: await g.head(st.dir) };
+    const rev = await inst.install(ctx, pkg, st.locked, opts);
+    if (rev !== st.locked) {
+      if (st.locked) ctx.log(`    락은 ${short(st.locked)} 이지만 ${short(rev)} 이 설치됨. 락을 따라가게 갱신`);
+      lock.packages[pkg.id] = { source: pkg.source, rev };
       res.lockChanged = true;
     }
-    res.cloned.push(pkg.id);
-    if (pkg.install) await maybeInstall(ctx, pkg, st.dir, opts, res);
+    res.installed.push(pkg.id);
+    await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
   }
   if (res.lockChanged) await writeLock(ctx.shed, lock);
   return res;
 }
 
-export async function maybeInstall(ctx: Ctx, pkg: Package, dir: string, opts: EnsureOptions, res: EnsureResult): Promise<void> {
+export async function maybeInstall(ctx: Ctx, pkg: Package, dir: string, opts: InstallOpts, res: EnsureResult): Promise<void> {
   if (!pkg.install) return;
   if (opts.yes) {
-    ctx.log(`  $ (${pkg.into}) ${pkg.install}`);
-    await g.runShell(pkg.install, dir);
+    ctx.log(`  $ (${path.relative(ctx.adapter.root, dir) || "."}) ${pkg.install}`);
+    await runShell(pkg.install, dir);
   } else {
     res.pendingInstalls.push({ id: pkg.id, dir, cmd: pkg.install });
   }
@@ -117,24 +112,24 @@ export function reportPending(ctx: Ctx, res: EnsureResult): void {
   for (const p of res.pendingInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
 }
 
-/** lshed update: 패키지를 원격 최신으로 올리고 락을 갱신한다. */
+/** lshed update: 패키지를 최신으로 올리고 락을 갱신한다. */
 export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
-  const res: EnsureResult = { cloned: [], pendingInstalls: [], lockChanged: false };
-  for (const pkg of pkgs) {
+  const res: EnsureResult = { installed: [], pendingInstalls: [], lockChanged: false };
+  for (const pkg of ordered(ctx, pkgs)) {
+    const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);
     if (!st.present) { ctx.log(`  ! package ${pkg.id}: 설치되어 있지 않음. 먼저 restore 하세요`); continue; }
-    if (opts.dryRun) { ctx.log(`  ~ package ${pkg.id}  (git pull --ff-only)`); continue; }
-    await g.pullFf(st.dir);
-    const now = await g.head(st.dir);
-    const before = lock.packages[pkg.id]?.commit;
+    if (opts.dryRun) { ctx.log(`  ~ package ${pkg.id}  (${inst.name} update)`); continue; }
+    const now = await inst.update(ctx, pkg, opts);
+    const before = lock.packages[pkg.id]?.rev;
     if (now !== before) {
-      lock.packages[pkg.id] = { source: pkg.source, commit: now };
+      lock.packages[pkg.id] = { source: pkg.source, rev: now };
       res.lockChanged = true;
-      ctx.log(`  ↑ package ${pkg.id}  ${before ? before.slice(0, 7) : "(없음)"} → ${now.slice(0, 7)}`);
-      await maybeInstall(ctx, pkg, st.dir, opts, res);
+      ctx.log(`  ↑ package ${pkg.id}  ${before ? short(before) : "(없음)"} → ${short(now)}`);
+      await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
     } else {
-      ctx.log(`  = package ${pkg.id}  ${now.slice(0, 7)} (최신)`);
+      ctx.log(`  = package ${pkg.id}  ${short(now)} (최신)`);
     }
   }
   if (res.lockChanged) await writeLock(ctx.shed, lock);

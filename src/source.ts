@@ -7,7 +7,9 @@
 export type Source =
   | { scheme: "file"; path: string }
   | { scheme: "github"; owner: string; repo: string; ref?: string; subpath?: string }
-  | { scheme: "git"; url: string; ref?: string };
+  | { scheme: "git"; url: string; ref?: string }
+  /** 어댑터 설치기가 해석하는 스킴 (예: claude-plugin:exa@official). 부품에는 쓸 수 없다. */
+  | { scheme: "other"; name: string; rest: string };
 
 const GITHUB_RE = /^([\w.-]+)\/([\w.-]+)(?:@([^#]+))?(?:#(.+))?$/;
 
@@ -36,8 +38,14 @@ export function parseSource(raw: string): Source {
       return { scheme, url, ref: ref || undefined };
     }
     default:
-      throw new Error(`알 수 없는 스킴 "${scheme}": "${raw}"`);
+      if (!/^[a-z][\w-]*$/.test(scheme)) throw new Error(`알 수 없는 스킴 "${scheme}": "${raw}"`);
+      return { scheme: "other", name: scheme, rest };
   }
+}
+
+/** 부품(components)에 허용되는 스킴인지 */
+export function isComponentSource(s: Source): boolean {
+  return s.scheme === "file" || s.scheme === "github" || s.scheme === "git";
 }
 
 export function formatSource(s: Source): string {
@@ -45,6 +53,7 @@ export function formatSource(s: Source): string {
     case "file": return `file:${s.path}`;
     case "github": return `github:${s.owner}/${s.repo}${s.ref ? `@${s.ref}` : ""}${s.subpath ? `#${s.subpath}` : ""}`;
     case "git": return `git:${s.url}${s.ref ? `#${s.ref}` : ""}`;
+    case "other": return `${s.name}:${s.rest}`;
   }
 }
 

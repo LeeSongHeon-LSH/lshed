@@ -27,8 +27,9 @@ export function formatStatus(s: Status, adapterRoot: string): string {
     `관리 중  ${s.state.managed.length}개 경로 (${adapterRoot})`,
   ];
   lines.push(s.drifted.length ? `드리프트 ${s.drifted.length}개: ${s.drifted.join(", ")}  → lshed diff` : "드리프트 없음");
+  const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
   for (const p of s.packages) {
-    const where = !p.present ? "설치 안 됨 → lshed restore" : !p.locked ? `${p.head!.slice(0, 7)} (락 없음)` : p.head === p.locked ? `${p.head!.slice(0, 7)} = lock` : `${p.head!.slice(0, 7)} ≠ lock ${p.locked.slice(0, 7)} → lshed update`;
+    const where = !p.present ? "설치 안 됨 → lshed restore" : !p.locked ? `${short(p.rev)} (락 없음)` : p.rev === p.locked ? `${short(p.rev)} = lock` : `${short(p.rev)} ≠ lock ${short(p.locked)} → lshed update`;
     lines.push(`패키지   ${p.pkg.id}  ${where}`);
   }
   return lines.join("\n");

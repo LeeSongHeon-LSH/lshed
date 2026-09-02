@@ -102,7 +102,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
 
   await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString() });
   const bdir = backup && backedUp.length ? backupDir : null;
-  ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.cloned.length ? `, 패키지 clone ${pkgRes.cloned.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
+  ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.installed.length ? `, 패키지 설치 ${pkgRes.installed.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
   return { profile, placed, removed: toRemove, backedUp, backupDir: bdir };
 }

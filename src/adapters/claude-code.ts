@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { AgentAdapter, Category, ScannedComponent } from "./types.js";
+import { marketplaceInstaller, pluginInstaller } from "../installers/claude-plugin.js";
 
 const CATEGORIES: readonly Category[] = [
   { name: "skills", root: "skills", kind: "dir" },
@@ -28,6 +29,10 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
   instructionsFileName() {
     return "CLAUDE.md";
+  }
+
+  installers() {
+    return [marketplaceInstaller, pluginInstaller];
   }
 
   async scan(): Promise<ScannedComponent[]> {

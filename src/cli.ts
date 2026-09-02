@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { ClaudeCodeAdapter } from "./adapters/claude-code.js";
-import type { Ctx } from "./core/context.js";
+import { spawnExec, type Ctx } from "./core/context.js";
 import { init } from "./core/init.js";
 import { restore } from "./core/restore.js";
 import { status, formatStatus } from "./core/status.js";
@@ -37,7 +37,7 @@ async function ctxFor(cmd: "init" | "other"): Promise<Ctx> {
   if (!shed && cmd === "other") shed = (await readState(adapter))?.shed;
   if (!shed && cmd === "init") shed = path.join(os.homedir(), "lshed");
   if (!shed) throw new Error("창고 위치를 모릅니다. --shed <dir> 또는 LSHED_HOME 을 지정하세요.");
-  return { adapter, shed: path.resolve(shed), log: (l) => console.log(l) };
+  return { adapter, shed: path.resolve(shed), log: (l) => console.log(l), exec: spawnExec };
 }
 
 async function run(fn: () => Promise<unknown>): Promise<void> {

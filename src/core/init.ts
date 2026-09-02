@@ -32,8 +32,9 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
   const generated = await detectGenerated(all, pkgs);
   const found = all.filter((f) => !pkgs.some((p) => p.path === f.path) && !generated.has(`${f.category}/${f.id}`));
   for (const p of pkgs) {
-    m.packages.push({ id: p.id, source: p.source, into: p.into });
-    ctx.log(`  ≡ package ${p.id}  ${p.source} @${p.commit.slice(0, 7)}  (참조만 기록)`);
+    m.packages.push(p.into ? { id: p.id, source: p.source, into: p.into } : { id: p.id, source: p.source });
+    const rev = /^[0-9a-f]{40}$/.test(p.rev) ? p.rev.slice(0, 7) : p.rev;
+    ctx.log(`  ≡ package ${p.id}  ${p.source} @${rev}  (참조만 기록)`);
   }
   if (pkgs.length) m.profiles[profileName][PACKAGES] = pkgs.map((p) => p.id);
   for (const [key, by] of generated) ctx.log(`  · ${key}  (${by} 가 생성한 것 → 건너뜀)`);
@@ -83,11 +84,12 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
   let yamlText = stringifyManifest(m);
   // 설치 명령은 자동으로 알 수 없다. 사용자가 채울 자리를 남긴다.
   for (const p of pkgs) {
+    if (!p.into) continue; // 어댑터 설치기 패키지는 자기 설치법을 안다
     yamlText = yamlText.replace(`    into: ${p.into}\n`, `    into: ${p.into}\n    # install: ./setup    # ← 복원 후 실행할 명령이 있으면 채우세요 (--yes 로 실행)\n`);
   }
   await fs.writeFile(manifestPath(ctx), `# lshed manifest — edit freely. Reference: https://github.com/LeeSongHeon-LSH/lshed\n` + yamlText);
   if (pkgs.length) {
-    await writeLock(ctx.shed, { version: 1, packages: Object.fromEntries(pkgs.map((p) => [p.id, { source: p.source, commit: p.commit }])) });
+    await writeLock(ctx.shed, { version: 1, packages: Object.fromEntries(pkgs.map((p) => [p.id, { source: p.source, rev: p.rev }])) });
   }
   await writeState(ctx.adapter, { profile: profileName, shed: ctx.shed, managed, appliedAt: new Date().toISOString() });
   const parts = [`부품 ${copied}개`];
@@ -95,6 +97,6 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
   if (generated.size) parts.push(`생성물 ${generated.size}개 건너뜀`);
   if (skipped.length) parts.push(`제외 ${skipped.length}개`);
   ctx.log(`\n${MANIFEST_FILE} 생성: ${manifestPath(ctx)}  (${parts.join(", ")}, 프로필 "${profileName}")`);
-  if (pkgs.length) ctx.log(`패키지의 설치 명령(install:)은 lshed.yaml 에서 직접 채우세요.`);
+  if (pkgs.some((p) => p.into)) ctx.log(`git 패키지의 설치 명령(install:)은 lshed.yaml 에서 직접 채우세요.`);
   return { manifest: m, copied, skipped, packages: pkgs.map((p) => p.id), generated: [...generated.keys()] };
 }

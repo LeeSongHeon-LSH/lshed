@@ -14,7 +14,11 @@ export interface ScannedComponent {
   path: string;
 }
 
+import type { Installer } from "../installers/types.js";
+
 export interface AgentAdapter {
+  /** 이 에이전트 고유의 패키지 설치기 (플러그인 등). 없으면 빈 배열 */
+  installers(): readonly Installer[];
   readonly name: string;
   /** 사용자 레벨 설정 루트 (예: ~/.claude). 테스트에서 주입 가능. */
   readonly root: string;

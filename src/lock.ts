@@ -4,9 +4,12 @@ import YAML from "yaml";
 import { z } from "zod";
 
 /** lshed.lock — 패키지가 실제로 어느 커밋인지 (§6.3). 창고에 들어가며 커밋한다. */
+const EntrySchema = z
+  .object({ source: z.string(), rev: z.string().optional(), commit: z.string().optional() })
+  .transform((e) => ({ source: e.source, rev: e.rev ?? e.commit ?? "" }));
 export const LockSchema = z.object({
   version: z.literal(1),
-  packages: z.record(z.string(), z.object({ source: z.string(), commit: z.string() })).default({}),
+  packages: z.record(z.string(), EntrySchema).default({}),
 });
 export type Lock = z.infer<typeof LockSchema>;
 

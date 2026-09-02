@@ -89,7 +89,14 @@ profiles:
     expect(m.profiles.default.packages).toEqual(["gstack"]);
   });
   it("file: 출처는 패키지가 될 수 없다", () => {
-    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "file:./x"))).toThrow(/github: 또는 git:/);
+    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "file:./x"))).toThrow(/file: 일 수 없습니다/);
+  });
+  it("github: 패키지는 into 가 필요하고, 부품은 어댑터 스킴을 쓸 수 없다", () => {
+    expect(() => parseManifest(P.replace("    into: skills/gstack\n", ""))).toThrow(/into 가 필요/);
+    expect(() => parseManifest("version: 1\ncomponents:\n  skills:\n    - id: x\n      source: claude-plugin:x@m\n")).toThrow(/부품 출처는 file:/);
+  });
+  it("설치기가 없는 스킴은 거부", () => {
+    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "registry:foo"), undefined, ["github", "git"])).toThrow(/설치기가 없습니다/);
   });
   it("프로필이 없는 패키지를 참조", () => {
     expect(() => parseManifest(P.replace("packages: [gstack]", "packages: [nope]"))).toThrow(/"nope" 는 packages 에 없음/);

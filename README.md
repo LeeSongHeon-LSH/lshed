@@ -108,10 +108,22 @@ profiles:
 
 `lshed.lock` pins each package to a commit, so a fresh machine gets the same version you had. `lshed update` moves it forward.
 
+Claude Code plugins are packages too, with their own scheme. `init` finds them in `~/.claude/plugins`:
+
+```yaml
+packages:
+  - id: claude-plugins-official
+    source: claude-marketplace:anthropics/claude-plugins-official
+  - id: exa
+    source: claude-plugin:exa@claude-plugins-official
+```
+
+`restore` adds the marketplace, then runs `claude plugin install exa@claude-plugins-official`. Plugins cannot be pinned to a version, so the lock records whatever got installed and `status` tells you when it differs from the machine you came from. Plugins that bundle MCP servers bring them along.
+
 Rules that keep this safe:
 
 - A package that is already present is never touched by `restore`. Your local checkout is yours.
-- `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`.
+- `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`. Plugin installs go through Claude Code's own package manager and run without it; `--yes` is forwarded as `-y` for plugins that declare an install command.
 - Packages are not part of the managed set. Switching profiles never deletes a clone.
 - Installers sometimes create aliases without symlinks, which `init` cannot tell from authored skills. Leave those out with `--exclude`:
 
@@ -171,7 +183,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 - MCP servers and secrets. Planned: the manifest names the keys, values are injected locally, nothing secret enters the shed.
 - `settings.json` merging (hooks, permissions).
 - `sync` (a git pull/push wrapper). Use git in the shed directly for now.
-- Plugins installed through Claude Code's marketplace. They are packages too; recording them is next.
+- MCP servers configured by hand in `~/.claude.json`. Plugin-bundled ones are covered.
 - Windows and macOS have not been tested. The code avoids platform-specific paths, but treat 0.1 as Linux/WSL.
 
 ## Troubleshooting

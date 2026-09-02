@@ -16,7 +16,7 @@ const r = (p: string) => fs.readFile(p, "utf8");
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-rm-"));
   root = path.join(tmp, "claude"); shed = path.join(tmp, "shed"); logs = [];
-  ctx = { adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l) };
+  ctx = { adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l), exec: async () => {} };
   await w(path.join(root, "skills/alpha/SKILL.md"), "a");
   await w(path.join(root, "skills/beta/SKILL.md"), "b");
   await w(path.join(root, "agents/beta.md"), "agent beta");

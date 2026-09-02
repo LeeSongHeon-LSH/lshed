@@ -22,7 +22,7 @@ beforeEach(async () => {
   root = path.join(tmp, "claude");
   shed = path.join(tmp, "shed");
   logs = [];
-  ctx = { adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l) };
+  ctx = { adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l), exec: async () => {} };
   // 가짜 ~/.claude
   await w(path.join(root, "skills/alpha/SKILL.md"), "alpha v1");
   await w(path.join(root, "skills/alpha/ref/x.txt"), "x");

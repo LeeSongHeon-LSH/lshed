@@ -8,6 +8,7 @@ import { isGenerated, instructionsFile } from "./instructions.js";
 import { detectPackages, detectGenerated } from "./packages.js";
 import { writeLock } from "../lock.js";
 import { PACKAGES } from "../manifest.js";
+import { mask, suspiciousStrings, placeholdersIn, writeEntryFile, type Json } from "./entries.js";
 
 export interface InitResult { manifest: Manifest; copied: number; skipped: string[]; packages: string[]; generated: string[] }
 
@@ -58,6 +59,32 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
       managed.push(targetRel(cat, f.id));
       copied++;
       ctx.log(`  + ${cat.name}/${f.id}`);
+    }
+  }
+
+  // 항목형 (MCP 등): 시크릿은 자리표시자로 바꿔 담는다 (§7.1)
+  for (const cat of ctx.adapter.entries()) {
+    const all = await cat.read();
+    const ids = Object.keys(all).sort();
+    for (const id of ids.filter((id) => isExcluded(cat.name, id))) {
+      skipped.push(`${cat.name}/${id}`);
+      ctx.log(`  - ${cat.name}/${id}  (--exclude)`);
+    }
+    const mine = ids.filter((id) => !isExcluded(cat.name, id));
+    if (!mine.length) continue;
+    m.components[cat.name] = [];
+    m.profiles[profileName][cat.name] = [];
+    for (const id of mine) {
+      if (!/^[\w.-]+$/.test(id)) { ctx.log(`  ! ${cat.name}/${id}: 이름에 쓸 수 없는 문자가 있어 건너뜀`); continue; }
+      const masked = mask(id, all[id] as Json, cat);
+      await writeEntryFile(path.join(ctx.shed, cat.name, `${id}.json`), masked);
+      m.components[cat.name].push({ id });
+      m.profiles[profileName][cat.name].push(id);
+      managed.push(targetRel(cat, id));
+      copied++;
+      const vars = placeholdersIn(masked);
+      ctx.log(`  + ${cat.name}/${id}${vars.length ? `  (시크릿 → ${vars.map((v) => "${" + v + "}").join(", ")})` : ""}`);
+      for (const where of suspiciousStrings(masked)) ctx.log(`    ! ${where} 가 시크릿처럼 보입니다. 창고의 ${cat.name}/${id}.json 에서 \${VAR} 로 바꾸세요`);
     }
   }
 

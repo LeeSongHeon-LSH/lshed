@@ -99,7 +99,7 @@ dotfiles 관리 도구(chezmoi, GNU Stow, yadm 등)가 사실상 표준이다.
 | `agents` | `~/.claude/agents/<name>.md` | 파일 | v0.1 (skills와 형태가 같아 거의 공짜) |
 | `commands` | `~/.claude/commands/<name>.md` | 파일 | v0.1 (동일) |
 | `instructions` | `~/.claude/CLAUDE.md` | 조각 → import 목록 생성 (§3.3) | v0.1 |
-| `mcp` | `~/.claude.json`의 `mcpServers` 키 | JSON 항목 + 시크릿 | v0.2 |
+| `mcp` | `~/.claude.json`의 `mcpServers` 키 | JSON 항목, 시크릿은 `${VAR}` | v0.4 구현 (§7.4) |
 | `settings` | `~/.claude/settings.json`의 hooks·permissions 등 | JSON 병합 | v0.3 (병합 규칙 필요) |
 
 > **플러그인**(`~/.claude/plugins/`)은 Claude Code가 자체 레지스트리로 설치·갱신하므로
@@ -398,10 +398,24 @@ MCP 설정에 API 키가 들어가고, 창고는 git에 올라간다.
 Claude Code는 계속 새 개념(plugins, subagents 등)을 추가한다.
 카테고리 집합을 어댑터가 반환하게 하면 새 카테고리 추가는 어댑터 한 줄이다.
 
-### 7.4 MCP 저장 위치가 지저분함
+### 7.4 MCP — 항목형 부품 (v0.4 구현)
 
 Claude Code의 사용자 레벨 MCP는 `~/.claude.json`에 다른 상태값(machineID, 세션 기록 등)과 함께 있다.
-이 파일을 통째로 덮어쓰면 안 된다. `mcpServers` 키만 병합하거나 `claude mcp add` CLI를 호출한다. v0.2 설계 과제.
+파일 단위 부품이 아니라서 **항목형 카테고리**(`EntryCategory`)를 어댑터 경계에 추가했다.
+
+```
+EntryCategory { name, kind: "entry", secretKeys, expandsEnv, read(), write(id, value|null) }
+```
+
+- 창고에는 `mcp/<id>.json`. 배치는 `mcpServers.<id>` 키 하나만 바꾸고 파일은 임시 파일 → rename.
+- 관리 집합에는 `mcp:<id>` 로 적는다. 경로 구간에 `:` 이 못 오므로 파일과 구분된다.
+- **시크릿은 §7.1 A 그대로.** `env`·`headers` 아래 시크릿 같은 키의 값을 `${VAR}` 로 바꾼다.
+  Claude Code 가 모든 범위에서 `${VAR}` 를 스스로 확장하므로(실제 바이너리로 검증) `restore` 는 자리표시자를 그대로 놓는다.
+  시크릿 값은 lshed 를 한 번도 거치지 않는다. `expandsEnv: false` 인 어댑터를 위해 `expand()` 는 남겨 두었다.
+- `diff`/`save` 에서 자리표시자는 와일드카드다. 로컬에 실제 값이 들어 있어도 드리프트가 아니고, `save` 는 자리표시자를 보존하며 새 시크릿 키를 마스킹한다.
+- 휴리스틱(키 이름 정규식)은 제안이다. `args`·`url` 의 토큰 같은 문자열은 경고만 하고, 확정은 사용자가 창고 json 을 고쳐서 한다.
+- `claude mcp add-json` 대신 직접 쓰는 이유: 읽기는 어차피 JSON 을 봐야 하고, `claude` 없이도 테스트·복원이 되며, 한 키만 바꾸는 것이 CLI 호출보다 결정적이다.
+- 프로젝트 범위 MCP(`.mcp.json`, `projects.*`)는 §1.3 대로 다루지 않는다.
 
 ### 7.5 플러그인 — 패키지의 한 종류 (v0.3 구현)
 
@@ -438,7 +452,7 @@ v0.2  남이 쓸 수 있는 수준
    ✓ packages (github:/git: 출처, lshed.lock, update, install --yes)  ← 0.2.0
    ✓ list --unused / remove / prune                                    ← 0.2.1
    ✓ 플러그인·마켓플레이스를 packages 로 (설치기 인터페이스)            ← 0.3.0
-   - MCP (손으로 넣은 것. 시크릿은 키 이름만)
+   ✓ MCP (손으로 넣은 것. 시크릿은 ${VAR} 자리표시자)                 ← 0.4.0
    - sync
 
 v0.3
@@ -520,7 +534,10 @@ v0.3
 - [x] 새 기기 시뮬레이션: 빈 루트 + 실제 창고 → 부품 6개 배치, gstack 락 커밋 clone, install 은 표시만 (10.7초)
 - [x] 0.2.1 list / remove / prune — 2026-09-02
 - [x] 0.3.0 플러그인 설치기 — 2026-09-02
-- [ ] npm `lshed@0.3.0` 발행
+- [x] 0.4.0 MCP 항목형 부품 + ${VAR} 마스킹 — 2026-09-03 (실제 Claude Code 가 사용자 범위에서 확장하는지 프로브로 검증)
+- [ ] npm `lshed@0.4.0` 발행 (0.1.1~0.3.0 도 미발행)
+- [ ] 기존 창고 재스캔 (`init` 이후 새로 만든 스킬·MCP 를 창고에 넣는 명령. 지금은 yaml 을 손으로 고쳐야 한다)
+- [ ] sync
 
 ---
 

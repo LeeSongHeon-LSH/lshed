@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import type { Installer } from "../installers/types.js";
 import { gitInstaller } from "../installers/git.js";
 import { parseSource } from "../source.js";
-import type { AgentAdapter, Category } from "../adapters/types.js";
+import type { AgentAdapter, Category, EntryCategory } from "../adapters/types.js";
 import { parseManifest, type Manifest, type Component, effectiveSource, PACKAGES } from "../manifest.js";
 import { resolveSource } from "../resolvers/file.js";
 import { LSHED_DIR } from "../state.js";
@@ -51,7 +51,7 @@ export function manifestPath(ctx: Ctx): string {
 }
 
 export function knownCategories(adapter: AgentAdapter): string[] {
-  return [...adapter.categories().map((c) => c.name), INSTRUCTIONS];
+  return [...adapter.categories().map((c) => c.name), ...adapter.entries().map((e) => e.name), INSTRUCTIONS];
 }
 
 export async function loadManifest(ctx: Ctx): Promise<Manifest> {
@@ -70,17 +70,33 @@ export function ignoreOf(ctx: Ctx): readonly string[] {
   return ctx.ignore ?? DEFAULT_IGNORE;
 }
 
-/** 카테고리 하나의 부품이 로컬(어댑터 루트)에서 차지하는 상대 경로 */
-export function targetRel(cat: Category | typeof INSTRUCTIONS, id: string): string {
+/**
+ * 카테고리 하나의 부품이 로컬(어댑터 루트)에서 차지하는 상대 경로.
+ * 항목형은 경로가 없으므로 "<category>:<id>" 로 적는다 (경로 구간에 ':' 은 못 오므로 구분된다).
+ */
+export function targetRel(cat: Category | EntryCategory | typeof INSTRUCTIONS, id: string): string {
   if (cat === INSTRUCTIONS) return `${FRAGMENTS_DIR}/${id}.md`;
+  if (cat.kind === "entry") return `${cat.name}:${id}`;
   return cat.kind === "dir" ? `${cat.root}/${id}` : `${cat.root}/${id}.md`;
+}
+
+/** 관리 집합의 rel 이 항목형이면 그 카테고리와 id */
+export function entryOf(ctx: Ctx, rel: string): { cat: EntryCategory; id: string } | undefined {
+  const i = rel.indexOf(":");
+  if (i <= 0) return undefined;
+  const cat = ctx.adapter.entries().find((e) => e.name === rel.slice(0, i));
+  return cat ? { cat, id: rel.slice(i + 1) } : undefined;
+}
+
+export function kindOf(ctx: Ctx, category: string): "dir" | "file" | "entry" {
+  if (category === INSTRUCTIONS) return "file";
+  if (ctx.adapter.entries().some((e) => e.name === category)) return "entry";
+  return ctx.adapter.categories().find((k) => k.name === category)?.kind ?? "dir";
 }
 
 /** 부품의 창고 안 절대 경로 */
 export function sourcePath(ctx: Ctx, category: string, c: Component): string {
-  const cat = ctx.adapter.categories().find((k) => k.name === category);
-  const kind = category === INSTRUCTIONS ? "file" : cat?.kind ?? "dir";
-  return resolveSource(ctx.shed, effectiveSource(category, c, kind));
+  return resolveSource(ctx.shed, effectiveSource(category, c, kindOf(ctx, category)));
 }
 
 export function findComponent(m: Manifest, category: string, id: string): Component {
@@ -98,6 +114,8 @@ export interface PlanItem {
   /** 창고 절대 경로 */
   src: string;
   component: Component;
+  /** 항목형이면 그 카테고리 */
+  entry?: EntryCategory;
 }
 
 export function planProfile(ctx: Ctx, m: Manifest, profile: string): PlanItem[] {
@@ -109,11 +127,13 @@ export function planProfile(ctx: Ctx, m: Manifest, profile: string): PlanItem[] 
   const items: PlanItem[] = [];
   for (const [category, ids] of Object.entries(p)) {
     if (category === PACKAGES) continue;
-    const cat = category === INSTRUCTIONS ? INSTRUCTIONS : ctx.adapter.categories().find((k) => k.name === category);
+    const cat = category === INSTRUCTIONS ? INSTRUCTIONS
+      : ctx.adapter.categories().find((k) => k.name === category) ?? ctx.adapter.entries().find((e) => e.name === category);
     if (!cat) throw new Error(`프로필 "${profile}": 어댑터 ${ctx.adapter.name} 은 카테고리 "${category}" 를 모릅니다`);
+    const entry = cat !== INSTRUCTIONS && cat.kind === "entry" ? cat : undefined;
     for (const id of ids) {
       const component = findComponent(m, category, id);
-      items.push({ category, id, rel: targetRel(cat, id), src: sourcePath(ctx, category, component), component });
+      items.push({ category, id, rel: targetRel(cat, id), src: sourcePath(ctx, category, component), component, entry });
     }
   }
   return items;

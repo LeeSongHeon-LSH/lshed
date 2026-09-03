@@ -7,6 +7,23 @@ export interface Category {
   kind: "dir" | "file";
 }
 
+/**
+ * 파일이 아니라 설정 파일 안의 JSON 항목으로 사는 카테고리 (예: MCP 서버, §2.3).
+ * 창고에는 <name>/<id>.json 으로 담기며 시크릿은 "${VAR}" 자리표시자로 바뀐다 (§7.1).
+ */
+export interface EntryCategory {
+  name: string;
+  kind: "entry";
+  /** 이 키들 바로 아래의 시크릿 같은 값을 마스킹한다 (예: env, headers) */
+  secretKeys: readonly string[];
+  /** 에이전트가 "${VAR}" 를 스스로 확장하는가. true 면 자리표시자를 그대로 배치하고 시크릿은 lshed 를 거치지 않는다 */
+  expandsEnv: boolean;
+  /** 로컬의 모든 항목 (id → 값) */
+  read(): Promise<Record<string, unknown>>;
+  /** 항목 하나를 쓰거나(value) 지운다(null). 설정 파일의 다른 키는 건드리지 않는다 */
+  write(id: string, value: unknown | null): Promise<void>;
+}
+
 export interface ScannedComponent {
   category: string;
   id: string;
@@ -23,6 +40,8 @@ export interface AgentAdapter {
   /** 사용자 레벨 설정 루트 (예: ~/.claude). 테스트에서 주입 가능. */
   readonly root: string;
   categories(): readonly Category[];
+  /** 항목형 카테고리 (MCP 등). 없으면 빈 배열 */
+  entries(): readonly EntryCategory[];
   /** 지침 파일: import 목록 생성 vs 단순 연결 (§3.3) */
   instructionsStrategy(): "import" | "concat";
   /** 지침 파일 이름 (루트 기준). 예: CLAUDE.md */

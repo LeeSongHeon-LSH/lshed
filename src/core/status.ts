@@ -5,17 +5,25 @@ import { loadManifest } from "./context.js";
 import { packagesOf } from "../manifest.js";
 import { readLock } from "../lock.js";
 import { packageStatus, type PackageStatus } from "./packages.js";
+import { planProfile } from "./context.js";
+import { expand, readEntryFile } from "./entries.js";
 
-export interface Status { state: State | null; drifted: string[]; packages: PackageStatus[] }
+export interface Status { state: State | null; drifted: string[]; packages: PackageStatus[]; missingEnv: { rel: string; vars: string[] }[] }
 
 export async function status(ctx: Ctx): Promise<Status> {
   const state = await readState(ctx.adapter);
-  if (!state) return { state: null, drifted: [], packages: [] };
+  if (!state) return { state: null, drifted: [], packages: [], missingEnv: [] };
   const d = await diff(ctx);
   const m = await loadManifest(ctx);
   const lock = await readLock(ctx.shed);
   const packages = await Promise.all(packagesOf(m, state.profile).map((p) => packageStatus(ctx, p, lock)));
-  return { state, drifted: d.map((x) => `${x.item.category}/${x.item.id}`), packages };
+  const missingEnv: Status["missingEnv"] = [];
+  for (const it of planProfile(ctx, m, state.profile).filter((p) => p.entry)) {
+    const shed = await readEntryFile(it.src);
+    const missing = shed === null ? [] : expand(shed).missing;
+    if (missing.length) missingEnv.push({ rel: it.rel, vars: missing });
+  }
+  return { state, drifted: d.map((x) => `${x.item.category}/${x.item.id}`), packages, missingEnv };
 }
 
 export function formatStatus(s: Status, adapterRoot: string): string {
@@ -32,5 +40,6 @@ export function formatStatus(s: Status, adapterRoot: string): string {
     const where = !p.present ? "설치 안 됨 → lshed restore" : !p.locked ? `${short(p.rev)} (락 없음)` : p.rev === p.locked ? `${short(p.rev)} = lock` : `${short(p.rev)} ≠ lock ${short(p.locked)} → lshed update`;
     lines.push(`패키지   ${p.pkg.id}  ${where}`);
   }
+  for (const m of s.missingEnv) lines.push(`환경변수 ${m.rel}: ${m.vars.join(", ")} 없음  → 셸에서 export 하세요`);
   return lines.join("\n");
 }

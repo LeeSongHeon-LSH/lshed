@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf } from "./context.js";
+import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf, entryOf } from "./context.js";
+import { expand, matches, placeholdersIn, readEntryFile, writeEntryFile, type Json } from "./entries.js";
 import { readState, writeState, LSHED_DIR } from "../state.js";
 import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
@@ -14,6 +15,8 @@ export interface RestoreResult {
   removed: string[];
   backedUp: string[];
   backupDir: string | null;
+  /** 배치한 항목이 참조하는데 지금 환경에 없는 변수 */
+  missingEnv: { rel: string; vars: string[] }[];
 }
 
 /**
@@ -48,8 +51,23 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   const backupDir = path.join(ctx.adapter.root, LSHED_DIR, "backups", stamp);
   const backedUp: string[] = [];
   const placed: string[] = [];
+  const missingEnv: { rel: string; vars: string[] }[] = [];
+  const localEntries = new Map<string, Record<string, unknown>>();
+  const entriesOf = async (cat: { name: string; read(): Promise<Record<string, unknown>> }) => {
+    if (!localEntries.has(cat.name)) localEntries.set(cat.name, await cat.read());
+    return localEntries.get(cat.name)!;
+  };
 
   async function backUp(rel: string) {
+    const en = entryOf(ctx, rel);
+    if (en) {
+      const cur = (await entriesOf(en.cat))[en.id];
+      if (cur === undefined) return;
+      backedUp.push(rel);
+      if (opts.dryRun || !backup) return;
+      await writeEntryFile(path.join(backupDir, en.cat.name, `${en.id}.json`), cur as Json);
+      return;
+    }
     const from = abs(ctx, rel);
     if (!(await exists(from))) return;
     backedUp.push(rel);
@@ -61,11 +79,31 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   for (const rel of toRemove) {
     ctx.log(`  - ${rel}`);
     await backUp(rel);
-    if (!opts.dryRun) await removeTree(abs(ctx, rel));
+    if (opts.dryRun) continue;
+    const en = entryOf(ctx, rel);
+    if (en) await en.cat.write(en.id, null);
+    else await removeTree(abs(ctx, rel));
   }
 
   // 2) 배치
   for (const it of plan) {
+    if (it.entry) {
+      // 항목형: 설정 파일의 그 키만 바꾼다. 자리표시자는 에이전트가 확장하면 그대로, 아니면 여기서 채운다.
+      const shed = (await readEntryFile(it.src))!;
+      const local = (await entriesOf(it.entry))[it.id] as Json | undefined;
+      const vars = placeholdersIn(shed);
+      const ex = expand(shed);
+      if (ex.missing.length) missingEnv.push({ rel: it.rel, vars: ex.missing });
+      const value = it.entry.expandsEnv ? shed : ex.value;
+      const same = local !== undefined && matches(shed, local);
+      const mark = same ? "=" : local !== undefined ? "~" : "+";
+      ctx.log(`  ${mark} ${it.rel}${vars.length ? `  (${vars.map((v) => "${" + v + "}").join(", ")})` : ""}`);
+      if (same) { placed.push(it.rel); continue; }
+      if (local !== undefined) await backUp(it.rel);
+      if (!opts.dryRun) await it.entry.write(it.id, value);
+      placed.push(it.rel);
+      continue;
+    }
     const target = abs(ctx, it.rel);
     const same = (await hashTree(target, ignoreOf(ctx))) === (await hashTree(it.src, ignoreOf(ctx)));
     const mark = same ? "=" : (await exists(target)) ? "~" : "+";
@@ -97,12 +135,20 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   if (opts.dryRun) {
     ctx.log(`\n(dry-run) 변경 없음. 배치 ${placed.length}, 제거 ${toRemove.length}, 백업 예정 ${backedUp.length}`);
     reportPending(ctx, pkgRes);
-    return { profile, placed, removed: toRemove, backedUp, backupDir: null };
+    reportMissingEnv(ctx, missingEnv);
+    return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv };
   }
 
   await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString() });
   const bdir = backup && backedUp.length ? backupDir : null;
   ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.installed.length ? `, 패키지 설치 ${pkgRes.installed.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
-  return { profile, placed, removed: toRemove, backedUp, backupDir: bdir };
+  reportMissingEnv(ctx, missingEnv);
+  return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv };
+}
+
+export function reportMissingEnv(ctx: Ctx, missing: { rel: string; vars: string[] }[]): void {
+  if (!missing.length) return;
+  ctx.log(`\n환경변수가 없는 항목이 있습니다. 시크릿 값은 창고에 담지 않으므로 이 기기의 셸 환경에 넣으세요 (예: ~/.zshrc 의 export):`);
+  for (const m of missing) ctx.log(`  ${m.rel}: ${m.vars.join(", ")}`);
 }

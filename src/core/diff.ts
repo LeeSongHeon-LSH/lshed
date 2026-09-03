@@ -1,6 +1,7 @@
 import { type Ctx, loadManifest, planProfile, abs, type PlanItem, ignoreOf } from "./context.js";
 import { readState } from "../state.js";
 import { diffTrees, type FileChange } from "../fsutil.js";
+import { diffEntry, readEntryFile, type Json } from "./entries.js";
 
 export interface ComponentDiff { item: PlanItem; changes: FileChange[] }
 
@@ -10,8 +11,16 @@ export async function diff(ctx: Ctx): Promise<ComponentDiff[]> {
   if (!state) throw new Error("적용된 프로필이 없습니다. 먼저 'lshed restore <profile>' 을 실행하세요.");
   const m = await loadManifest(ctx);
   const out: ComponentDiff[] = [];
+  const localEntries = new Map<string, Record<string, unknown>>();
   for (const item of planProfile(ctx, m, state.profile)) {
-    const changes = await diffTrees(abs(ctx, item.rel), item.src, ignoreOf(ctx));
+    let changes: FileChange[];
+    if (item.entry) {
+      if (!localEntries.has(item.category)) localEntries.set(item.category, await item.entry.read());
+      const shed = await readEntryFile(item.src);
+      changes = shed === null ? [{ status: "A", file: "(entry)" }] : diffEntry(shed, localEntries.get(item.category)![item.id] as Json | undefined);
+    } else {
+      changes = await diffTrees(abs(ctx, item.rel), item.src, ignoreOf(ctx));
+    }
     if (changes.length) out.push({ item, changes });
   }
   return out;

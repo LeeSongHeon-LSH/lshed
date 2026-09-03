@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0 — 2026-09-03
+
+Hand-configured MCP servers travel with the profile. Secret values do not.
+
+- New category `mcp` for Claude Code: each user-scope server in `~/.claude.json` becomes `mcp/<name>.json` in the shed. `restore` writes only `mcpServers.<name>` and leaves the rest of the file (machine ID, session state, servers you added by hand) untouched. The file is replaced atomically.
+- `init` masks values under `env` and `headers` whose key looks like a secret with `${VAR}` (`EXA_API_KEY` → `${EXA_API_KEY}`, `Authorization: Bearer …` → `Bearer ${NOTION_AUTHORIZATION}`). Claude Code expands `${VAR}` from the environment in every scope, so `restore` places the placeholder verbatim and no secret passes through lshed. Verified against the real binary.
+- `restore` and `status` list the variables a profile needs that are not set in the current shell.
+- `diff` shows entry changes by key path; `save` keeps placeholders that still match and masks newly added secret-looking keys.
+- Profile switches remove only the servers lshed placed, backing each up as JSON.
+- Adapter interface: `entries()` returns categories that live as JSON entries instead of files, with `secretKeys` and `expandsEnv` policy. The default root honours `CLAUDE_CONFIG_DIR`.
+- Managed-set paths for entries are written as `mcp:<name>`; a colon cannot appear in a path segment, so they never collide with files.
+
 ## 0.3.0 — 2026-09-02
 
 Claude Code plugins are packages now. On the machine this was built against, the five installed plugins were the only thing a fresh `restore` still left out, and two of them carry MCP servers.

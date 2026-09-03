@@ -64,12 +64,15 @@ components:
   instructions:
     - id: base                    # file:./instructions/base.md
     - id: research-style
+  mcp:
+    - id: exa                     # file:./mcp/exa.json — secrets replaced by ${VAR}
 
 profiles:
   research:
     skills: [paper-review]
     agents: [reviewer]
     instructions: [base, research-style]    # order matters
+    mcp: [exa]
   teaching:
     skills: [grading-helper]
     commands: [summarize]
@@ -77,9 +80,24 @@ profiles:
 ```
 
 - Component `source` accepts `file:<path relative to the shed>`. Package `source` accepts `github:owner/repo@ref` or `git:<url>#ref`.
-- Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`.
+- Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`, `mcp`.
 - `ignore:` at the top level adds to the built-in list of things never copied: `node_modules`, `.git`, `__pycache__`, `.venv`, cache directories, `*.log`. Build output like `dist/` is not ignored by default, since some skills ship it. Add it yourself if your parts rebuild from source.
 - Instructions are not merged. `restore` writes a `CLAUDE.md` that `@`-imports each fragment in order, so a fragment edit shows up without re-running anything. Your original `CLAUDE.md` is backed up the first time.
+
+## MCP servers and secrets
+
+User-scope MCP servers live in `~/.claude.json`, next to machine IDs and session state. lshed treats each server as a component of category `mcp`: the shed holds `mcp/<name>.json`, and `restore` edits only the `mcpServers.<name>` key of `~/.claude.json`, leaving everything else in that file alone.
+
+**No secret value enters the shed.** `init` replaces values under `env` and `headers` whose key looks like a secret (`key`, `token`, `secret`, `pass`, `auth`, `credential`, `cookie`, `session`) with a `${VAR}` placeholder:
+
+```json
+{ "type": "stdio", "command": "npx", "args": ["-y", "exa-mcp-server"],
+  "env": { "EXA_API_KEY": "${EXA_API_KEY}" } }
+{ "type": "http", "url": "https://mcp.notion.com/mcp",
+  "headers": { "Authorization": "Bearer ${NOTION_AUTHORIZATION}" } }
+```
+
+`restore` writes the placeholder as is. Claude Code expands `${VAR}` from the environment when it starts the server, so the value only ever lives in your shell (`export EXA_API_KEY=...` in `~/.zshrc`, or however you manage secrets). `restore` and `status` list the variables the profile needs that are not set. The heuristic is a suggestion: edit the JSON in the shed to add or remove placeholders, and `init` warns when something in `args` or `url` looks like a token. `save` keeps existing placeholders and masks new secret-looking keys, so a rotated key never leaks into the shed by accident.
 
 ## Three kinds of things
 
@@ -168,22 +186,24 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 <shed>/
   lshed.yaml
   skills/<id>/            agents/<id>.md        commands/<id>.md        instructions/<id>.md
+  mcp/<id>.json                                 ← secrets as ${VAR}
 
 ~/.claude/
   skills/ agents/ commands/ CLAUDE.md           ← placed by restore
+~/.claude.json  mcpServers.<id>                 ← one key per mcp component; the rest of the file is untouched
   lshed/state.json                              ← which profile, which paths are managed
   lshed/instructions/<id>.md                    ← fragments imported by CLAUDE.md
   lshed/backups/<timestamp>/                    ← whatever restore replaced
 ```
 
-`state.json` is per machine and is not part of the shed.
+`state.json` is per machine and is not part of the shed. If `CLAUDE_CONFIG_DIR` is set, lshed uses it as the root and expects `.claude.json` inside it, as Claude Code does.
 
 ## Not in scope (yet)
 
-- MCP servers and secrets. Planned: the manifest names the keys, values are injected locally, nothing secret enters the shed.
+- Secrets beyond "name the variable". Encrypted values, `op://` references and OS keychains are possible later; today lshed is deliberately no better than dotfiles here.
+- Project-scope MCP servers (`.mcp.json`, `~/.claude.json` `projects.*`). They belong to the project.
 - `settings.json` merging (hooks, permissions).
 - `sync` (a git pull/push wrapper). Use git in the shed directly for now.
-- MCP servers configured by hand in `~/.claude.json`. Plugin-bundled ones are covered.
 - Windows and macOS have not been tested. The code avoids platform-specific paths, but treat 0.1 as Linux/WSL.
 
 ## Troubleshooting

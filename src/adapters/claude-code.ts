@@ -1,8 +1,9 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import type { AgentAdapter, Category, ScannedComponent } from "./types.js";
+import type { AgentAdapter, Category, EntryCategory, ScannedComponent } from "./types.js";
 import { marketplaceInstaller, pluginInstaller } from "../installers/claude-plugin.js";
+import { ClaudeMcpEntries } from "./claude-mcp.js";
 
 const CATEGORIES: readonly Category[] = [
   { name: "skills", root: "skills", kind: "dir" },
@@ -14,9 +15,16 @@ const CATEGORIES: readonly Category[] = [
 export class ClaudeCodeAdapter implements AgentAdapter {
   readonly name = "claude-code";
   readonly root: string;
+  private readonly mcp: EntryCategory;
 
   constructor(root?: string) {
-    this.root = root ?? path.join(os.homedir(), ".claude");
+    // Claude Code 는 CLAUDE_CONFIG_DIR 가 있으면 설정 전체(.claude.json 포함)를 그 안에 둔다
+    this.root = root ?? process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
+    this.mcp = new ClaudeMcpEntries(this.root);
+  }
+
+  entries() {
+    return [this.mcp];
   }
 
   categories() {

@@ -101,9 +101,10 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
   return m;
 }
 
-/** source 생략 시 관례: file:./<category>/<id> (dir) 또는 file:./<category>/<id>.md (file) */
-export function effectiveSource(category: string, c: Component, kind: "dir" | "file" = "dir"): string {
-  return c.source ?? `file:./${category}/${c.id}${kind === "file" ? ".md" : ""}`;
+/** source 생략 시 관례: file:./<category>/<id> (dir), <id>.md (file), <id>.json (entry) */
+export function effectiveSource(category: string, c: Component, kind: "dir" | "file" | "entry" = "dir"): string {
+  const ext = kind === "file" ? ".md" : kind === "entry" ? ".json" : "";
+  return c.source ?? `file:./${category}/${c.id}${ext}`;
 }
 
 export function stringifyManifest(m: Manifest): string {

@@ -101,7 +101,7 @@ program
   .action(() => run(async () => {
     const adapter = adapterFromOpts();
     const state = await readState(adapter);
-    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [] }, adapter.root)); return; }
+    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [], missingEnv: [] }, adapter.root)); return; }
     const ctx = await ctxFor("other");
     console.log(formatStatus(await status(ctx), adapter.root));
   }));
@@ -157,7 +157,9 @@ program
     const adapter = adapterFromOpts();
     const found = await adapter.scan();
     for (const c of found) console.log(`${c.category}/${c.id}\t${c.path}`);
-    console.error(`${found.length}개 발견 (root: ${adapter.root})`);
+    let n = found.length;
+    for (const e of adapter.entries()) for (const id of Object.keys(await e.read())) { console.log(`${e.name}/${id}\t(entry)`); n++; }
+    console.error(`${n}개 발견 (root: ${adapter.root})`);
   }));
 
 program.parseAsync();

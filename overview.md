@@ -280,7 +280,8 @@ README = UI. 30초 개요, 복사해서 되는 Quick Start, 매니페스트 레�
 ### 4.4 동기화는 도구 밖
 
 창고는 디렉터리이므로 `git clone <내 창고>` 뒤 `lshed restore research`면 끝이다.
-v0.1에 저장소 백엔드 추상화는 두지 않는다. `lshed sync`(git pull/push 래퍼)는 v0.2 편의 기능이다.
+v0.1에 저장소 백엔드 추상화는 두지 않는다. `lshed sync`(git pull/push 래퍼)는 편의 기능이다 (0.6.0 구현).
+commit → pull --rebase → push 를 묶고, 충돌이면 rebase 를 되돌려 창고를 깨끗하게 둔다. save 는 대신 해 주지 않고 경고만 한다.
 
 ### 4.5 크로스 플랫폼
 
@@ -326,7 +327,7 @@ lshed list [--unused]            # 창고 목록 / 어떤 프로필에도 안 �
 lshed remove <id>                # 창고에서 삭제 (프로필 참조가 있으면 거부)           v0.2
 lshed prune                      # 미사용 부품 일괄 정리 (확인 후)                     v0.2
 lshed update [<id>...]           # 원격 출처 재해석 + 락파일 갱신                       v0.2
-lshed sync                       # 창고 git pull/push 래퍼                              v0.2
+lshed sync [-m] [--no-push]      # 창고 commit + pull --rebase + push                    v0.6
 ```
 
 프로필 편집 명령은 두지 않는다. `lshed.yaml`을 직접 고치는 편이 어떤 UI보다 낫다.
@@ -455,7 +456,7 @@ v0.2  남이 쓸 수 있는 수준
    ✓ 플러그인·마켓플레이스를 packages 로 (설치기 인터페이스)            ← 0.3.0
    ✓ MCP (손으로 넣은 것. 시크릿은 ${VAR} 자리표시자)                 ← 0.4.0
    ✓ add (init 의 증분판. 감지는 제안, 확정은 사용자)                  ← 0.5.0
-   - sync
+   ✓ sync (commit·pull --rebase·push. 충돌이면 되돌림)                 ← 0.6.0
 
 v0.3
    - settings.json 병합 (hooks, permissions)
@@ -539,8 +540,8 @@ v0.3
 - [x] 0.4.0 MCP 항목형 부품 + ${VAR} 마스킹 — 2026-09-03 (실제 Claude Code 가 사용자 범위에서 확장하는지 프로브로 검증)
 - [ ] npm `lshed@0.4.0` 발행 (0.1.1~0.3.0 도 미발행)
 - [x] 0.5.0 `lshed add` — init 의 분류(discover)·수집(ingest)을 공용화해 증분으로. `exclude:` 를 매니페스트에 기록 — 2026-09-03
-- [ ] npm `lshed@0.5.0` 발행
-- [ ] sync
+- [x] 0.6.0 `lshed sync` + README 사용 안내 개정 — 2026-09-03
+- [ ] npm `lshed@0.6.0` 발행 (0.1.1~ 전부 미발행)
 
 ---
 

@@ -16,6 +16,7 @@ import { updatePackages, reportPending } from "./core/packages.js";
 import { listRows, formatRows } from "./core/list.js";
 import { remove, prune } from "./core/remove.js";
 import { add } from "./core/add.js";
+import { sync } from "./core/sync.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -130,6 +131,17 @@ program
   .action((keys: string[], o: { all?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     await add(ctx, keys, { all: o.all });
+  }));
+
+program
+  .command("sync")
+  .description("commit the shed, pull --rebase and push (the shed must be a git repo with origin)")
+  .option("-m, --message <msg>", "commit message (default: names the changed parts)")
+  .option("--no-push", "commit and pull only")
+  .option("--dry-run", "show what would be committed and pushed")
+  .action((o: { message?: string; push: boolean; dryRun?: boolean }) => run(async () => {
+    const ctx = await ctxFor("other");
+    await sync(ctx, { message: o.message, push: o.push, dryRun: o.dryRun });
   }));
 
 program

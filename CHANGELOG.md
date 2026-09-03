@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 — 2026-09-03
+
+- `lshed sync [-m <msg>] [--no-push] [--dry-run]`: commits everything in the shed, `git pull --rebase`, `git push` (setting the upstream the first time). Without `origin` it only commits. When commits come in it says to run `lshed restore`. On a conflict it aborts the rebase, leaves your commit in place and hands you the git command. It warns first if `diff` shows edits you have not saved, and never runs `save` for you.
+- README rewritten as a usage guide: day one, daily loop, new machine, profiles, adding things, updating packages, housekeeping, output marks, every command with its flags.
+
 ## 0.5.0 — 2026-09-03
 
 `init` was a one-shot. Anything you made afterwards had to be copied into the shed and typed into `lshed.yaml` by hand.

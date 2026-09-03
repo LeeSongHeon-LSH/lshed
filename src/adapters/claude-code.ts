@@ -73,33 +73,41 @@ export class ClaudeCodeAdapter implements AgentAdapter {
   async scan(): Promise<ScannedComponent[]> {
     const out: ScannedComponent[] = [];
     for (const cat of CATEGORIES) {
-      const dir = path.join(this.root, cat.root);
-      let entries: import("node:fs").Dirent[];
-      try {
-        entries = await fs.readdir(dir, { withFileTypes: true });
-      } catch {
-        continue; // 카테고리 디렉터리가 없으면 비어 있는 것
-      }
-      // readdir 순서는 파일 시스템마다 다르다. 매니페스트는 git 에 들어가므로 기기와 무관해야 한다.
-      // localeCompare 는 로케일을 타므로 쓰지 않는다.
-      entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-      for (const e of entries) {
-        if (e.name.startsWith(".")) continue;
-        const full = path.join(dir, e.name);
-        // 심볼릭 링크로 걸린 부품도 잡아야 하므로 Dirent 대신 stat 으로 판정한다
-        let st: import("node:fs").Stats;
-        try {
-          st = await fs.stat(full);
-        } catch {
-          continue; // 끊어진 링크
-        }
-        if (cat.kind === "dir" && st.isDirectory()) {
-          out.push({ category: cat.name, id: e.name, path: full });
-        } else if (cat.kind === "file" && st.isFile() && e.name.endsWith(".md")) {
-          out.push({ category: cat.name, id: e.name.slice(0, -3), path: full });
-        }
-      }
+      // 스킬은 skills/<name>/SKILL.md 한 단계다. agents/commands 는 Claude Code 가 하위 디렉터리를 재귀적으로 읽으므로
+      // 그대로 따라간다. id 는 루트 기준 상대 경로(POSIX, 확장자 제외)라 사용자의 폴더 정리가 창고에도 보존된다.
+      await this.walk(cat, path.join(this.root, cat.root), "", out);
     }
     return out;
+  }
+
+  private async walk(cat: Category, dir: string, rel: string, out: ScannedComponent[]): Promise<void> {
+    let entries: import("node:fs").Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return; // 카테고리 디렉터리가 없으면 비어 있는 것
+    }
+    // readdir 순서는 파일 시스템마다 다르다. 매니페스트는 git 에 들어가므로 기기와 무관해야 한다.
+    // localeCompare 는 로케일을 타므로 쓰지 않는다.
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const full = path.join(dir, e.name);
+      const id = rel ? `${rel}/${e.name}` : e.name;
+      // 심볼릭 링크로 걸린 부품도 잡아야 하므로 Dirent 대신 stat 으로 판정한다
+      let st: import("node:fs").Stats;
+      try {
+        st = await fs.stat(full);
+      } catch {
+        continue; // 끊어진 링크
+      }
+      if (cat.kind === "dir") {
+        if (st.isDirectory()) out.push({ category: cat.name, id, path: full });
+      } else if (st.isDirectory()) {
+        await this.walk(cat, full, id, out);
+      } else if (st.isFile() && e.name.endsWith(".md")) {
+        out.push({ category: cat.name, id: id.slice(0, -3), path: full });
+      }
+    }
   }
 }

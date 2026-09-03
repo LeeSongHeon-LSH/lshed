@@ -2,9 +2,21 @@ import { z } from "zod";
 import YAML from "yaml";
 import { parseSource, isComponentSource } from "./source.js";
 
+/** id 는 경로 구간을 가질 수 있다 (agents/team/reviewer.md → "team/reviewer"). 구간마다 영문·숫자·._- */
+const ID_RE = /^[\w.-]+(?:\/[\w.-]+)*$/;
+
+/**
+ * "category/id" 또는 "id" → 카테고리(없을 수 있음)와 id.
+ * id 자체에 '/' 가 들어갈 수 있으므로 첫 '/' 에서만 나눈다. 카테고리 이름에는 '/' 가 없다.
+ */
+export function parseKey(raw: string): { category?: string; id: string } {
+  const i = raw.indexOf("/");
+  return i < 0 ? { id: raw } : { category: raw.slice(0, i), id: raw.slice(i + 1) };
+}
+
 /** 부품 하나. source 생략 시 file:./<category>/<id> (§3.2 관례). */
 const ComponentSchema = z.object({
-  id: z.string().regex(/^[\w.-]+$/, "id는 영문·숫자·._- 만 허용"),
+  id: z.string().regex(ID_RE, "id는 영문·숫자·._- 와 구간 사이의 / 만 허용"),
   source: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });

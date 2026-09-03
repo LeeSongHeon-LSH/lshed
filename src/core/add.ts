@@ -5,7 +5,7 @@ import { readState, writeState } from "../state.js";
 import { readLock, writeLock } from "../lock.js";
 import { discover, notInManifest, inManifestNotInProfile, keyOf, type Found, type Discovered } from "./discover.js";
 import { ingest, tidy } from "./ingest.js";
-import type { Manifest } from "../manifest.js";
+import { parseKey, type Manifest } from "../manifest.js";
 
 export interface AddCandidates { fresh: Found[]; notInProfile: string[]; generated: Map<string, string> }
 
@@ -39,10 +39,13 @@ export async function add(ctx: Ctx, keys: string[] = [], opts: { all?: boolean }
   let chosen = c.fresh;
   if (keys.length) {
     chosen = keys.map((raw) => {
-      const [a, b] = raw.includes("/") ? raw.split("/", 2) : [undefined, raw];
-      const hits = c.fresh.filter((f) => f.id === b && (a === undefined || f.category === a));
+      // "agents/team/reviewer" 는 category=agents, id=team/reviewer. 카테고리 없이 "team/reviewer" 만 줘도 된다.
+      const tryBoth = (k: { category?: string; id: string }) => c.fresh.filter((f) => f.id === k.id && (k.category === undefined || f.category === k.category));
+      const k1 = parseKey(raw);
+      let hits = tryBoth(k1);
+      if (!hits.length && k1.category !== undefined) hits = tryBoth({ id: raw }); // 카테고리처럼 보인 첫 구간이 사실 id 의 일부
       if (!hits.length) {
-        const known = (m.components[a ?? ""] ?? []).some((x) => x.id === b) || Object.values(m.components).some((cs) => cs.some((x) => x.id === b)) || m.packages.some((p) => p.id === b);
+        const known = Object.values(m.components).some((cs) => cs.some((x) => x.id === k1.id || x.id === raw)) || m.packages.some((p) => p.id === k1.id);
         throw new Error(known ? `"${raw}" 는 이미 창고에 있습니다. 프로필에 넣으려면 lshed.yaml 의 profiles 를 고치세요.` : `"${raw}" 는 로컬에서 찾지 못했습니다. 'lshed add' 로 후보를 보세요.`);
       }
       if (hits.length > 1) throw new Error(`"${raw}" 가 모호합니다: ${hits.map(keyOf).join(", ")}`);

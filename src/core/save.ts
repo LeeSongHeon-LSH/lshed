@@ -3,7 +3,7 @@ import { matches, readEntryFile, remask, writeEntryFile, type Json } from "./ent
 import { readState } from "../state.js";
 import { copyTree, exists, hashTree } from "../fsutil.js";
 import { isSaveable } from "../resolvers/file.js";
-import { effectiveSource } from "../manifest.js";
+import { effectiveSource, parseKey } from "../manifest.js";
 
 /**
  * 로컬 편집 → 창고 (§3.4). file: 출처만. ids 를 주면 그것만, 없으면 현재 프로필 전체.
@@ -17,8 +17,9 @@ export async function save(ctx: Ctx, ids: string[] = []): Promise<string[]> {
 
   if (ids.length) {
     plan = ids.map((raw) => {
-      const [a, b] = raw.includes("/") ? raw.split("/", 2) : [undefined, raw];
-      const hits = plan.filter((p) => p.id === b && (a === undefined || p.category === a));
+      const k = parseKey(raw);
+      let hits = plan.filter((p) => p.id === k.id && (k.category === undefined || p.category === k.category));
+      if (!hits.length && k.category !== undefined) hits = plan.filter((p) => p.id === raw); // id 자체에 / 가 있는 경우
       if (!hits.length) throw new Error(`"${raw}" 는 현재 프로필(${state.profile})에 없습니다`);
       if (hits.length > 1) throw new Error(`"${raw}" 가 모호합니다: ${hits.map((h) => `${h.category}/${h.id}`).join(", ")}`);
       return hits[0];

@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import YAML, { isSeq, isMap } from "yaml";
 import { type Ctx, manifestPath, loadManifest, sourcePath, findComponent } from "./context.js";
-import { PACKAGES, type Manifest } from "../manifest.js";
+import { PACKAGES, parseKey, type Manifest } from "../manifest.js";
 import { listRows } from "./list.js";
 import { readLock, writeLock } from "../lock.js";
 import { exists, removeTree } from "../fsutil.js";
@@ -10,8 +10,9 @@ import { exists, removeTree } from "../fsutil.js";
 /** "category/id" 또는 "id" → 유일한 항목으로 해석 */
 export function resolveKey(m: Manifest, raw: string): { category: string; id: string } {
   const rows = listRows(m);
-  const [a, b] = raw.includes("/") ? raw.split("/", 2) : [undefined, raw];
-  const hits = rows.filter((r) => r.id === b && (a === undefined || r.category === a));
+  const k = parseKey(raw);
+  let hits = rows.filter((r) => r.id === k.id && (k.category === undefined || r.category === k.category));
+  if (!hits.length && k.category !== undefined) hits = rows.filter((r) => r.id === raw); // "team/reviewer" 처럼 id 자체에 / 가 있는 경우
   if (!hits.length) throw new Error(`"${raw}" 는 창고에 없습니다`);
   if (hits.length > 1) throw new Error(`"${raw}" 가 모호합니다: ${hits.map((h) => `${h.category}/${h.id}`).join(", ")}`);
   return { category: hits[0].category, id: hits[0].id };

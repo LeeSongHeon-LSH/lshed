@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.6 — 2026-09-03
+
+Agents organised in subdirectories were silently left out of the shed.
+
+- Claude Code reads `~/.claude/agents/` recursively (a subagent's name comes from its frontmatter, not its path), but `init` and `add` only looked at top-level `.md` files. A machine with `agents/team/reviewer.md` restored elsewhere without it, and nothing said so. File-kind categories (`agents`, `commands`) are now scanned recursively; the id keeps the path (`team/reviewer`), so your folder layout survives the round trip and two files with the same name in different folders do not collide. Skills stay one level deep, which is what Claude Code reads at the user root.
+- Keys accept the path form everywhere: `lshed save team/reviewer`, `lshed add agents/team/newbie`, `lshed remove agents/team/reviewer`.
+- Verified against the real binary that the generated `CLAUDE.md` import (`@lshed/instructions/main.md`) resolves relative to the file, so instruction fragments load. That had only ever been checked by reading the generated text.
+
 ## 0.7.5 — 2026-09-03
 
 - `init` and `add` now list what they find in a fixed order. `fs.readdir` returns entries in filesystem order, which differs between machines, so two people running `init` on the same harness got manifests whose component lists were ordered differently. `lshed.yaml` is a file you commit, so that showed up as noise in diffs.

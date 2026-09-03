@@ -235,3 +235,58 @@ describe("스캔 순서", () => {
     expect(ids).toEqual(["alpha", "alpha2", "beta", "bravo", "mike", "zulu"]);
   });
 });
+
+describe("하위 디렉터리의 에이전트·명령 (Claude Code 는 agents/ 를 재귀적으로 읽는다)", () => {
+  beforeEach(async () => {
+    await w(path.join(root, "agents/team/reviewer.md"), "nested reviewer");
+    await w(path.join(root, "agents/team/deep/qa.md"), "deep qa");
+    await w(path.join(root, "commands/frontend/component.md"), "nested command");
+    await w(path.join(root, "skills/alpha/nested/SKILL.md"), "skills are one level; this is part of alpha");
+  });
+
+  it("scan: id 에 경로가 들어가고, 스킬은 한 단계만", async () => {
+    const found = await ctx.adapter.scan();
+    expect(found.filter((c) => c.category === "agents").map((c) => c.id)).toEqual(["rev", "team/deep/qa", "team/reviewer"]);
+    expect(found.filter((c) => c.category === "commands").map((c) => c.id)).toEqual(["frontend/component"]);
+    expect(found.filter((c) => c.category === "skills").map((c) => c.id)).toEqual(["alpha", "beta"]);
+  });
+
+  it("init → 다른 기기 restore 가 같은 자리에 놓고, 전환이 그것만 지운다", async () => {
+    const { manifest } = await init(ctx);
+    expect(manifest.profiles.default.agents).toEqual(["rev", "team/deep/qa", "team/reviewer"]);
+    expect(await r(path.join(shed, "agents/team/reviewer.md"))).toBe("nested reviewer");
+    expect((await readState(ctx.adapter))?.managed).toEqual(expect.arrayContaining(["agents/team/reviewer.md", "agents/team/deep/qa.md", "commands/frontend/component.md"]));
+
+    const rootB = path.join(tmp, "B");
+    const ctxB: Ctx = { ...ctx, adapter: new ClaudeCodeAdapter(rootB) };
+    const res = await restore(ctxB, "default");
+    expect(res.removed).toEqual([]);
+    expect(await r(path.join(rootB, "agents/team/reviewer.md"))).toBe("nested reviewer");
+    expect(await r(path.join(rootB, "agents/team/deep/qa.md"))).toBe("deep qa");
+    expect(await r(path.join(rootB, "commands/frontend/component.md"))).toBe("nested command");
+
+    const y = await r(path.join(shed, "lshed.yaml"));
+    await fs.writeFile(path.join(shed, "lshed.yaml"), y + "  lean:\n    agents: [rev]\n");
+    const sw = await restore(ctxB, "lean");
+    expect(sw.removed).toEqual(expect.arrayContaining(["agents/team/reviewer.md", "agents/team/deep/qa.md"]));
+    expect(await exists(path.join(rootB, "agents/team/reviewer.md"))).toBe(false);
+    expect(await exists(path.join(rootB, "agents/rev.md"))).toBe(true);
+  });
+
+  it("키에 경로가 있어도 save / remove / add 가 찾는다", async () => {
+    await init(ctx);
+    await w(path.join(root, "agents/team/reviewer.md"), "edited");
+    expect(await save(ctx, ["team/reviewer"])).toEqual(["agents/team/reviewer"]);
+    expect(await r(path.join(shed, "agents/team/reviewer.md"))).toBe("edited");
+    await w(path.join(root, "agents/team/deep/qa.md"), "edited too");
+    expect(await save(ctx, ["agents/team/deep/qa"])).toEqual(["agents/team/deep/qa"]);
+
+    const { remove } = await import("../src/core/remove.js");
+    await expect(remove(ctx, "agents/team/reviewer")).rejects.toThrow(/default/);
+
+    await w(path.join(root, "agents/team/newbie.md"), "new");
+    const { add } = await import("../src/core/add.js");
+    expect(await add(ctx, ["team/newbie"])).toEqual(["agents/team/newbie"]);
+    expect(await r(path.join(shed, "agents/team/newbie.md"))).toBe("new");
+  });
+});

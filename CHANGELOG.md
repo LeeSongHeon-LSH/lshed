@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.0 — 2026-09-03
+
+`settings.json` travels, without merging.
+
+- New category `settings` for Claude Code: each top-level key of `~/.claude/settings.json` (`hooks`, `permissions`, `env`, `model`, `theme`, …) is one component, stored as `settings/<key>.json`. `restore` writes only the keys the profile lists; a profile can carry `permissions` and leave `model` to each machine. `enabledPlugins` is skipped because the plugin packages own it.
+- Absolute paths under the home directory are stored as `${HOME}/…` (MCP entries too), so hook commands survive a different home. Claude Code does not expand variables in `settings.json`, so `restore` expands `${HOME}` and other `${VAR}` there from the shell; MCP placeholders are still left for Claude Code.
+- `env` in settings is a secret map: secret-looking keys are masked.
+- The secret heuristic now matches whole words. `CLAUDE_CODE_MAX_OUTPUT_TOKENS` is not a token; `BYPASS_PERMISSIONS` is not a password.
+- `init` and `add` flag an entry whose value points inside a package (a hook a toolkit's installer wrote) and suggest `exclude:`.
+- The MCP adapter became a generic "one JSON key = one entry" store used by both categories.
+
 ## 0.6.0 — 2026-09-03
 
 - `lshed sync [-m <msg>] [--no-push] [--dry-run]`: commits everything in the shed, `git pull --rebase`, `git push` (setting the upstream the first time). Without `origin` it only commits. When commits come in it says to run `lshed restore`. On a conflict it aborts the rebase, leaves your commit in place and hands you the git command. It warns first if `diff` shows edits you have not saved, and never runs `save` for you.

@@ -8,7 +8,7 @@ import type { Manifest } from "../manifest.js";
 /** 로컬에서 발견한 것 하나. init 과 add 가 같은 분류를 쓴다 (§3.7). */
 export type Found =
   | { kind: "component"; category: string; id: string; path: string; cat: Category }
-  | { kind: "entry"; category: string; id: string; value: Json; cat: EntryCategory }
+  | { kind: "entry"; category: string; id: string; value: Json; cat: EntryCategory; warn?: string }
   | { kind: "package"; category: "packages"; id: string; pkg: DetectedPackage };
 
 export const keyOf = (f: { category: string; id: string }) => `${f.category}/${f.id}`;
@@ -49,7 +49,10 @@ export async function discover(ctx: Ctx, exclude: readonly string[] = []): Promi
     for (const id of Object.keys(all).sort()) {
       if (isExcluded(cat.name, id)) { excluded.push(`${cat.name}/${id}`); continue; }
       if (!/^[\w.-]+$/.test(id)) { ctx.log(`  ! ${cat.name}/${id}: 이름에 쓸 수 없는 문자가 있어 건너뜀`); continue; }
-      items.push({ kind: "entry", category: cat.name, id, value: all[id] as Json, cat });
+      // 값이 패키지 안을 가리키면 그 패키지의 설치가 써 넣은 것일 수 있다 (예: gstack 의 훅). 감지는 제안이다.
+      const owner = kept.find((p) => p.path && JSON.stringify(all[id]).includes(p.path));
+      const warn = owner ? `패키지 ${owner.id} 안을 가리킵니다. 그 설치가 만든 것이면 exclude 하세요: ${cat.name}/${id}` : undefined;
+      items.push({ kind: "entry", category: cat.name, id, value: all[id] as Json, cat, warn });
     }
   }
   return { items, generated, excluded };

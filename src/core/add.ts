@@ -30,7 +30,7 @@ export async function add(ctx: Ctx, keys: string[] = [], opts: { all?: boolean }
     if (!c.fresh.length) ctx.log("창고에 없는 새 항목이 없습니다.");
     else {
       ctx.log(`창고에 없는 항목 ${c.fresh.length}개 (넣으려면 lshed add <key...> 또는 --all):`);
-      for (const f of c.fresh) ctx.log(`  ${f.kind === "package" ? "≡" : " "} ${keyOf(f)}${f.kind === "package" ? `  ${f.pkg.source}` : ""}`);
+      for (const f of c.fresh) ctx.log(`  ${f.kind === "package" ? "≡" : " "} ${keyOf(f)}${f.kind === "package" ? `  ${f.pkg.source}` : f.kind === "entry" && f.warn ? `  ! ${f.warn}` : ""}`);
     }
     hint(ctx, c, state.profile);
     return [];

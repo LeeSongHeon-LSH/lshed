@@ -49,9 +49,10 @@ export async function ingest(ctx: Ctx, doc: Document, profile: string, items: Fo
     } else {
       const masked = mask(f.id, f.value, f.cat);
       await writeEntryFile(path.join(ctx.shed, f.category, `${f.id}.json`), masked);
-      const vars = placeholdersIn(masked);
+      const vars = placeholdersIn(masked).filter((v) => v !== "HOME");
       ctx.log(`  + ${f.category}/${f.id}${vars.length ? `  (시크릿 → ${vars.map((v) => "${" + v + "}").join(", ")})` : ""}`);
       for (const where of suspiciousStrings(masked)) ctx.log(`    ! ${where} 가 시크릿처럼 보입니다. 창고의 ${f.category}/${f.id}.json 에서 \${VAR} 로 바꾸세요`);
+      if (f.warn) ctx.log(`    ! ${f.warn}`);
     }
     const comps = seqAt(doc, ["components", f.category]);
     if (!comps.items.some((it) => isMap(it) && it.get("id") === f.id)) comps.add(doc.createNode({ id: f.id }));

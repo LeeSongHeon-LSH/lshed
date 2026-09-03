@@ -3,7 +3,8 @@ import path from "node:path";
 import os from "node:os";
 import type { AgentAdapter, Category, EntryCategory, ScannedComponent } from "./types.js";
 import { marketplaceInstaller, pluginInstaller } from "../installers/claude-plugin.js";
-import { ClaudeMcpEntries } from "./claude-mcp.js";
+import { JsonEntries } from "./json-entries.js";
+import { exists } from "../fsutil.js";
 
 const CATEGORIES: readonly Category[] = [
   { name: "skills", root: "skills", kind: "dir" },
@@ -15,16 +16,42 @@ const CATEGORIES: readonly Category[] = [
 export class ClaudeCodeAdapter implements AgentAdapter {
   readonly name = "claude-code";
   readonly root: string;
-  private readonly mcp: EntryCategory;
+  private readonly entryCats: readonly EntryCategory[];
 
   constructor(root?: string) {
     // Claude Code 는 CLAUDE_CONFIG_DIR 가 있으면 설정 전체(.claude.json 포함)를 그 안에 둔다
     this.root = root ?? process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
-    this.mcp = new ClaudeMcpEntries(this.root);
+    const root_ = this.root;
+    this.entryCats = [
+      /**
+       * 사용자 범위 MCP (§7.4): ~/.claude 의 형제 ~/.claude.json 의 mcpServers. CLAUDE_CONFIG_DIR 처럼 루트 안에 있으면 그것.
+       * Claude Code 가 ${VAR} 를 모든 범위에서 스스로 확장하므로 자리표시자를 그대로 둔다.
+       */
+      new JsonEntries({
+        name: "mcp",
+        file: async () => { const inside = path.join(root_, ".claude.json"); return (await exists(inside)) ? inside : `${root_}.json`; },
+        under: "mcpServers",
+        secretKeys: ["env", "headers"],
+        expandsEnv: true,
+      }),
+      /**
+       * settings.json (§7.6): 최상위 키 하나 = 항목 하나 (hooks, permissions, env, model, ...).
+       * 병합하지 않는다. 키를 통째로 소유하고, 로컬 편집은 diff/save 로 되가져온다.
+       * enabledPlugins 는 플러그인 설치기가 만드는 상태라 담지 않는다. ${VAR} 는 Claude Code 가 안 채우므로 restore 가 채운다.
+       */
+      new JsonEntries({
+        name: "settings",
+        file: async () => path.join(root_, "settings.json"),
+        secretKeys: [],
+        secretRootIds: ["env"],
+        expandsEnv: false,
+        skip: ["enabledPlugins"],
+      }),
+    ];
   }
 
   entries() {
-    return [this.mcp];
+    return this.entryCats;
   }
 
   categories() {

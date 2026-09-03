@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf, entryOf } from "./context.js";
-import { expand, matches, placeholdersIn, readEntryFile, writeEntryFile, type Json } from "./entries.js";
+import { expand, envWithHome, matches, placeholdersIn, readEntryFile, writeEntryFile, type Json } from "./entries.js";
 import { readState, writeState, LSHED_DIR } from "../state.js";
 import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
@@ -91,8 +91,8 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
       // 항목형: 설정 파일의 그 키만 바꾼다. 자리표시자는 에이전트가 확장하면 그대로, 아니면 여기서 채운다.
       const shed = (await readEntryFile(it.src))!;
       const local = (await entriesOf(it.entry))[it.id] as Json | undefined;
-      const vars = placeholdersIn(shed);
-      const ex = expand(shed);
+      const vars = placeholdersIn(shed).filter((v) => v !== "HOME");
+      const ex = expand(shed, envWithHome());
       if (ex.missing.length) missingEnv.push({ rel: it.rel, vars: ex.missing });
       const value = it.entry.expandsEnv ? shed : ex.value;
       const same = local !== undefined && matches(shed, local);

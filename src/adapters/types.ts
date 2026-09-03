@@ -16,6 +16,8 @@ export interface EntryCategory {
   kind: "entry";
   /** 이 키들 바로 아래의 시크릿 같은 값을 마스킹한다 (예: env, headers) */
   secretKeys: readonly string[];
+  /** 항목 자체가 시크릿 맵인 id (예: settings 의 env) */
+  secretRootIds?: readonly string[];
   /** 에이전트가 "${VAR}" 를 스스로 확장하는가. true 면 자리표시자를 그대로 배치하고 시크릿은 lshed 를 거치지 않는다 */
   expandsEnv: boolean;
   /** 로컬의 모든 항목 (id → 값) */

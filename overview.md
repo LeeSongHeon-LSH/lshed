@@ -100,7 +100,7 @@ dotfiles 관리 도구(chezmoi, GNU Stow, yadm 등)가 사실상 표준이다.
 | `commands` | `~/.claude/commands/<name>.md` | 파일 | v0.1 (동일) |
 | `instructions` | `~/.claude/CLAUDE.md` | 조각 → import 목록 생성 (§3.3) | v0.1 |
 | `mcp` | `~/.claude.json`의 `mcpServers` 키 | JSON 항목, 시크릿은 `${VAR}` | v0.4 구현 (§7.4) |
-| `settings` | `~/.claude/settings.json`의 hooks·permissions 등 | JSON 병합 | v0.3 (병합 규칙 필요) |
+| `settings` | `~/.claude/settings.json`의 최상위 키 | 키 하나 = 항목 하나, 병합 없음 | v0.7 구현 (§7.6) |
 
 > **플러그인**(`~/.claude/plugins/`)은 Claude Code가 자체 레지스트리로 설치·갱신하므로
 > lshed는 "어떤 플러그인이 켜져 있는지" 목록만 프로필에 기록한다(v0.2, `settings.enabledPlugins`).
@@ -439,6 +439,20 @@ Installer { schemes, priority, detect, status, install, update }
 
 ---
 
+### 7.6 settings.json — 병합하지 않는다 (v0.7 구현)
+
+초안은 "JSON 병합 (병합 규칙 필요)" 이었다. 규칙을 설계하는 대신 §7.4 의 항목형 카테고리를 그대로 썼다:
+**최상위 키 하나가 부품 하나**다 (`settings/permissions.json`, `settings/hooks.json`). 창고가 그 키를 통째로 소유한다.
+
+- 병합 규칙이 필요 없다. 배열(permissions.allow, hooks)의 합치기·중복·순서 문제가 사라진다.
+- 로컬에서 권한을 더 주면 diff 에 보이고 save 로 되가져온다. 스킬과 같은 규칙(§3.4).
+- 프로필이 키를 고른다. `permissions`·`hooks` 는 옮기고 `model` 은 기기마다 다르게 둘 수 있다.
+- `enabledPlugins` 는 플러그인 설치기가 만드는 상태라 담지 않는다 (§3.7 의 "설치가 만들어낸 것").
+- 홈 아래 절대경로는 `${HOME}/…` 로 담는다. settings.json 은 Claude Code 가 `${VAR}` 를 안 채우므로 `expandsEnv: false` — restore 가 셸 환경으로 채운다. MCP 는 여전히 Claude Code 가 채운다.
+- 실환경: gstack setup 이 써 넣은 Stop 훅은 "패키지 안을 가리킴" 으로 감지되어 exclude 했다. 부분 소유(배열 일부만 생성물)는 다루지 않는다. 키 단위가 한계이고, 감지는 제안이다.
+
+---
+
 ## 8. 버전 로드맵
 
 ```
@@ -459,7 +473,7 @@ v0.2  남이 쓸 수 있는 수준
    ✓ sync (commit·pull --rebase·push. 충돌이면 되돌림)                 ← 0.6.0
 
 v0.3
-   - settings.json 병합 (hooks, permissions)
+   ✓ settings.json — 병합 대신 키 단위 소유 (§7.6)                       ← 0.7.0
    - macOS / Windows 검증
    - --link 옵션 검토
 
@@ -541,7 +555,8 @@ v0.3
 - [ ] npm `lshed@0.4.0` 발행 (0.1.1~0.3.0 도 미발행)
 - [x] 0.5.0 `lshed add` — init 의 분류(discover)·수집(ingest)을 공용화해 증분으로. `exclude:` 를 매니페스트에 기록 — 2026-09-03
 - [x] 0.6.0 `lshed sync` + README 사용 안내 개정 — 2026-09-03
-- [ ] npm `lshed@0.6.0` 발행 (0.1.1~ 전부 미발행)
+- [x] 0.7.0 settings 항목형 + ${HOME} + 시크릿 단어 단위 — 2026-09-03
+- [ ] npm `lshed@0.7.0` 발행 (0.1.1~ 전부 미발행)
 
 ---
 

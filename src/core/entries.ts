@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type { EntryCategory } from "../adapters/types.js";
 
@@ -14,8 +15,14 @@ import type { EntryCategory } from "../adapters/types.js";
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
-/** 값이 시크릿일 법한 키 이름. 확정이 아니라 제안이다. 창고의 json 을 고쳐 조정한다. */
-export const SECRET_KEY_RE = /key|token|secret|pass|auth|credential|cookie|session/i;
+/**
+ * 값이 시크릿일 법한 키 이름. 확정이 아니라 제안이다. 창고의 json 을 고쳐 조정한다.
+ * 부분 문자열이 아니라 단어 단위로 본다: MAX_OUTPUT_TOKENS 나 BYPASS_PERMISSIONS 는 시크릿이 아니다.
+ */
+const SECRET_WORDS = new Set(["key", "apikey", "token", "secret", "password", "passwd", "auth", "authorization", "credential", "credentials", "cookie", "session"]);
+export function isSecretKey(k: string): boolean {
+  return k.split(/[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/).some((w) => SECRET_WORDS.has(w.toLowerCase()));
+}
 
 const PLACEHOLDER_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g;
 
@@ -41,22 +48,40 @@ const envName = (...parts: string[]) => parts.join("_").replace(/[^A-Za-z0-9]+/g
  *   headers: { Authorization: "Bearer xx" }     → "Bearer ${NOTION_AUTHORIZATION}"  (id_헤더이름; 스킴 단어는 남긴다)
  * 이미 자리표시자면 그대로 둔다.
  */
-export function mask(id: string, entry: Json, cat: Pick<EntryCategory, "secretKeys">): Json {
+export type MaskCat = Pick<EntryCategory, "secretKeys" | "secretRootIds">;
+
+export function mask(id: string, entry: Json, cat: MaskCat, home: string = os.homedir()): Json {
+  entry = portable(entry, home);
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return entry;
+  const maskSection = (sect: { [k: string]: Json }, envLike: boolean): { [k: string]: Json } => {
+    const masked: { [k: string]: Json } = {};
+    for (const [k, v] of Object.entries(sect)) {
+      if (typeof v !== "string" || !isSecretKey(k) || PLACEHOLDER_RE.test(v)) { masked[k] = v; PLACEHOLDER_RE.lastIndex = 0; continue; }
+      const name = envLike ? envName(k) : envName(id, k);
+      const scheme = /^(\w+) \S+$/.exec(v);
+      masked[k] = scheme ? `${scheme[1]} \${${name}}` : `\${${name}}`;
+    }
+    return masked;
+  };
+  if (cat.secretRootIds?.includes(id)) return maskSection(entry, true);
   const out: { [k: string]: Json } = { ...entry };
   for (const sk of cat.secretKeys) {
     const sect = out[sk];
     if (!sect || typeof sect !== "object" || Array.isArray(sect)) continue;
-    const masked: { [k: string]: Json } = {};
-    for (const [k, v] of Object.entries(sect)) {
-      if (typeof v !== "string" || !SECRET_KEY_RE.test(k) || PLACEHOLDER_RE.test(v)) { masked[k] = v; PLACEHOLDER_RE.lastIndex = 0; continue; }
-      const name = sk === "env" ? envName(k) : envName(id, k);
-      const scheme = /^(\w+) \S+$/.exec(v);
-      masked[k] = scheme ? `${scheme[1]} \${${name}}` : `\${${name}}`;
-    }
-    out[sk] = masked;
+    out[sk] = maskSection(sect, sk === "env");
   }
   return out;
+}
+
+/** 홈 디렉터리 절대 경로를 ${HOME} 으로. 기기마다 홈이 달라도 훅·명령 경로가 옮겨진다. expand 가 되돌린다. */
+export function portable(entry: Json, home: string = os.homedir()): Json {
+  if (!home || home === "/") return entry;
+  return walk(entry, (s) => (s === home || s.startsWith(home + "/") ? "${HOME}" + s.slice(home.length) : s));
+}
+
+/** expand 에 쓸 환경. HOME 은 항상 있다 (Windows 는 USERPROFILE 뿐이라). */
+export function envWithHome(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return { HOME: os.homedir(), ...env };
 }
 
 /** 값 안에서 시크릿처럼 생긴 문자열 (args, url 등 마스킹 대상이 아닌 곳). init 이 경고만 한다. */
@@ -103,7 +128,7 @@ export function matches(shed: Json, local: Json): boolean {
 }
 
 /** 로컬 값을 창고로 되가져온다. 창고에 있던 자리표시자가 여전히 맞으면 보존하고, 새 시크릿 키는 마스킹한다. */
-export function remask(id: string, local: Json, shed: Json | null, cat: Pick<EntryCategory, "secretKeys">): Json {
+export function remask(id: string, local: Json, shed: Json | null, cat: MaskCat, home: string = os.homedir()): Json {
   const keep = (l: Json, s: Json | undefined): Json => {
     if (typeof l === "string" && typeof s === "string" && stringMatches(s, l)) return s;
     if (Array.isArray(l) && Array.isArray(s)) return l.map((x, i) => keep(x, s[i]));
@@ -112,7 +137,7 @@ export function remask(id: string, local: Json, shed: Json | null, cat: Pick<Ent
     }
     return l;
   };
-  return mask(id, shed === null ? local : keep(local, shed), cat);
+  return mask(id, shed === null ? local : keep(local, portable(shed, home)), cat, home);
 }
 
 /** 다른 키 경로 목록 (diff 표시용). 창고에만 있으면 D, 로컬에만 있으면 A, 다르면 M. */

@@ -6,7 +6,7 @@ import { packagesOf } from "../manifest.js";
 import { readLock } from "../lock.js";
 import { packageStatus, type PackageStatus } from "./packages.js";
 import { planProfile } from "./context.js";
-import { expand, readEntryFile } from "./entries.js";
+import { expand, envWithHome, readEntryFile } from "./entries.js";
 import { candidates } from "./add.js";
 import { keyOf } from "./discover.js";
 
@@ -29,7 +29,7 @@ export async function status(ctx: Ctx): Promise<Status> {
   const missingEnv: Status["missingEnv"] = [];
   for (const it of planProfile(ctx, m, state.profile).filter((p) => p.entry)) {
     const shed = await readEntryFile(it.src);
-    const missing = shed === null ? [] : expand(shed).missing;
+    const missing = shed === null ? [] : expand(shed, envWithHome()).missing;
     if (missing.length) missingEnv.push({ rel: it.rel, vars: missing });
   }
   const fresh = (await candidates(ctx, m, state.profile)).fresh.map(keyOf);

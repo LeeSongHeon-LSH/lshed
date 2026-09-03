@@ -1,6 +1,6 @@
 # lshed
 
-Keep your coding-agent harness — skills, subagents, commands, instructions, MCP servers — in a **shed**, and restore it on any machine with one command.
+Keep your coding-agent harness — skills, subagents, commands, instructions, MCP servers, settings — in a **shed**, and restore it on any machine with one command.
 
 ```
 lshed init --shed ~/lshed          # scan ~/.claude into a shed + write lshed.yaml
@@ -17,7 +17,7 @@ lshed adds three first-class ideas on top of "a directory in git":
 
 | Idea | What it gives you |
 |---|---|
-| **Components** | every skill / agent / command / instruction fragment / MCP server is one named part in the shed |
+| **Components** | every skill / agent / command / instruction fragment / MCP server / settings key is one named part in the shed |
 | **Profiles** | named recipes — `research`, `work`, `minimal` — that pick a subset of parts |
 | **Managed set** | lshed remembers what it placed, so switching profiles removes only its own files and never touches yours |
 
@@ -227,6 +227,9 @@ components:
     - id: research-style
   mcp:
     - id: exa                     # file:./mcp/exa.json — secrets replaced by ${VAR}
+  settings:
+    - id: permissions             # file:./settings/permissions.json — one top-level key of settings.json
+    - id: hooks
 
 packages:
   - id: gstack
@@ -241,6 +244,7 @@ profiles:
     agents: [reviewer]
     instructions: [base, research-style]    # order matters
     mcp: [exa]
+    settings: [permissions, hooks]
   teaching:
     skills: [grading-helper]
     commands: [summarize]
@@ -248,7 +252,7 @@ profiles:
 ```
 
 - Component `source` accepts `file:<path relative to the shed>`. Package `source` accepts `github:owner/repo@ref`, `git:<url>#ref`, `claude-marketplace:<owner/repo>`, `claude-plugin:<name>@<marketplace>`.
-- Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`, `mcp`.
+- Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`, `mcp`, `settings`.
 - `ignore:` adds to the built-in list of things never copied: `node_modules`, `.git`, `__pycache__`, `.venv`, cache directories, `*.log`. Build output like `dist/` is not ignored by default, since some skills ship it.
 - `exclude:` lists parts that exist locally but must not enter the shed. `init --exclude` writes it.
 
@@ -274,7 +278,7 @@ Claude Code plugins are packages with their own scheme. `init` finds user-scope 
 
 User-scope MCP servers live in `~/.claude.json`, next to machine IDs and session state. lshed treats each server as a component of category `mcp`: the shed holds `mcp/<name>.json`, and `restore` edits only the `mcpServers.<name>` key of `~/.claude.json`, leaving everything else in that file alone.
 
-**No secret value enters the shed.** `init` and `add` replace values under `env` and `headers` whose key looks like a secret (`key`, `token`, `secret`, `pass`, `auth`, `credential`, `cookie`, `session`) with a `${VAR}` placeholder:
+**No secret value enters the shed.** `init` and `add` replace values under `env` and `headers` whose key contains a secret-looking word (`key`, `token`, `secret`, `password`, `auth`, `authorization`, `credential`, `cookie`, `session` — whole words, so `MAX_OUTPUT_TOKENS` is left alone) with a `${VAR}` placeholder:
 
 ```json
 { "type": "stdio", "command": "npx", "args": ["-y", "exa-mcp-server"],
@@ -284,6 +288,24 @@ User-scope MCP servers live in `~/.claude.json`, next to machine IDs and session
 ```
 
 `restore` writes the placeholder as is. Claude Code expands `${VAR}` from the environment when it starts the server, so the value only ever lives in your shell (`export EXA_API_KEY=...` in `~/.zshrc`, or however you manage secrets). `restore` and `status` list the variables the profile needs that are not set. The heuristic is a suggestion: edit the JSON in the shed to add or remove placeholders, and `init` warns when something in `args` or `url` looks like a token. `save` keeps existing placeholders and masks new secret-looking keys, so a rotated key never leaks into the shed by accident. `diff` compares with placeholders as wildcards, so a machine holding real values is not drift.
+
+## Settings
+
+`~/.claude/settings.json` holds hooks, permissions, `env`, the model, the theme, and some state Claude Code writes for itself. lshed does not merge it. Each **top-level key is one component** of category `settings`: the shed holds `settings/permissions.json`, `settings/hooks.json`, and so on, and `restore` writes exactly those keys, leaving the rest of the file alone. A profile can carry `permissions` and `hooks` and leave `model` to each machine.
+
+```
+$ lshed add
+창고에 없는 항목 3개:
+    settings/hooks  ! 패키지 gstack 안을 가리킵니다. 그 설치가 만든 것이면 exclude 하세요: settings/hooks
+    settings/model
+    settings/theme
+```
+
+- `enabledPlugins` is never taken: the plugin packages own it, and `restore` rebuilds it by installing them.
+- Absolute paths under your home directory become `${HOME}/…` in the shed, so a hook command written on one machine works on another. Claude Code does not expand variables in `settings.json`, so `restore` fills `${HOME}` and any `${VAR}` itself from your shell; unset variables are reported and left as placeholders.
+- `env` is treated as a secret map: keys that look secret are masked, the rest (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`, …) travel as they are.
+- A value pointing inside a package (a hook a toolkit's installer wrote) is flagged. If the installer recreates it, put it in `exclude:` and let `restore --yes` bring it back.
+- Since the shed owns the whole key, extra permissions you grant locally show up in `diff` and go into the shed with `save`, like any other edit.
 
 ## Commands
 
@@ -309,7 +331,7 @@ Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed r
 
 0. Installs any package in the profile that is missing, at the version in `lshed.lock`.
 1. Removes paths that the **previous** profile placed and the new one doesn't need.
-2. Copies every part of the new profile into place; writes every MCP entry into `~/.claude.json`.
+2. Copies every part of the new profile into place; writes MCP entries into `~/.claude.json` and settings keys into `settings.json`.
 3. Regenerates the instructions file.
 
 Anything it overwrites or removes is backed up first under `~/.claude/lshed/backups/<timestamp>/`, unless you pass `--no-backup`. Files lshed never placed are left alone. `--dry-run` prints the plan and writes nothing.
@@ -335,9 +357,11 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
   lshed.lock                                    package versions (generated)
   skills/<id>/    agents/<id>.md    commands/<id>.md    instructions/<id>.md
   mcp/<id>.json                                 secrets as ${VAR}
+  settings/<id>.json                            one top-level key each; home paths as ${HOME}
 
 ~/.claude/
   skills/ agents/ commands/ CLAUDE.md           ← placed by restore
+  settings.json  <id>                           ← one key per settings component; the rest is untouched
   lshed/state.json                              ← which profile, which paths are managed
   lshed/instructions/<id>.md                    ← fragments imported by CLAUDE.md
   lshed/backups/<timestamp>/                    ← whatever restore replaced
@@ -350,7 +374,6 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 - Secrets beyond "name the variable". Encrypted values, `op://` references and OS keychains are possible later; today lshed is deliberately no better than dotfiles here.
 - Project-scope MCP servers (`.mcp.json`, `~/.claude.json` `projects.*`) and project-scope plugins. They belong to the project.
-- `settings.json` merging (hooks, permissions).
 - Windows and macOS have not been tested. The code avoids platform-specific paths, but treat this as Linux/WSL for now.
 
 ## Troubleshooting
@@ -361,6 +384,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 - **`status` says a package differs from the lock** — something updated the clone or plugin behind lshed's back (Claude Code auto-updates plugins). `lshed update` records the new version.
 - **`status` keeps listing the same new things** — they are installer aliases or scratch. Add them to `exclude:` in `lshed.yaml`.
 - **restore says an MCP variable is missing** — export it in your shell profile and restart Claude Code. The placeholder in `~/.claude.json` is correct; Claude Code fills it at startup.
+- **restore wrote a hook with the wrong path** — the shed stores home paths as `${HOME}/…`. If a command points elsewhere on this machine, edit the JSON in the shed to use `${HOME}` or another variable and `restore` again.
 - **sync stopped on a conflict** — `cd <shed> && git pull --rebase`, resolve, `git rebase --continue`, then `lshed sync` again.
 
 ## License

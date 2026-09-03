@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.3 — 2026-09-03
+
+You no longer need Node to run lshed.
+
+- **Standalone binaries** for Windows x64, macOS (arm64/x64) and Linux (x64/arm64), attached to every tagged release. They carry their own runtime (~60-85 MB) and need nothing installed. `npm run binaries` builds all five from one machine.
+- **The npm package is self-contained.** `commander`, `yaml` and `zod` are bundled into `dist/cli.js` (627 KB) instead of being installed alongside it; `zod` alone was 7.9 MB. `npm install -g lshed` now downloads one file.
+- The version is baked in at build time, so the binaries do not look for a `package.json` that is not there.
+- The smoke script accepts `LSHED_CLI=<path>` and is run against the compiled binary in CI, so the binaries are tested, not just built.
+
+The design assumed everyone using a coding agent already had Node, because Claude Code installs through npm. Claude Code also has a native installer, and that assumption cost a user their laptop.
+
 ## 0.7.2 — 2026-09-03
 
 Joining a machine that already has a harness, found while preparing the Windows check.

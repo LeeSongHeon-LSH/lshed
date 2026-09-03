@@ -1,6 +1,6 @@
 {
   "name": "lshed",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Portable harness environment manager for coding agents",
   "license": "MIT",
   "author": "leesongheon <leesongheon1209@gmail.com>",
@@ -23,6 +23,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "smoke": "node scripts/smoke.mjs",
+    "binaries": "node scripts/build-binaries.mjs",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "keywords": [
@@ -33,12 +34,10 @@
     "mcp",
     "cli"
   ],
-  "dependencies": {
+  "devDependencies": {
     "commander": "^15.0.0",
     "yaml": "^2.9.0",
-    "zod": "^4.5.4"
-  },
-  "devDependencies": {
+    "zod": "^4.5.4",
     "@types/node": "^26.4.1",
     "tsup": "^8.5.1",
     "tsx": "^4.23.13",

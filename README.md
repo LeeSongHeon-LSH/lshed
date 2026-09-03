@@ -25,11 +25,23 @@ Currently supports **Claude Code** (`~/.claude`). Other agents plug in through a
 
 ## Install
 
+With Node 20 or newer:
+
 ```
-npm install -g lshed
+npm install -g lshed          # or run it once: npx lshed status
 ```
 
-Node 20 or newer. `git` on the PATH for packages and `sync`. `claude` on the PATH if your shed lists plugins.
+Without Node, download a standalone binary from the [latest release](https://github.com/LeeSongHeon-LSH/lshed/releases/latest) and put it on your PATH. It carries its own runtime, so it is ~80 MB.
+
+| Platform | File |
+|---|---|
+| Windows x64 | `lshed-windows-x64.exe` → rename to `lshed.exe` |
+| macOS Apple Silicon / Intel | `lshed-darwin-arm64` / `lshed-darwin-x64` |
+| Linux x64 / arm64 | `lshed-linux-x64` / `lshed-linux-arm64` |
+
+On macOS and Linux, `chmod +x` it first. The binaries are unsigned, so macOS warns on first run.
+
+Either way you also need `git` on the PATH for packages and `sync`, and `claude` if your shed lists plugins.
 
 ## Quick start
 

@@ -5,7 +5,9 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const cli = path.resolve("dist/cli.js");
+// LSHED_CLI 로 실행파일을 지정하면 그것을 검사한다 (컴파일된 바이너리 검증용)
+const bin = process.env.LSHED_CLI ? path.resolve(process.env.LSHED_CLI) : null;
+const cli = bin ?? path.resolve("dist/cli.js");
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-smoke-"));
 const A = path.join(tmp, "A"), B = path.join(tmp, "B"), shed = path.join(tmp, "shed");
 const w = async (p, c) => { await fs.mkdir(path.dirname(p), { recursive: true }); await fs.writeFile(p, c); };
@@ -13,7 +15,9 @@ const J = (o) => JSON.stringify(o, null, 2);
 let failed = 0;
 
 function run(root, args, env = {}) {
-  const r = spawnSync(process.execPath, [cli, "--root", root, "--shed", shed, ...args], { encoding: "utf8", env: { ...process.env, ...env } });
+  const argv = ["--root", root, "--shed", shed, ...args];
+  const r = bin ? spawnSync(bin, argv, { encoding: "utf8", env: { ...process.env, ...env } })
+                : spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8", env: { ...process.env, ...env } });
   const out = (r.stdout + r.stderr).trim();
   console.log(`\n$ lshed ${args.join(" ")}   (root=${path.basename(root)})\n${out.replace(/^/gm, "  ")}`);
   return { code: r.status, out };
@@ -94,5 +98,5 @@ r = run(B, ["sync"]);
 check("sync exit 0 (origin 없음)", r.code === 0 && r.out.includes("origin 이 없어"));
 
 await fs.rm(tmp, { recursive: true, force: true });
-console.log(`\n${failed ? `✘ ${failed}개 실패` : "✔ 스모크 통과"}  (${process.platform} ${os.release()}, node ${process.version})`);
+console.log(`\n${failed ? `✘ ${failed}개 실패` : "✔ 스모크 통과"}  (${process.platform} ${os.release()}, ${bin ? `binary ${path.basename(bin)}` : `node ${process.version}`})`);
 process.exit(failed ? 1 : 0);

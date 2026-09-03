@@ -1,5 +1,4 @@
 import { Command } from "commander";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { ClaudeCodeAdapter } from "./adapters/claude-code.js";
@@ -18,7 +17,9 @@ import { remove, prune } from "./core/remove.js";
 import { add } from "./core/add.js";
 import { sync } from "./core/sync.js";
 
-const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
+/** 빌드 시점에 tsup 이 박는다 (tsup.config.ts). 실행파일 안에는 package.json 이 없다. */
+declare const __LSHED_VERSION__: string;
+const version = typeof __LSHED_VERSION__ === "string" ? __LSHED_VERSION__ : "0.0.0-dev";
 
 // `lshed status | head` 처럼 읽는 쪽이 먼저 닫으면 EPIPE 가 난다. 파이프의 정상적인 끝이므로 조용히 끝낸다.
 for (const s of [process.stdout, process.stderr]) {

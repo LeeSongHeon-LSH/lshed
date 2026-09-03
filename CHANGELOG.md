@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.4 — 2026-09-03
+
+The first CI run on real macOS and Windows machines found three bugs. All of them were path comparisons that only hold on Linux.
+
+- A stub whose symlink points into a package was not recognised as generated on **macOS or Windows**. The target of a broken link cannot be resolved, so it was compared unresolved: on macOS `/var/folders/...` never matches the package's real `/private/var/folders/...`. Paths are now resolved as far as they exist before being compared.
+- The warning for a settings value pointing inside a package never fired on **Windows**, because it matched the raw path against JSON text where backslashes are escaped. It now walks the values and compares them as paths.
+- Path comparison is one helper that strips the Windows `\\?\` prefix and ignores case there.
+- The test that runs a package's `install:` script is skipped on Windows; `./setup` is a shell script and `cmd.exe` cannot run it.
+
 ## 0.7.3 — 2026-09-03
 
 You no longer need Node to run lshed.

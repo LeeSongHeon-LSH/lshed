@@ -1,4 +1,5 @@
 import path from "node:path";
+import { isInside } from "../fsutil.js";
 import type { Category, EntryCategory, ScannedComponent } from "../adapters/types.js";
 import type { Ctx } from "./context.js";
 import { detectPackages, detectGenerated, type DetectedPackage } from "./packages.js";
@@ -12,6 +13,14 @@ export type Found =
   | { kind: "package"; category: "packages"; id: string; pkg: DetectedPackage };
 
 export const keyOf = (f: { category: string; id: string }) => `${f.category}/${f.id}`;
+
+/** 값 안의 모든 문자열. 경로처럼 보이는 것을 찾을 때 쓴다. */
+function stringsIn(v: unknown, out: string[] = []): string[] {
+  if (typeof v === "string") out.push(v);
+  else if (Array.isArray(v)) for (const x of v) stringsIn(x, out);
+  else if (v && typeof v === "object") for (const x of Object.values(v)) stringsIn(x, out);
+  return out;
+}
 
 export interface Discovered {
   items: Found[];
@@ -50,7 +59,8 @@ export async function discover(ctx: Ctx, exclude: readonly string[] = []): Promi
       if (isExcluded(cat.name, id)) { excluded.push(`${cat.name}/${id}`); continue; }
       if (!/^[\w.-]+$/.test(id)) { ctx.log(`  ! ${cat.name}/${id}: 이름에 쓸 수 없는 문자가 있어 건너뜀`); continue; }
       // 값이 패키지 안을 가리키면 그 패키지의 설치가 써 넣은 것일 수 있다 (예: gstack 의 훅). 감지는 제안이다.
-      const owner = kept.find((p) => p.path && JSON.stringify(all[id]).includes(p.path));
+      // 문자열 포함이 아니라 경로로 견준다. JSON 안의 Windows 경로는 백슬래시가 이스케이프되어 있다.
+      const owner = kept.find((p) => p.path && stringsIn(all[id]).some((s) => isInside(p.path!, s)));
       const warn = owner ? `패키지 ${owner.id} 안을 가리킵니다. 그 설치가 만든 것이면 exclude 하세요: ${cat.name}/${id}` : undefined;
       items.push({ kind: "entry", category: cat.name, id, value: all[id] as Json, cat, warn });
     }

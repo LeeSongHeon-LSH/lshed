@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { ScannedComponent } from "../adapters/types.js";
 import { type Ctx, installersFor, installerFor } from "./context.js";
+import { isInside, realpathish } from "../fsutil.js";
 import type { Package } from "../manifest.js";
 import { readLock, writeLock, type Lock } from "../lock.js";
 import { runShell } from "../git.js";
@@ -24,7 +25,7 @@ export async function detectGenerated(found: ScannedComponent[], pkgs: DetectedP
   const out = new Map<string, string>();
   const located = pkgs.filter((p) => p.path);
   if (!located.length) return out;
-  const roots = await Promise.all(located.map(async (p) => ({ id: p.id, real: await fs.realpath(p.path!) })));
+  const roots = await Promise.all(located.map(async (p) => ({ id: p.id, real: await realpathish(p.path!) })));
   for (const f of found) {
     if (located.some((p) => p.path === f.path)) continue;
     let entries: string[];
@@ -37,10 +38,11 @@ export async function detectGenerated(found: ScannedComponent[], pkgs: DetectedP
       let target: string;
       try {
         if (!(await fs.lstat(p)).isSymbolicLink()) continue;
-        // 끊어진 링크여도 어디를 가리키는지는 안다 (패키지를 지운 뒤 남은 스텁)
-        target = await fs.realpath(p).catch(async () => path.resolve(f.path, await fs.readlink(p)));
+        // 끊어진 링크여도 어디를 가리키는지는 안다 (패키지를 지운 뒤 남은 스텁).
+        // 목적지가 없으면 realpath 가 실패하므로, 있는 데까지만 풀어서 견준다.
+        target = await realpathish(path.resolve(f.path, await fs.readlink(p)));
       } catch { continue; }
-      const owner = roots.find((r) => target === r.real || target.startsWith(r.real + path.sep));
+      const owner = roots.find((r) => isInside(r.real, target));
       if (owner) { out.set(`${f.category}/${f.id}`, owner.id); break; }
     }
   }

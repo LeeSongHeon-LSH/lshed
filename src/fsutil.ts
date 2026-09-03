@@ -3,6 +3,40 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { DEFAULT_IGNORE, isIgnored } from "./ignore.js";
 
+/**
+ * 경로 비교의 플랫폼 차이를 한 곳에 모은다 (§4.5).
+ * Windows 의 realpath/readlink 는 `\\?\C:\...` 를 돌려주기도 하고, 대소문자를 가리지 않는다.
+ */
+export function normalizePath(p: string): string {
+  const n = path.resolve(p.replace(/^\\\\\?\\/, ""));
+  return process.platform === "win32" ? n.toLowerCase() : n;
+}
+
+/**
+ * 없는 경로도 최대한 실제 경로로 만든다. 존재하는 가장 가까운 조상을 realpath 하고 나머지를 붙인다.
+ * macOS 의 /var → /private/var 처럼, 끊어진 링크의 목적지를 성한 경로와 견주려면 필요하다.
+ */
+export async function realpathish(p: string): Promise<string> {
+  let cur = path.resolve(p);
+  const rest: string[] = [];
+  for (;;) {
+    try {
+      return path.join(await fs.realpath(cur), ...rest.reverse());
+    } catch {
+      const parent = path.dirname(cur);
+      if (parent === cur) return path.resolve(p); // 루트까지 갔는데도 없다
+      rest.push(path.basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+/** child 가 parent 자신이거나 그 아래인가 */
+export function isInside(parent: string, child: string): boolean {
+  const a = normalizePath(parent), b = normalizePath(child);
+  return a === b || b.startsWith(a.endsWith(path.sep) ? a : a + path.sep);
+}
+
 export async function exists(p: string): Promise<boolean> {
   try { await fs.access(p); return true; } catch { return false; }
 }

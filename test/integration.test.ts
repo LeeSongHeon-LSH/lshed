@@ -150,6 +150,22 @@ describe("diff / save / status", () => {
   });
 });
 
+describe("경로 비교 (플랫폼 차이)", () => {
+  it("realpathish: 없는 경로도 있는 조상까지 풀어 준다 (macOS /var → /private/var)", async () => {
+    const { realpathish, isInside } = await import("../src/fsutil.js");
+    // macOS 의 임시 디렉터리처럼, 링크를 거쳐 들어간 경로
+    const real = path.join(tmp, "real");
+    const via = path.join(tmp, "via");
+    await fs.mkdir(real, { recursive: true });
+    await fs.symlink(real, via, "junction");
+    const gone = await realpathish(path.join(via, "pkg", "bin"));   // 아직 없는 목적지
+    expect(isInside(real, gone)).toBe(true);
+    expect(isInside(path.join(tmp, "elsewhere"), gone)).toBe(false);
+    // 있는 경로는 그대로 실제 경로
+    expect(await realpathish(via)).toBe(await fs.realpath(real));
+  });
+});
+
 describe("창고를 갈아탈 때", () => {
   it("다른 창고의 관리 목록으로 지우기 전에 경고한다", async () => {
     // 탐색하려고 임시 창고로 init 한 기기가, 뒤이어 진짜 창고를 restore 하는 상황

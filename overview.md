@@ -544,6 +544,13 @@ v0.1의 런타임 결정 근거는 "대상 사용자가 이미 Node를 갖고 �
 
 Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%USERPROFILE%\.claude`, `claude` 는 `claude.cmd`, `install:` 은 cmd.exe 로 실행되므로 `./setup` 같은 sh 스크립트는 못 돈다(Git Bash 경로를 적거나 exclude).
 
+**실제로 CI 가 잡아낸 것 (0.7.4)** — 셋 다 "리눅스에서만 성립하는 경로 비교" 였다.
+`fs.realpath` 는 끊어진 링크의 목적지를 풀지 못하는데, macOS 의 임시 디렉터리는 `/var` → `/private/var` 라
+풀지 않은 목적지가 패키지의 실제 경로와 영영 안 맞았다. Windows 는 `\\?\` 접두사와 대소문자,
+그리고 JSON 안에서 이스케이프된 백슬래시가 문제였다.
+경로 비교는 `fsutil.ts` 의 `normalizePath`/`isInside`/`realpathish` 한 곳으로 모았고,
+링크된 디렉터리를 만들어 리눅스에서도 이 부류를 재현하는 회귀 테스트를 두었다.
+
 ## 11. 미결 질문
 
 - **프로필 상속** (`extends: base`) — v0.1은 명시 나열. 중복이 불편해지면 v0.2에서 도입.

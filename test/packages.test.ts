@@ -140,7 +140,7 @@ describe("update", () => {
 
     const { parseManifest } = await import("../src/manifest.js");
     const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
-    const res = await updatePackages(ctx, m.packages, { yes: true });
+    const res = await updatePackages(ctx, m.packages, { yes: process.platform !== "win32" });
     expect(res.lockChanged).toBe(true);
     const after = (await readLock(shed)).packages.toolkit.rev;
     expect(after).not.toBe(before);

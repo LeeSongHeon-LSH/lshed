@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-09-03
+
+`init` was a one-shot. Anything you made afterwards had to be copied into the shed and typed into `lshed.yaml` by hand.
+
+- `lshed add [keys...] [--all]` scans the agent root the way `init` does and lists what the shed lacks: authored skills, agents, commands, MCP servers, and git clones or plugins that should be packages. Without keys it only lists. Chosen items are copied (or recorded with a lock entry for packages), appended to `lshed.yaml` with your comments intact, added to the current profile, and added to the managed set.
+- `status` reports things outside the shed as `창고 밖 N개 → lshed add`.
+- `init --exclude` is now remembered as `exclude:` in the manifest, so `add` and `status` do not keep proposing the aliases you left out.
+- `init` and `add` share one classification path (`discover`) and one ingest path, so they cannot drift apart. `init` now edits a YAML document instead of serialising an object; output is unchanged.
+
 ## 0.4.0 — 2026-09-03
 
 Hand-configured MCP servers travel with the profile. Secret values do not.

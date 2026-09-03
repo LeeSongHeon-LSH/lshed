@@ -34,6 +34,8 @@ export const ManifestSchema = z.object({
   agent: z.string().default("claude-code"),
   /** 창고에 담지 않을 이름들. 기본값(DEFAULT_IGNORE)에 더해진다. */
   ignore: z.array(z.string()).optional(),
+  /** 로컬에 있어도 창고에 넣지 않을 부품 ("id" 또는 "category/id"). init --exclude 가 적고 add/status 가 따른다. */
+  exclude: z.array(z.string()).optional(),
   components: ComponentsSchema.default({}),
   packages: z.array(PackageSchema).default([]),
   profiles: z.record(z.string(), ProfileSchema).default({}),
@@ -112,6 +114,7 @@ export function stringifyManifest(m: Manifest): string {
   const out: Record<string, unknown> = { ...m };
   if (!m.packages.length) delete out.packages;
   if (!m.ignore?.length) delete out.ignore;
+  if (!m.exclude?.length) delete out.exclude;
   return YAML.stringify(out, { lineWidth: 0 });
 }
 

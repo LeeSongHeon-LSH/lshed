@@ -15,6 +15,7 @@ import { packagesOf } from "./manifest.js";
 import { updatePackages, reportPending } from "./core/packages.js";
 import { listRows, formatRows } from "./core/list.js";
 import { remove, prune } from "./core/remove.js";
+import { add } from "./core/add.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
@@ -101,7 +102,7 @@ program
   .action(() => run(async () => {
     const adapter = adapterFromOpts();
     const state = await readState(adapter);
-    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [], missingEnv: [] }, adapter.root)); return; }
+    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [], missingEnv: [], fresh: [] }, adapter.root)); return; }
     const ctx = await ctxFor("other");
     console.log(formatStatus(await status(ctx), adapter.root));
   }));
@@ -120,6 +121,15 @@ program
   .action((ids: string[]) => run(async () => {
     const ctx = await ctxFor("other");
     await save(ctx, ids);
+  }));
+
+program
+  .command("add [keys...]")
+  .description("put things that appeared locally since init into the shed and the current profile (lists candidates without keys)")
+  .option("--all", "add every candidate")
+  .action((keys: string[], o: { all?: boolean }) => run(async () => {
+    const ctx = await ctxFor("other");
+    await add(ctx, keys, { all: o.all });
   }));
 
 program

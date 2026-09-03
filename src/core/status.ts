@@ -7,12 +7,21 @@ import { readLock } from "../lock.js";
 import { packageStatus, type PackageStatus } from "./packages.js";
 import { planProfile } from "./context.js";
 import { expand, readEntryFile } from "./entries.js";
+import { candidates } from "./add.js";
+import { keyOf } from "./discover.js";
 
-export interface Status { state: State | null; drifted: string[]; packages: PackageStatus[]; missingEnv: { rel: string; vars: string[] }[] }
+export interface Status {
+  state: State | null;
+  drifted: string[];
+  packages: PackageStatus[];
+  missingEnv: { rel: string; vars: string[] }[];
+  /** 로컬에 있는데 창고에 없는 것 → lshed add */
+  fresh: string[];
+}
 
 export async function status(ctx: Ctx): Promise<Status> {
   const state = await readState(ctx.adapter);
-  if (!state) return { state: null, drifted: [], packages: [], missingEnv: [] };
+  if (!state) return { state: null, drifted: [], packages: [], missingEnv: [], fresh: [] };
   const d = await diff(ctx);
   const m = await loadManifest(ctx);
   const lock = await readLock(ctx.shed);
@@ -23,7 +32,8 @@ export async function status(ctx: Ctx): Promise<Status> {
     const missing = shed === null ? [] : expand(shed).missing;
     if (missing.length) missingEnv.push({ rel: it.rel, vars: missing });
   }
-  return { state, drifted: d.map((x) => `${x.item.category}/${x.item.id}`), packages, missingEnv };
+  const fresh = (await candidates(ctx, m, state.profile)).fresh.map(keyOf);
+  return { state, drifted: d.map((x) => `${x.item.category}/${x.item.id}`), packages, missingEnv, fresh };
 }
 
 export function formatStatus(s: Status, adapterRoot: string): string {
@@ -41,5 +51,6 @@ export function formatStatus(s: Status, adapterRoot: string): string {
     lines.push(`패키지   ${p.pkg.id}  ${where}`);
   }
   for (const m of s.missingEnv) lines.push(`환경변수 ${m.rel}: ${m.vars.join(", ")} 없음  → 셸에서 export 하세요`);
+  if (s.fresh.length) lines.push(`창고 밖  ${s.fresh.length}개: ${s.fresh.join(", ")}  → lshed add`);
   return lines.join("\n");
 }

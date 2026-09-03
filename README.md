@@ -143,7 +143,7 @@ Rules that keep this safe:
 - A package that is already present is never touched by `restore`. Your local checkout is yours.
 - `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`. Plugin installs go through Claude Code's own package manager and run without it; `--yes` is forwarded as `-y` for plugins that declare an install command.
 - Packages are not part of the managed set. Switching profiles never deletes a clone.
-- Installers sometimes create aliases without symlinks, which `init` cannot tell from authored skills. Leave those out with `--exclude`:
+- Installers sometimes create aliases without symlinks, which `init` cannot tell from authored skills. Leave those out with `--exclude`; `init` records them under `exclude:` in the manifest so `add` and `status` stop suggesting them:
 
 ```bash
 lshed init --shed ~/harness --exclude _gstack-command connect-chrome
@@ -153,6 +153,7 @@ lshed init --shed ~/harness --exclude _gstack-command connect-chrome
 
 ```
 lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
+lshed add [keys...] [--all]                     put things that appeared since init into the shed
 lshed restore [profile] [--dry-run] [--no-backup] [--yes]
 lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh lshed.lock
 lshed status                                    applied profile, managed paths, drift, packages
@@ -162,6 +163,8 @@ lshed list [--unused]                           what is in the shed, and which p
 lshed remove <key>                              drop a component or package from the shed
 lshed prune [--yes]                             drop everything no profile uses
 ```
+
+`add` is `init` for one thing at a time. Write a new skill, add an MCP server, clone a toolkit into `~/.claude/skills/`, then `lshed add` lists what the shed does not have yet, sorted the same way `init` sorts: authored parts get copied, clones become packages with a lock entry, files an installer generated are skipped. `lshed add <key...>` or `--all` takes them in; they join the current profile and the managed set. `status` shows the count as `창고 밖`. Something already in the shed but missing from the profile is a manifest edit, and `add` says so.
 
 `remove` and `prune` delete from the shed without a backup. The shed is meant to live in git; commit before you prune. Both refuse to touch anything a profile still lists, so the way to retire a part is to take it out of the profiles first.
 

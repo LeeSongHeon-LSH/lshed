@@ -76,7 +76,8 @@ export function mask(id: string, entry: Json, cat: MaskCat, home: string = os.ho
 /** 홈 디렉터리 절대 경로를 ${HOME} 으로. 기기마다 홈이 달라도 훅·명령 경로가 옮겨진다. expand 가 되돌린다. */
 export function portable(entry: Json, home: string = os.homedir()): Json {
   if (!home || home === "/") return entry;
-  return walk(entry, (s) => (s === home || s.startsWith(home + "/") ? "${HOME}" + s.slice(home.length) : s));
+  // Windows 는 홈이 C:\Users\me 라 구분자가 둘 다 올 수 있다
+  return walk(entry, (s) => (s === home || s.startsWith(home + "/") || s.startsWith(home + "\\") ? "${HOME}" + s.slice(home.length) : s));
 }
 
 /** expand 에 쓸 환경. HOME 은 항상 있다 (Windows 는 USERPROFILE 뿐이라). */

@@ -41,7 +41,14 @@ export async function sync(ctx: Ctx, opts: SyncOptions = {}): Promise<SyncResult
     ctx.log(`  ${opts.dryRun ? "(dry-run) " : ""}commit ${dirty.length}개: ${dirty.slice(0, 5).join(", ")}${dirty.length > 5 ? ` 외 ${dirty.length - 5}` : ""}`);
     if (!opts.dryRun) {
       await git(["add", "-A"], shed);
-      await git(["commit", "--quiet", "-m", msg], shed);
+      try {
+        await git(["commit", "--quiet", "-m", msg], shed);
+      } catch (e) {
+        if (/Author identity unknown|Please tell me who you are/.test((e as Error).message)) {
+          throw new Error(`git 사용자 정보가 없어 커밋할 수 없습니다. 한 번만 설정하세요:\n  git config --global user.name "이름"\n  git config --global user.email "메일"`);
+        }
+        throw e;
+      }
     }
     res.committed = dirty;
   } else {

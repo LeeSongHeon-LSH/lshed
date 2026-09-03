@@ -163,7 +163,7 @@ describe("ignore / symlink (실환경에서 발견된 문제)", () => {
   it("심볼릭 링크로 걸린 스킬도 잡고 내용으로 복사한다", async () => {
     const outside = path.join(tmp, "elsewhere/linked");
     await w(path.join(outside, "SKILL.md"), "linked content");
-    await fs.symlink(outside, path.join(root, "skills/linked"));
+    await fs.symlink(outside, path.join(root, "skills/linked"), "junction");
     const { manifest } = await init(ctx);
     expect(manifest.components.skills.map((c) => c.id)).toContain("linked");
     const copied = path.join(shed, "skills/linked");
@@ -172,7 +172,7 @@ describe("ignore / symlink (실환경에서 발견된 문제)", () => {
   });
 
   it("끊어진 링크는 건너뛴다", async () => {
-    await fs.symlink(path.join(tmp, "gone"), path.join(root, "skills/broken"));
+    await fs.symlink(path.join(tmp, "gone"), path.join(root, "skills/broken"), "junction");
     const { manifest } = await init(ctx);
     expect(manifest.components.skills.map((c) => c.id)).not.toContain("broken");
   });

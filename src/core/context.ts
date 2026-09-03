@@ -20,10 +20,10 @@ export interface Ctx {
   ignore?: readonly string[];
 }
 
-/** 기본 exec: 자식 프로세스, stdio 상속 */
+/** 기본 exec: 자식 프로세스, stdio 상속. Windows 의 claude.cmd 같은 래퍼는 셸을 거쳐야 찾는다. */
 export function spawnExec(cmd: string, args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, { cwd, stdio: "inherit" });
+    const p = spawn(cmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
     p.on("error", reject);
     p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} 가 ${code} 로 끝났습니다`))));
   });

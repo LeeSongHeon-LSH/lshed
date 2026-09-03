@@ -513,6 +513,16 @@ v0.3
 
 ---
 
+### 10.1 다른 OS 검증 절차 (0.7.1)
+
+세 층으로 본다. 각 층은 이전 층이 통과해야 의미가 있다.
+
+1. **단위·통합 테스트** — `npm ci && npm test`. CI 매트릭스(ubuntu/macos/windows × node 20/22)가 push 마다 돌린다. Windows 는 심볼릭 링크 대신 junction 을 쓴다.
+2. **CLI 스모크** — `npm run build && npm run smoke`. 임시 디렉터리의 가짜 루트에서 빌드된 `dist/cli.js` 를 init → restore → add → diff → save → 전환 → list → sync 순으로 돌린다. 실제 `~/.claude` 는 건드리지 않는다. 셸 spawn, 경로 구분자, `${HOME}`, 파일 rename 같은 플랫폼 차이는 여기서 드러난다.
+3. **실환경** — `npm link` 뒤 `lshed init --shed <임시 창고>` 로 실제 루트를 읽기만 하고(init 은 창고와 `<root>/lshed/` 에만 쓴다), `lshed restore --dry-run` 이 전부 `=` 인지 본다. 그다음에야 진짜 창고를 clone 해 `restore` 한다. 백업이 기본이라 되돌릴 수 있다.
+
+Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%USERPROFILE%\.claude`, `claude` 는 `claude.cmd`, `install:` 은 cmd.exe 로 실행되므로 `./setup` 같은 sh 스크립트는 못 돈다(Git Bash 경로를 적거나 exclude).
+
 ## 11. 미결 질문
 
 - **프로필 상속** (`extends: base`) — v0.1은 명시 나열. 중복이 불편해지면 v0.2에서 도입.

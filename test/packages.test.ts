@@ -40,7 +40,7 @@ beforeEach(async () => {
   // 기기 A: 툴킷을 clone 해서 설치했고, setup 이 스텁 스킬(bin → 툴킷 안) 을 만들어 둔 상태
   await git(["clone", "-q", remote, path.join(rootA, "skills/toolkit")]);
   await w(path.join(rootA, "skills/browse/SKILL.md"), "stub");
-  await fs.symlink(path.join(rootA, "skills/toolkit/bin"), path.join(rootA, "skills/browse/bin"));
+  await fs.symlink(path.join(rootA, "skills/toolkit/bin"), path.join(rootA, "skills/browse/bin"), "junction");
   await w(path.join(rootA, "skills/mine/SKILL.md"), "authored");
 });
 afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
@@ -88,7 +88,8 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     expect(await exists(path.join(rootB, "skills/mine/SKILL.md"))).toBe(true);
   });
 
-  it("--yes 면 install 을 실행한다", async () => {
+  // setup 은 sh 스크립트라 cmd.exe 에서는 못 돈다. install 실행 자체는 플랫폼 셸에 맡긴다.
+  it.skipIf(process.platform === "win32")("--yes 면 install 을 실행한다", async () => {
     await restore(ctxFor(rootB), "default", { yes: true });
     expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
   });
@@ -144,6 +145,6 @@ describe("update", () => {
     const after = (await readLock(shed)).packages.toolkit.rev;
     expect(after).not.toBe(before);
     expect(await r(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe("toolkit v2");
-    expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
+    if (process.platform !== "win32") expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
   });
 });

@@ -23,10 +23,10 @@ export const clone = (url: string, dir: string, ref?: string) =>
 export const resetHard = (dir: string, sha: string) => git(["reset", "--hard", "--quiet", sha], dir);
 export const pullFf = (dir: string) => git(["pull", "--ff-only", "--quiet"], dir);
 
-/** 설치 명령 실행. 출력은 그대로 터미널로 흘린다. */
+/** 설치 명령 실행. 출력은 그대로 터미널로 흘린다. 셸은 플랫폼 기본값 (sh / cmd.exe). */
 export function runShell(cmd: string, cwd: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = spawn("sh", ["-c", cmd], { cwd, stdio: "inherit" });
+    const p = spawn(cmd, { cwd, stdio: "inherit", shell: true });
     p.on("error", reject);
     p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`명령이 ${code} 로 끝났습니다: ${cmd}`))));
   });

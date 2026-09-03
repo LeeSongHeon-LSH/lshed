@@ -46,7 +46,7 @@ async function appear() {
   await git(["add", "-A"], tk);
   await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v1"], tk);
   await w(path.join(root, "skills/stub/SKILL.md"), "stub");
-  await fs.symlink(path.join(tk, "bin"), path.join(root, "skills/stub/bin"));
+  await fs.symlink(path.join(tk, "bin"), path.join(root, "skills/stub/bin"), "junction");
 }
 
 describe("lshed add", () => {

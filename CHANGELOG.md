@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.1 — 2026-09-03
+
+Groundwork for running on Windows and macOS. Not yet verified on a real machine.
+
+- Package `install:` commands run through the platform shell (`sh` or `cmd.exe`) instead of a hard-coded `sh -c`.
+- On Windows, `claude` and other wrappers installed as `.cmd` are found by spawning through the shell.
+- Home-directory paths with backslashes are also rewritten to `${HOME}`.
+- `sync` explains what to do when git has no user identity.
+- `npm run smoke` drives the built CLI through init, restore, add, diff, save, profile switch, list and sync in a temporary directory without touching the real `~/.claude`. Use it on a new OS before trusting a real restore.
+- GitHub Actions matrix: ubuntu, macOS, Windows × Node 20, 22. Tests use directory junctions on Windows so no elevated privileges are needed.
+
 ## 0.7.0 — 2026-09-03
 
 `settings.json` travels, without merging.

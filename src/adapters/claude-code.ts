@@ -80,6 +80,9 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       } catch {
         continue; // 카테고리 디렉터리가 없으면 비어 있는 것
       }
+      // readdir 순서는 파일 시스템마다 다르다. 매니페스트는 git 에 들어가므로 기기와 무관해야 한다.
+      // localeCompare 는 로케일을 타므로 쓰지 않는다.
+      entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
       for (const e of entries) {
         if (e.name.startsWith(".")) continue;
         const full = path.join(dir, e.name);

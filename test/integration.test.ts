@@ -159,8 +159,9 @@ describe("경로 비교 (플랫폼 차이)", () => {
     await fs.mkdir(real, { recursive: true });
     await fs.symlink(real, via, "junction");
     const gone = await realpathish(path.join(via, "pkg", "bin"));   // 아직 없는 목적지
-    expect(isInside(real, gone)).toBe(true);
-    expect(isInside(path.join(tmp, "elsewhere"), gone)).toBe(false);
+    // 양쪽 다 푼 경로로 견준다. macOS 의 /var 나 Windows 의 8.3 짧은 이름은 푼 뒤에야 맞는다.
+    expect(isInside(await fs.realpath(real), gone)).toBe(true);
+    expect(isInside(await realpathish(path.join(tmp, "elsewhere")), gone)).toBe(false);
     // 있는 경로는 그대로 실제 경로
     expect(await realpathish(via)).toBe(await fs.realpath(real));
   });
@@ -223,5 +224,14 @@ describe("ignore / symlink (실환경에서 발견된 문제)", () => {
     await restore(ctx, "default");
     await w(path.join(root, "skills/alpha/node_modules/x.js"), "junk");
     expect(await diff(ctx)).toEqual([]);
+  });
+});
+
+describe("스캔 순서", () => {
+  it("파일 시스템 순서와 무관하게 정렬된다 (매니페스트가 git 에 들어간다)", async () => {
+    for (const n of ["zulu", "alpha2", "mike", "bravo"]) await w(path.join(root, `skills/${n}/SKILL.md`), n);
+    const ids = (await ctx.adapter.scan()).filter((c) => c.category === "skills").map((c) => c.id);
+    expect(ids).toEqual([...ids].sort());
+    expect(ids).toEqual(["alpha", "alpha2", "beta", "bravo", "mike", "zulu"]);
   });
 });

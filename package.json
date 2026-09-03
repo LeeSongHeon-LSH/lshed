@@ -1,6 +1,6 @@
 {
   "name": "lshed",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "Portable harness environment manager for coding agents",
   "license": "MIT",
   "author": "leesongheon <leesongheon1209@gmail.com>",

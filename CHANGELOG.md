@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.5 — 2026-09-03
+
+- `init` and `add` now list what they find in a fixed order. `fs.readdir` returns entries in filesystem order, which differs between machines, so two people running `init` on the same harness got manifests whose component lists were ordered differently. `lshed.yaml` is a file you commit, so that showed up as noise in diffs.
+- The path-comparison regression test compared a resolved path against an unresolved one and failed on macOS and Windows for the wrong reason. It now compares resolved to resolved, the way the code it guards does.
+
+0.7.4 fixed the three real bugs the first macOS and Windows CI run found; this release fixes the test that came with it.
+
 ## 0.7.4 — 2026-09-03
 
 The first CI run on real macOS and Windows machines found three bugs. All of them were path comparisons that only hold on Linux.

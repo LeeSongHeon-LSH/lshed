@@ -20,6 +20,11 @@ import { sync } from "./core/sync.js";
 
 const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
+// `lshed status | head` 처럼 읽는 쪽이 먼저 닫으면 EPIPE 가 난다. 파이프의 정상적인 끝이므로 조용히 끝낸다.
+for (const s of [process.stdout, process.stderr]) {
+  s.on("error", (e: NodeJS.ErrnoException) => { if (e.code === "EPIPE") process.exit(0); });
+}
+
 const program = new Command()
   .name("lshed")
   .description("Keep your coding-agent harness (skills, agents, commands, instructions) in a shed and restore it anywhere by profile.")

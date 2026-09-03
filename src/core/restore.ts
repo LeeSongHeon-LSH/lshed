@@ -47,6 +47,13 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   const oldManaged = new Set(state?.managed ?? []);
   const toRemove = [...oldManaged].filter((r) => !newManaged.has(r)).sort();
 
+  // 관리 집합은 "이 창고가 놓은 것" 이다. 창고가 바뀌면 그 목록은 다른 창고의 것이라 제거 근거가 약하다.
+  // 다른 창고로 갈아타는 흔한 경로가 "탐색용 init 뒤 진짜 창고 restore" 이고, 그때 이 기기의 부품이 제거 대상이 된다.
+  if (state && state.shed !== ctx.shed && toRemove.length) {
+    ctx.log(`! 마지막으로 적용한 창고가 다릅니다: ${state.shed}`);
+    ctx.log(`  아래 ${toRemove.length}개는 그 창고의 관리 목록에 있어 제거 대상입니다 (백업됨). 이 기기의 것을 지키려면 먼저 'lshed add' 로 창고에 넣으세요.`);
+  }
+
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupDir = path.join(ctx.adapter.root, LSHED_DIR, "backups", stamp);
   const backedUp: string[] = [];

@@ -150,6 +150,24 @@ describe("diff / save / status", () => {
   });
 });
 
+describe("창고를 갈아탈 때", () => {
+  it("다른 창고의 관리 목록으로 지우기 전에 경고한다", async () => {
+    // 탐색하려고 임시 창고로 init 한 기기가, 뒤이어 진짜 창고를 restore 하는 상황
+    await init(ctx);
+    const other = path.join(tmp, "real-shed");
+    const ctx2: Ctx = { ...ctx, shed: other };
+    await fs.cp(shed, other, { recursive: true });
+    const y = await r(path.join(other, "lshed.yaml"));
+    await fs.writeFile(path.join(other, "lshed.yaml"), y.replace("    - id: beta\n", ""). replace("      - beta\n", ""));
+    await fs.rm(path.join(other, "skills/beta"), { recursive: true });
+    logs = [];
+    const res = await restore(ctx2, "default", { dryRun: true });
+    expect(res.removed).toEqual(["skills/beta"]);
+    expect(logs.join("\n")).toContain(`마지막으로 적용한 창고가 다릅니다: ${shed}`);
+    expect(logs.join("\n")).toContain("lshed add");
+  });
+});
+
 describe("ignore / symlink (실환경에서 발견된 문제)", () => {
   it("node_modules 와 .git 은 창고에 담기지 않는다", async () => {
     await w(path.join(root, "skills/heavy/SKILL.md"), "h");

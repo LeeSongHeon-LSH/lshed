@@ -89,6 +89,31 @@ lshed sync            # commit the shed, pull, push
 
 `save` is the only path from `~/.claude` to the shed, and it only works for parts the shed owns (`file:` sources). `sync` warns if you have unsaved edits so you do not push a shed that is behind your machine.
 
+### A machine that already has a setup
+
+The common case is not an empty machine: it already runs the agent and has skills, settings and MCP servers of its own. `restore` is built for that. With no prior lshed state it **removes nothing** — it places what the profile lists, and anything it overwrites goes to `~/.claude/lshed/backups/<timestamp>/` first. Parts that exist only on that machine are untouched.
+
+```
+$ lshed restore default --shed ~/lshed --dry-run
+  + skills/mine
+  ~ skills/shared            # same name, different content → backed up, then replaced
+  + mcp:exa  (${EXA_API_KEY})
+  ~ settings:model
+(dry-run) 변경 없음. 배치 5, 제거 0, 백업 예정 3
+```
+
+Always run `--dry-run` first. `+` is new, `~` replaces with a backup, `-` removes with a backup. If the plan looks right, drop the flag.
+
+Then push that machine's own parts up into the shed and both machines have everything:
+
+```
+lshed add                    # lists what this machine has that the shed does not
+lshed add windows-only mcp/my-local-server
+lshed sync
+```
+
+Do not run `init` on such a machine just to look around. `init` claims what it finds as lshed-managed, so a later `restore` from your real shed would treat those parts as removable (backed up, but removed). Use `lshed scan`, which only prints. If you do it anyway, `restore` warns you before removing anything and `lshed add` is the way out.
+
 ### A new machine
 
 ```

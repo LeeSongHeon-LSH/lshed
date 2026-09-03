@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.2 — 2026-09-03
+
+Joining a machine that already has a harness, found while preparing the Windows check.
+
+- `restore` warns before removing parts that a **different** shed had claimed. Running `init` against a scratch shed to look around marks that machine's own parts as managed, so a later restore from the real shed would remove them. They were always backed up, but nothing said why. `lshed scan` is the read-only way to look.
+- No longer crashes with an `EPIPE` stack trace when output is piped into something that exits early (`lshed status | head`).
+- The smoke script now models a machine that already runs the agent: a skill whose name collides with the shed, a skill only that machine has, and its own MCP and settings. It checks that a collision is backed up and replaced, that machine-only parts survive, that nothing is removed, and that `add` pushes them into the shed.
+- README: how to join a machine that already has a setup, and why not to `init` there.
+
 ## 0.7.1 — 2026-09-03
 
 Groundwork for running on Windows and macOS. Not yet verified on a real machine.

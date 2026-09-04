@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.10.0 — 2026-09-04
+## 0.11.0 — 2026-09-04
+
+One shed, several agents.
+
+- `--agent codex|gemini|copilot|cursor|agents` restores the same shed into another tool's config root. They all read `skills/<name>/SKILL.md` the way Claude Code does, and `~/.agents/skills/` is the shared location every one of them also reads. Codex gets `AGENTS.md`, Gemini `GEMINI.md`, Copilot `copilot-instructions.md`, each with the profile's instruction fragments concatenated; Cursor and `~/.agents` have no user-level instructions file and skip that category.
+- Parts the target does not understand are announced and skipped instead of failing: MCP servers, settings keys and Claude Code agents/commands stay Claude-only, and Claude plugin packages are not installed elsewhere. Each agent root keeps its own state, profile and `--link` choice.
+- `lshed init --agent codex` builds a shed from a Codex machine; a shed made by one agent restores into any other. The shed's `agent:` field is now only the default for `--agent`; `$LSHED_AGENT` also works.
+- `lshed status` names the agent next to the root.
+
+ — 2026-09-04
 
 Link instead of copy, on the machines where you edit.
 

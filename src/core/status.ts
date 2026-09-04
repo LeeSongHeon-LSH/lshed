@@ -2,7 +2,7 @@ import type { Ctx } from "./context.js";
 import { readState, type State } from "../state.js";
 import { diff } from "./diff.js";
 import { loadManifest } from "./context.js";
-import { packagesOf } from "../manifest.js";
+import { installablePackages } from "./context.js";
 import { readLock } from "../lock.js";
 import { packageStatus, type PackageStatus } from "./packages.js";
 import { planProfile } from "./context.js";
@@ -25,7 +25,8 @@ export async function status(ctx: Ctx): Promise<Status> {
   const d = await diff(ctx);
   const m = await loadManifest(ctx);
   const lock = await readLock(ctx.shed);
-  const packages = await Promise.all(packagesOf(m, state.profile).map((p) => packageStatus(ctx, p, lock)));
+  // 이 에이전트로 설치할 수 없는 패키지는 이 기기의 관심사가 아니다 (restore 도 건너뛴다)
+  const packages = await Promise.all(installablePackages(ctx, m, state.profile).packages.map((p) => packageStatus(ctx, p, lock)));
   const missingEnv: Status["missingEnv"] = [];
   for (const it of planProfile(ctx, m, state.profile).filter((p) => p.entry)) {
     const shed = await readEntryFile(it.src);
@@ -36,13 +37,13 @@ export async function status(ctx: Ctx): Promise<Status> {
   return { state, drifted: d.map((x) => `${x.item.category}/${x.item.id}`), packages, missingEnv, fresh };
 }
 
-export function formatStatus(s: Status, adapterRoot: string): string {
-  if (!s.state) return `적용된 프로필이 없습니다 (${adapterRoot}).\n  lshed init --shed <dir>   또는   lshed restore <profile>`;
+export function formatStatus(s: Status, adapterRoot: string, agent = "claude-code"): string {
+  if (!s.state) return `적용된 프로필이 없습니다 (${agent}: ${adapterRoot}).\n  lshed init --shed <dir>   또는   lshed restore <profile>`;
   const lines = [
     `프로필   ${s.state.profile}`,
     `창고     ${s.state.shed}`,
     `적용     ${s.state.appliedAt}`,
-    `관리 중  ${s.state.managed.length}개 경로 (${adapterRoot})`,
+    `관리 중  ${s.state.managed.length}개 경로 (${agent}: ${adapterRoot})`,
   ];
   if (s.state.link) lines.push("배치     link (파일 부품은 창고로 가는 링크 — 편집이 바로 창고에 반영됨)");
   lines.push(s.drifted.length ? `드리프트 ${s.drifted.length}개: ${s.drifted.join(", ")}  → lshed diff` : "드리프트 없음");

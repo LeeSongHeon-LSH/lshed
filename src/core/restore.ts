@@ -1,12 +1,12 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf, entryOf } from "./context.js";
+import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf, entryOf, unsupportedCategories, installablePackages, schemeOf } from "./context.js";
 import { expand, envWithHome, matches, placeholdersIn, readEntryFile, writeEntryFile, type Json } from "./entries.js";
 import { readState, writeState, LSHED_DIR } from "../state.js";
 import { copyTree, exists, hashTree, isLink, isLinkTo, linkTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
 import { ensurePackages, reportPending } from "./packages.js";
-import { packagesOf, type Manifest } from "../manifest.js";
+import type { Manifest } from "../manifest.js";
 
 export interface RestoreOptions {
   dryRun?: boolean;
@@ -45,14 +45,20 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   for (const it of plan) {
     if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: 창고에 파일이 없습니다: ${it.src}`);
   }
+  // 창고 하나를 여러 에이전트가 쓴다 (§4.6). 이 에이전트가 모르는 카테고리·설치기 없는 패키지는 조용히가 아니라 알리고 건너뛴다.
+  const skippedCats = unsupportedCategories(ctx, m, profile);
+  if (skippedCats.length) ctx.log(`  · ${ctx.adapter.name} 은 ${skippedCats.join(", ")} 를 다루지 않아 건너뜁니다`);
+  const pk = installablePackages(ctx, m, profile);
+  for (const p of pk.skipped) ctx.log(`  · package ${p.id}  (${schemeOf(p.source)}: 는 ${ctx.adapter.name} 로 설치할 수 없어 건너뜀)`);
 
   // 0) 패키지 먼저. 생성물이 있어야 하는 부품이 있을 수 있다. 관리 집합에는 넣지 않는다.
-  const pkgRes = await ensurePackages(ctx, packagesOf(m, profile), { dryRun: opts.dryRun, yes: opts.yes });
+  const pkgRes = await ensurePackages(ctx, pk.packages, { dryRun: opts.dryRun, yes: opts.yes });
 
   const instrRel = ctx.adapter.instructionsFileName();
-  const fragments = plan.filter((p) => p.category === INSTRUCTIONS);
+  // 지침 파일이 없는 어댑터는 planProfile 이 instructions 를 이미 뺐다
+  const fragments = instrRel ? plan.filter((p) => p.category === INSTRUCTIONS) : [];
   const newManaged = new Set(plan.map((p) => p.rel));
-  if (fragments.length) newManaged.add(instrRel);
+  if (fragments.length && instrRel) newManaged.add(instrRel);
   const oldManaged = new Set(state?.managed ?? []);
   const toRemove = [...oldManaged].filter((r) => !newManaged.has(r)).sort();
 
@@ -142,7 +148,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
 
   // 3) 지침 파일
   const instrPath = instructionsFile(ctx);
-  if (fragments.length) {
+  if (fragments.length && instrRel && instrPath) {
     const contents: { id: string; content: string }[] = [];
     for (const f of fragments) contents.push({ id: f.id, content: await fs.readFile(f.src, "utf8") });
     const rendered = renderInstructions(ctx, profile, contents);

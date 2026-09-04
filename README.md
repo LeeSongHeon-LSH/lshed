@@ -245,6 +245,27 @@ Switching removes only what the previous profile placed (`-`), keeps what both u
 
 Instructions fragments are ordered. `restore` writes a `CLAUDE.md` that `@`-imports each fragment, so editing a fragment in the shed shows up on the next `restore` and there is nothing to merge.
 
+### Other agents, same shed
+
+Codex, Gemini CLI, Copilot CLI and Cursor all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all of them also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`:
+
+```
+lshed restore --agent agents            # ~/.agents/skills: every tool that follows the convention reads it
+lshed restore --agent codex             # ~/.codex/skills + ~/.codex/AGENTS.md
+lshed restore --agent gemini --link     # ~/.gemini/skills + ~/.gemini/GEMINI.md, as links
+```
+
+| `--agent` | root | skills | instructions file |
+|---|---|---|---|
+| `claude-code` (default) | `~/.claude` or `$CLAUDE_CONFIG_DIR` | yes, plus agents, commands, MCP, settings | `CLAUDE.md`, `@`-imports fragments |
+| `codex` | `~/.codex` or `$CODEX_HOME` | yes | `AGENTS.md`, fragments concatenated |
+| `gemini` | `~/.gemini` | yes | `GEMINI.md`, concatenated |
+| `copilot` | `~/.copilot` or `$COPILOT_HOME` | yes | `copilot-instructions.md`, concatenated |
+| `cursor` | `~/.cursor` | yes | none (Cursor's user rules live in its settings UI) |
+| `agents` | `~/.agents` | yes | none |
+
+Each agent root keeps its own `lshed/state.json`, so restoring into `~/.codex` never touches what lshed placed in `~/.claude`, and each can use a different profile or `--link` choice. Parts the target does not understand are announced and skipped: a profile with MCP servers and settings keys restores into Codex as skills plus `AGENTS.md`, with a line saying `codex 은 mcp, settings 를 다루지 않아 건너뜁니다`. Claude plugin packages are skipped the same way; `github:`/`git:` packages are cloned into every agent root that restores the profile, so give the other agents a profile without them if that is not what you want. `lshed init --agent codex` works too, and a shed made from Codex restores into Claude Code with `CLAUDE.md` generated from the same fragments. The shed's `agent:` is only a default for `--agent` (`$LSHED_AGENT` also works).
+
 ### Links instead of copies
 
 On the machine where you do most of your editing, `restore --link` places skills, agents, commands and instruction fragments as links into the shed instead of copies. Edits in `~/.claude` land in the shed directly, `diff` has nothing to report, and `save` has nothing to do; `lshed sync` is the whole loop.
@@ -444,7 +465,7 @@ $ lshed add
 ```
 lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
 lshed add [keys...] [--all]                     put things that appeared since init into the shed
-lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes]
+lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes]   (--agent <name> to target another tool)
 lshed status                                    applied profile, drift, packages, missing env, new things
 lshed diff                                      files (or JSON keys) that differ between local and shed
 lshed save [ids...]                             copy local edits back into the shed
@@ -457,7 +478,7 @@ lshed prune [--yes]                             drop everything no profile uses
 
 Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`.
 
-Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed remembers it), `--root <dir>` (agent config root, default `~/.claude` or `CLAUDE_CONFIG_DIR`).
+Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed remembers it), `--agent <name>` (or `LSHED_AGENT`; default is the shed's `agent:`, then `claude-code`), `--root <dir>` (agent config root, default is the agent's own, e.g. `~/.claude` or `~/.codex`).
 
 ### What `restore` does
 

@@ -1,8 +1,10 @@
 import { Command } from "commander";
 import os from "node:os";
 import path from "node:path";
-import { ClaudeCodeAdapter } from "./adapters/claude-code.js";
-import { spawnExec, type Ctx } from "./core/context.js";
+import { promises as fs } from "node:fs";
+import { createAdapter, adapterNames, DEFAULT_AGENT } from "./adapters/registry.js";
+import type { AgentAdapter } from "./adapters/types.js";
+import { spawnExec, manifestAgent, installablePackages, schemeOf, MANIFEST_FILE, type Ctx } from "./core/context.js";
 import { init } from "./core/init.js";
 import { restore } from "./core/restore.js";
 import { pick, type Prompter } from "./core/pick.js";
@@ -12,7 +14,6 @@ import { diff, formatDiff } from "./core/diff.js";
 import { save } from "./core/save.js";
 import { readState } from "./state.js";
 import { loadManifest } from "./core/context.js";
-import { packagesOf } from "./manifest.js";
 import { updatePackages, reportPending } from "./core/packages.js";
 import { listRows, formatRows } from "./core/list.js";
 import { remove, prune } from "./core/remove.js";
@@ -33,15 +34,25 @@ const program = new Command()
   .description("Keep your coding-agent harness (skills, agents, commands, instructions) in a shed and restore it anywhere by profile.")
   .version(version)
   .option("--shed <dir>", "shed directory (default: $LSHED_HOME, then the shed recorded by the last restore)")
-  .option("--root <dir>", "agent config root (default: ~/.claude)");
+  .option("--agent <name>", `which agent to place into: ${adapterNames().join(", ")} (default: $LSHED_AGENT, then the shed's agent, then ${DEFAULT_AGENT})`)
+  .option("--root <dir>", "agent config root (default: the agent's own, e.g. ~/.claude or ~/.codex)");
 
-function adapterFromOpts(): ClaudeCodeAdapter {
-  const { root } = program.opts<{ root?: string }>();
-  return new ClaudeCodeAdapter(root ? path.resolve(root) : undefined);
+/**
+ * 어댑터 선택: --agent > $LSHED_AGENT > (창고 위치를 알면) lshed.yaml 의 agent > claude-code.
+ * 창고 위치를 state 에서 가져오는 경우는 어댑터가 먼저 필요하므로 매니페스트를 볼 수 없다 — 그때는 기본값이다.
+ */
+async function adapterFromOpts(): Promise<AgentAdapter> {
+  const { root, agent, shed } = program.opts<{ root?: string; agent?: string; shed?: string }>();
+  let name = agent ?? process.env.LSHED_AGENT;
+  const shedDir = shed ?? process.env.LSHED_HOME;
+  if (!name && shedDir) {
+    try { name = manifestAgent(await fs.readFile(path.join(path.resolve(shedDir), MANIFEST_FILE), "utf8")); } catch { /* 창고가 아직 없음 (init) */ }
+  }
+  return createAdapter(name ?? DEFAULT_AGENT, root ? path.resolve(root) : undefined);
 }
 
 async function ctxFor(cmd: "init" | "other"): Promise<Ctx> {
-  const adapter = adapterFromOpts();
+  const adapter = await adapterFromOpts();
   const { shed: flag } = program.opts<{ shed?: string }>();
   let shed = flag ?? process.env.LSHED_HOME;
   if (!shed && cmd === "other") shed = (await readState(adapter))?.shed;
@@ -124,7 +135,9 @@ program
     const state = await readState(ctx.adapter);
     if (!state) throw new Error("적용된 프로필이 없습니다. 먼저 'lshed restore <profile>' 을 실행하세요.");
     const m = await loadManifest(ctx);
-    let pkgs = packagesOf(m, state.profile);
+    const pk = installablePackages(ctx, m, state.profile);
+    for (const p of pk.skipped) console.log(`  · package ${p.id}  (${schemeOf(p.source)}: 는 ${ctx.adapter.name} 로 다룰 수 없어 건너뜀)`);
+    let pkgs = pk.packages;
     if (ids.length) {
       pkgs = ids.map((id) => {
         const p = m.packages.find((x) => x.id === id);
@@ -141,11 +154,11 @@ program
   .command("status")
   .description("show the applied profile, managed paths and drift")
   .action(() => run(async () => {
-    const adapter = adapterFromOpts();
+    const adapter = await adapterFromOpts();
     const state = await readState(adapter);
-    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [], missingEnv: [], fresh: [] }, adapter.root)); return; }
+    if (!state) { console.log(formatStatus({ state: null, drifted: [], packages: [], missingEnv: [], fresh: [] }, adapter.root, adapter.name)); return; }
     const ctx = await ctxFor("other");
-    console.log(formatStatus(await status(ctx), adapter.root));
+    console.log(formatStatus(await status(ctx), adapter.root, adapter.name));
   }));
 
 program
@@ -216,7 +229,7 @@ program
   .command("scan")
   .description("(debug) list components found in the agent config root")
   .action(() => run(async () => {
-    const adapter = adapterFromOpts();
+    const adapter = await adapterFromOpts();
     const found = await adapter.scan();
     for (const c of found) console.log(`${c.category}/${c.id}\t${c.path}`);
     let n = found.length;

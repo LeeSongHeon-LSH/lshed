@@ -46,8 +46,8 @@ export interface AgentAdapter {
   entries(): readonly EntryCategory[];
   /** 지침 파일: import 목록 생성 vs 단순 연결 (§3.3) */
   instructionsStrategy(): "import" | "concat";
-  /** 지침 파일 이름 (루트 기준). 예: CLAUDE.md */
-  instructionsFileName(): string;
+  /** 지침 파일 이름 (루트 기준). 예: CLAUDE.md. 사용자 수준 지침 파일이 없는 도구는 null (instructions 카테고리를 건너뛴다) */
+  instructionsFileName(): string | null;
   /** 현재 설치된 부품 스캔 (init의 근거) */
   scan(): Promise<ScannedComponent[]>;
 }

@@ -39,7 +39,7 @@ export async function init(ctx: Ctx, opts: { profile?: string; exclude?: string[
 
   // 기존 지침 파일: lshed 생성물이 아니면 조각 "main" 으로 가져온다
   const instr = instructionsFile(ctx);
-  if (await exists(instr)) {
+  if (instr && (await exists(instr))) {
     const text = await fs.readFile(instr, "utf8");
     if (!isGenerated(text)) {
       const dst = path.join(ctx.shed, INSTRUCTIONS, "main.md");

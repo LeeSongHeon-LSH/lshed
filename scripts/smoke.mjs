@@ -101,6 +101,17 @@ check("백업 생성", r.out.includes("백업"));
 r = run(B, ["list"]);
 check("list exit 0", r.code === 0);
 
+// 창고 하나를 다른 에이전트가 쓴다: ~/.agents 규약(skills 만), codex(skills + AGENTS.md 이어붙임)
+const C = path.join(tmp, "C"), D = path.join(tmp, "D");
+const there = (p) => fs.access(p).then(() => true, () => false);
+r = run(C, ["--agent", "agents", "restore", "default"]);
+check("agents: skills 만 배치, 나머지는 알리고 건너뜀", r.code === 0 && (await there(path.join(C, "skills/alpha/SKILL.md"))) && r.out.includes("다루지 않아 건너뜁니다") && !(await there(path.join(C, "agents"))) && !(await there(`${C}.json`)));
+r = run(D, ["--agent", "codex", "restore", "default"]);
+check("codex: AGENTS.md 에 지침을 이어붙임", r.code === 0 && (await fs.readFile(path.join(D, "AGENTS.md"), "utf8")).includes("# rules"));
+r = run(D, ["--agent", "codex", "status"]);
+check("codex: 자기 state", r.out.includes("codex:") && r.out.includes("드리프트 없음"));
+check("B 의 state 는 그대로", JSON.parse(await fs.readFile(path.join(B, "lshed/state.json"), "utf8")).profile === "minimal");
+
 // sync (원격 없음): 커밋만
 spawnSync("git", ["init", "-q"], { cwd: shed });
 spawnSync("git", ["config", "user.name", "smoke"], { cwd: shed });

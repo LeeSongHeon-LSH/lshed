@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import YAML from "yaml";
-import { type Ctx, INSTRUCTIONS, loadManifest, manifestPath } from "./context.js";
+import { type Ctx, INSTRUCTIONS, loadManifest, manifestPath, knownCategories } from "./context.js";
 import { PACKAGES, resolveProfile, type Manifest } from "../manifest.js";
 import { readState } from "../state.js";
 import { restore, type RestoreOptions, type RestoreResult } from "./restore.js";
@@ -72,6 +72,8 @@ export async function pick(ctx: Ctx, prompter: Prompter, opts: PickOptions = {})
   }
   const groups = pickGroups(ctx, m, baseName ? resolveProfile(m, baseName) : undefined);
   if (!groups.length) throw new Error(`창고에 고를 것이 없습니다: ${ctx.shed}`);
+  const unknown = Object.keys(m.components).filter((c) => !knownCategories(ctx.adapter).includes(c));
+  if (unknown.length) ctx.log(`  · ${ctx.adapter.name} 은 ${unknown.join(", ")} 를 다루지 않아 이 화면에 없습니다 (다른 에이전트로 restore 할 때 씁니다)`);
 
   ctx.log(`창고: ${ctx.shed}  (${groups.map((g) => g.title).join(", ")})${baseName ? `  기준 프로필: ${baseName}` : ""}`);
   const selection: Record<string, string[]> = {};

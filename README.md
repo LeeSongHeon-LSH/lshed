@@ -11,15 +11,35 @@ The shed is a plain directory. Put it in a git repo, Dropbox, whatever. `lshed s
 
 ## Why
 
-Every new laptop, server, container or WSL box means setting up `~/.claude` again. dotfiles tools move **files**; they don't know what a skill, an agent or an instruction fragment is, they can't compose a subset per machine, and they can't tell which parts they placed and which were yours.
+Every new laptop, server, container or WSL box means setting up `~/.claude` again. The obvious fix is to put `~/.claude` itself in git, and for many people that is the right answer.
 
-lshed adds three first-class ideas on top of "a directory in git":
+**When a `.gitignore` is enough.** You are one person, every machine gets the same setup, and everything in `~/.claude` is yours. Then this does the job and you should not install lshed:
+
+```
+cd ~/.claude && git init
+printf 'projects/\ncache/\nsessions/\nshell-snapshots/\nhistory.jsonl\n*.bak*\n' > .gitignore
+git add skills agents commands CLAUDE.md settings.json .gitignore && git commit -m init
+```
+
+No new concepts, no copy step: the directory you edit is the repository. Cloning it on the next machine is the whole restore.
+
+**Where that stops working.** The repository above starts to hurt as soon as `~/.claude` is not just yours:
+
+- **Toolkits you installed.** One cloned toolkit here is 1.6 GB and generated 53 alias skills next to the 4 you wrote. Raw git commits all of it, or you maintain the ignore list by hand.
+- **Secrets inside one JSON file.** MCP servers and their tokens live in `~/.claude.json` together with unrelated state. File-level ignore cannot split them, so you either commit tokens or leave MCP out.
+- **A machine that already has a setup.** `git clone` into a non-empty `~/.claude` is a merge you do by hand, and nothing tracks which files came from the repo and which were already there.
+- **Different subsets per machine.** A headless server wants no browser toolkit and no MCP. Branches or templates can fake this, but nothing removes the parts you no longer want when you switch.
+- **Choosing on the machine itself.** `git clone` is all or nothing. On a new box you want to look at what the shed has, category by category, and tick what this machine needs.
+
+lshed exists for those five cases. It keeps the shed as a plain directory in git, and adds three ideas on top:
 
 | Idea | What it gives you |
 |---|---|
-| **Components** | every skill / agent / command / instruction fragment / MCP server / settings key is one named part in the shed |
-| **Profiles** | named recipes — `research`, `work`, `minimal` — that pick a subset of parts |
-| **Managed set** | lshed remembers what it placed, so switching profiles removes only its own files and never touches yours |
+| **Components** | every skill / agent / command / instruction fragment / MCP server / settings key is one named part; toolkits you installed are recorded as a source and version, not copied |
+| **Profiles** | named recipes — `research`, `work`, `minimal` — that pick a subset of parts; write them in `lshed.yaml`, or let `restore --pick` build one from a checklist |
+| **Managed set** | lshed remembers what it placed, so switching profiles or restoring onto an existing machine removes only its own files and never touches yours |
+
+The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed, and lshed has to know Claude Code's layout, which the plain repository does not. If none of the five cases applies to you, the `.gitignore` wins.
 
 Currently supports **Claude Code** (`~/.claude`). Other agents plug in through an adapter.
 
@@ -56,6 +76,7 @@ lshed sync                                  # commit + push
 # 3. On any other machine
 git clone <your private repo> ~/lshed
 lshed restore research --shed ~/lshed       # --shed only needed the first time
+lshed restore --pick --shed ~/lshed         # or tick what this machine gets, category by category
 ```
 
 ## How to use it
@@ -153,6 +174,46 @@ lshed restore default --shed ~/lshed
 ```
 
 Two things need you afterwards. Package `install:` commands are shell commands from a repository you cloned, so `restore` shows them and stops; run them yourself or rerun with `--yes`. MCP servers reference secrets as `${VAR}`; export the variables in your shell and Claude Code fills them in. From then on `lshed restore` with no arguments reapplies the last profile, and the shed location is remembered.
+
+### Picking instead of naming a profile
+
+You do not have to know the profile names, or edit `lshed.yaml`, to set up a machine. `restore --pick` walks the shed one category at a time and asks what this machine should get:
+
+```
+$ lshed restore --pick --shed ~/lshed
+창고: /home/me/lshed  (packages (3), skills (4), instructions (1), mcp (1))
+◆  packages (3)  — 이 기기에 둘 것을 고르세요 (space 선택, a 전체, enter 다음)
+│  ◼ gstack  github:garrytan/gstack@main
+│  ◻ claude-plugins-official  claude-marketplace:anthropics/claude-plugins-official
+│  ◻ exa  claude-plugin:exa@claude-plugins-official
+◆  skills (4)  — 이 기기에 둘 것을 고르세요
+│  ◼ add-drivers
+│  ◼ domain-modeling
+│  ◻ grilling
+│  ◻ paper-review
+◆  instructions (1)
+│  ◼ main
+◆  mcp (1)
+│  ◻ notion
+◆  이 선택을 저장할 프로필 이름
+│  lab-box
+
+프로필 "lab-box" 을 lshed.yaml 에 저장했습니다. 다른 기기에서도 쓰려면 lshed sync 로 올리세요.
+
+  + package gstack  (clone https://github.com/garrytan/gstack.git @main → 253d1df)
+  + skills/add-drivers
+  + skills/domain-modeling
+  + lshed/instructions/main.md
+  + CLAUDE.md
+
+프로필 "lab-box" 적용: 배치 4, 제거 0, 패키지 설치 1
+```
+
+Categories the shed has nothing in (here `agents`, `commands`, `settings`) are skipped, not shown empty. The choice is always saved as a profile, named after the machine unless you type another name: that is what makes the next bare `lshed restore` reapply it, and what `lshed sync` carries to your other machines. If the shed already has a profile with that name, lshed asks before overwriting it.
+
+`lshed restore default --pick` starts with `default`'s parts checked, so you can trim a profile for this machine instead of starting from nothing. With no argument the last applied profile is the starting point. `--dry-run` shows the plan and writes neither `lshed.yaml` nor `~/.claude`. Ctrl+C at any screen leaves everything untouched.
+
+On a machine with no applied profile, a bare `lshed restore --shed ~/lshed` in a terminal opens the picker by itself. In a script or a pipe it asks for a profile name instead.
 
 ### Profiles
 
@@ -349,7 +410,7 @@ $ lshed add
 ```
 lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
 lshed add [keys...] [--all]                     put things that appeared since init into the shed
-lshed restore [profile] [--dry-run] [--no-backup] [--yes]
+lshed restore [profile] [--pick] [--dry-run] [--no-backup] [--yes]
 lshed status                                    applied profile, drift, packages, missing env, new things
 lshed diff                                      files (or JSON keys) that differ between local and shed
 lshed save [ids...]                             copy local edits back into the shed
@@ -372,6 +433,8 @@ Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed r
 3. Regenerates the instructions file.
 
 Anything it overwrites or removes is backed up first under `~/.claude/lshed/backups/<timestamp>/`, unless you pass `--no-backup`. Files lshed never placed are left alone. `--dry-run` prints the plan and writes nothing.
+
+With `--pick`, a checklist per non-empty category comes first (packages, skills, agents, commands, instructions, MCP servers, settings keys). `[profile]` pre-checks that profile's parts. The result is written to `lshed.yaml` as a profile, and then steps 0–3 run for it.
 
 ### What `sync` does
 

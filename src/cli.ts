@@ -5,6 +5,8 @@ import { ClaudeCodeAdapter } from "./adapters/claude-code.js";
 import { spawnExec, type Ctx } from "./core/context.js";
 import { init } from "./core/init.js";
 import { restore } from "./core/restore.js";
+import { pick, type Prompter } from "./core/pick.js";
+import * as clack from "@clack/prompts";
 import { status, formatStatus } from "./core/status.js";
 import { diff, formatDiff } from "./core/diff.js";
 import { save } from "./core/save.js";
@@ -69,14 +71,44 @@ program
     console.log(`\n다음: 창고를 git 으로 관리하세요.  cd ${ctx.shed} && git init`);
   }));
 
+/** 터미널 프롬프트. 취소(Ctrl+C)는 undefined 로 돌려서 pick 이 조용히 물러나게 한다. */
+function terminalPrompter(): Prompter {
+  const un = <T>(v: T | symbol): T | undefined => (clack.isCancel(v) ? undefined : (v as T));
+  return {
+    async multiselect(g) {
+      return un(await clack.multiselect<string>({
+        message: `${g.title}  — 이 기기에 둘 것을 고르세요 (space 선택, a 전체, enter 다음)`,
+        options: g.options.map((o) => ({ value: o.id, label: o.id, hint: o.hint })),
+        initialValues: g.options.filter((o) => o.checked).map((o) => o.id),
+        required: false,
+      }));
+    },
+    async text(message, defaultValue, validate) {
+      return un(await clack.text({ message, placeholder: defaultValue, defaultValue, validate: (v) => validate(v ?? "") }));
+    },
+    async confirm(message) {
+      return un(await clack.confirm({ message }));
+    },
+  };
+}
+
 program
   .command("restore [profile]")
-  .description("apply a profile (defaults to the last applied one)")
+  .description("apply a profile (defaults to the last applied one; with no profile at all, opens the picker)")
+  .option("--pick", "choose parts category by category and save the choice as a profile ([profile] pre-checks that profile)")
   .option("--dry-run", "print what would change without touching anything")
   .option("--no-backup", "skip backing up files that get replaced or removed")
   .option("--yes", "run package install commands (they are shown, not run, without this)")
-  .action((profile: string | undefined, o: { dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
+  .action((profile: string | undefined, o: { pick?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
+    const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const firstTime = !profile && !(await readState(ctx.adapter));
+    if (o.pick || (firstTime && tty)) {
+      if (!tty) throw new Error("--pick 은 대화형 터미널이 필요합니다. 프로필 이름을 직접 지정하세요: lshed restore <profile>");
+      if (firstTime && !o.pick) console.log("적용한 프로필이 없어 고르는 화면을 엽니다. 프로필을 바로 적용하려면: lshed restore <profile>\n");
+      await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes });
+      return;
+    }
     await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes });
   }));
 

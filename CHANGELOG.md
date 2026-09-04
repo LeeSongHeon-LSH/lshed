@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 2026-09-04
+
+Pick what a machine gets instead of writing a profile by hand.
+
+- `lshed restore --pick` walks the shed one category at a time — packages, then skills, agents, commands, instructions, MCP servers, settings keys — and shows a checklist for each. Categories the shed has nothing in are skipped, so a shed with no packages never asks about packages. The choice is saved to `lshed.yaml` as a profile (named after the machine by default, or whatever you type) and then applied like any other `restore`. Saving is not optional: the next bare `lshed restore` reapplies the same choice, and `lshed sync` carries it to your other machines.
+- `lshed restore <profile> --pick` starts with that profile's parts checked, so you can trim or extend an existing profile instead of starting from nothing. With no argument, the last applied profile is the starting point.
+- On a machine with no applied profile, a bare `lshed restore --shed <dir>` in a terminal opens the picker instead of failing. In a pipe or a script it still asks for a profile name.
+- `--dry-run` shows the plan and writes neither `lshed.yaml` nor the agent root. Naming an existing profile asks before overwriting it. Ctrl+C at any screen leaves everything as it was.
+- Prompts come from `@clack/prompts`, bundled like the other dependencies.
+
 ## 0.7.6 — 2026-09-03
 
 Agents organised in subdirectories were silently left out of the shed.

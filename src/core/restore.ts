@@ -6,9 +6,15 @@ import { readState, writeState, LSHED_DIR } from "../state.js";
 import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
 import { ensurePackages, reportPending } from "./packages.js";
-import { packagesOf } from "../manifest.js";
+import { packagesOf, type Manifest } from "../manifest.js";
 
-export interface RestoreOptions { dryRun?: boolean; backup?: boolean; yes?: boolean }
+export interface RestoreOptions {
+  dryRun?: boolean;
+  backup?: boolean;
+  yes?: boolean;
+  /** 이미 읽은(또는 아직 쓰지 않은) 매니페스트로 계획한다. pick 의 dry-run 이 쓴다. */
+  manifest?: Manifest;
+}
 export interface RestoreResult {
   profile: string;
   placed: string[];
@@ -31,7 +37,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   const profile = profileArg ?? state?.profile;
   if (!profile) throw new Error("프로필을 지정하세요: lshed restore <profile>  (이전에 적용한 프로필이 없습니다)");
 
-  const m = await loadManifest(ctx);
+  const m = opts.manifest ?? await loadManifest(ctx);
   const plan = planProfile(ctx, m, profile);
   for (const it of plan) {
     if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: 창고에 파일이 없습니다: ${it.src}`);

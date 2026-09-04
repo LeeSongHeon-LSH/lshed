@@ -39,7 +39,7 @@ lshed exists for those five cases. It keeps the shed as a plain directory in git
 | **Profiles** | named recipes — `research`, `work`, `minimal` — that pick a subset of parts; write them in `lshed.yaml`, or let `restore --pick` build one from a checklist |
 | **Managed set** | lshed remembers what it placed, so switching profiles or restoring onto an existing machine removes only its own files and never touches yours |
 
-The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed, and lshed has to know Claude Code's layout, which the plain repository does not. If none of the five cases applies to you, the `.gitignore` wins.
+The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed (or use `restore --link` on machines where you edit a lot, and skip the copy step), and lshed has to know Claude Code's layout, which the plain repository does not. If none of the five cases applies to you, the `.gitignore` wins.
 
 Currently supports **Claude Code** (`~/.claude`). Other agents plug in through an adapter.
 
@@ -245,6 +245,22 @@ Switching removes only what the previous profile placed (`-`), keeps what both u
 
 Instructions fragments are ordered. `restore` writes a `CLAUDE.md` that `@`-imports each fragment, so editing a fragment in the shed shows up on the next `restore` and there is nothing to merge.
 
+### Links instead of copies
+
+On the machine where you do most of your editing, `restore --link` places skills, agents, commands and instruction fragments as links into the shed instead of copies. Edits in `~/.claude` land in the shed directly, `diff` has nothing to report, and `save` has nothing to do; `lshed sync` is the whole loop.
+
+```
+$ lshed restore --link
+  ~ skills/add-drivers  (link)
+  ~ agents/reviewer.md  (link)
+  ~ lshed/instructions/main.md  (link)
+  = CLAUDE.md
+
+프로필 "default" 적용 (link): 배치 4, 제거 0
+```
+
+The choice is per machine and remembered: later `lshed restore` calls on that machine keep linking, `lshed status` shows `배치 link`, and `restore --no-link` goes back to copies. Other machines are not affected. MCP entries and settings keys are JSON values, not files, so they are always written. Switching profiles removes the links, never the shed behind them. On Windows, directories become junctions with no special permission; single-file parts (agents, commands, fragments) need Developer Mode for a link, and without it lshed copies the file, says so, and treats it like any other copy (`save` still works for it).
+
 A profile can build on another one with `extends`, so a machine-specific profile lists only what is different:
 
 ```yaml
@@ -428,7 +444,7 @@ $ lshed add
 ```
 lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
 lshed add [keys...] [--all]                     put things that appeared since init into the shed
-lshed restore [profile] [--pick] [--dry-run] [--no-backup] [--yes]
+lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes]
 lshed status                                    applied profile, drift, packages, missing env, new things
 lshed diff                                      files (or JSON keys) that differ between local and shed
 lshed save [ids...]                             copy local edits back into the shed
@@ -447,7 +463,7 @@ Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed r
 
 0. Installs any package in the profile that is missing, at the version in `lshed.lock`.
 1. Removes paths that the **previous** profile placed and the new one doesn't need.
-2. Copies every part of the new profile into place; writes MCP entries into `~/.claude.json` and settings keys into `settings.json`.
+2. Copies every part of the new profile into place (or links it into the shed, with `--link` or on a machine that used it before); writes MCP entries into `~/.claude.json` and settings keys into `settings.json`.
 3. Regenerates the instructions file.
 
 Anything it overwrites or removes is backed up first under `~/.claude/lshed/backups/<timestamp>/`, unless you pass `--no-backup`. Files lshed never placed are left alone. `--dry-run` prints the plan and writes nothing.
@@ -465,7 +481,7 @@ On a conflict it aborts the rebase, leaves the shed clean with your commit intac
 
 ### Ownership
 
-The shed is the source of truth for authored parts: `save` copies local edits back for `file:` components. Packages are owned by their upstream: `update` pulls them, `save` ignores them.
+The shed is the source of truth for authored parts: `save` copies local edits back for `file:` components, and a linked part is the shed. Packages are owned by their upstream: `update` pulls them, `save` ignores them.
 
 ## Where things live
 

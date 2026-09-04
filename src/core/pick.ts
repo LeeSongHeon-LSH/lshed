@@ -112,7 +112,7 @@ export async function pick(ctx: Ctx, prompter: Prompter, opts: PickOptions = {})
     ctx.log(`\n프로필 "${name}" 을 lshed.yaml 에 저장했습니다. 다른 기기에서도 쓰려면 lshed sync 로 올리세요.\n`);
   }
 
-  const restored = await restore(ctx, name, { dryRun: opts.dryRun, backup: opts.backup, yes: opts.yes, manifest: m });
+  const restored = await restore(ctx, name, { dryRun: opts.dryRun, backup: opts.backup, yes: opts.yes, link: opts.link, manifest: m });
   return { profile: name, selection, restored };
 }
 

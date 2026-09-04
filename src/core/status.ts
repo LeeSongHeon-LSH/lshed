@@ -44,6 +44,7 @@ export function formatStatus(s: Status, adapterRoot: string): string {
     `적용     ${s.state.appliedAt}`,
     `관리 중  ${s.state.managed.length}개 경로 (${adapterRoot})`,
   ];
+  if (s.state.link) lines.push("배치     link (파일 부품은 창고로 가는 링크 — 편집이 바로 창고에 반영됨)");
   lines.push(s.drifted.length ? `드리프트 ${s.drifted.length}개: ${s.drifted.join(", ")}  → lshed diff` : "드리프트 없음");
   const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
   for (const p of s.packages) {

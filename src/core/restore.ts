@@ -3,7 +3,7 @@ import path from "node:path";
 import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf, entryOf } from "./context.js";
 import { expand, envWithHome, matches, placeholdersIn, readEntryFile, writeEntryFile, type Json } from "./entries.js";
 import { readState, writeState, LSHED_DIR } from "../state.js";
-import { copyTree, exists, hashTree, removeTree } from "../fsutil.js";
+import { copyTree, exists, hashTree, isLink, isLinkTo, linkTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
 import { ensurePackages, reportPending } from "./packages.js";
 import { packagesOf, type Manifest } from "../manifest.js";
@@ -12,6 +12,8 @@ export interface RestoreOptions {
   dryRun?: boolean;
   backup?: boolean;
   yes?: boolean;
+  /** 파일 부품을 복사 대신 링크로 놓는다 (§3.6). 생략하면 이 기기가 마지막에 쓴 방식, 처음이면 복사. */
+  link?: boolean;
   /** 이미 읽은(또는 아직 쓰지 않은) 매니페스트로 계획한다. pick 의 dry-run 이 쓴다. */
   manifest?: Manifest;
 }
@@ -27,7 +29,7 @@ export interface RestoreResult {
 
 /**
  * 프로필 적용 (§3.5).
- *  - 새 계획에 있는 항목은 복사한다 (기존 파일이 다르면 백업 후).
+ *  - 새 계획에 있는 항목은 복사한다 (기존 파일이 다르면 백업 후). --link 면 창고로 가는 링크를 놓는다 (§3.6).
  *  - 이전 관리 집합에 있었지만 새 계획에 없는 항목만 제거한다 (백업 후).
  *  - 관리 집합에 없는 사용자 파일은 건드리지 않는다.
  */
@@ -36,6 +38,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   const state = await readState(ctx.adapter);
   const profile = profileArg ?? state?.profile;
   if (!profile) throw new Error("프로필을 지정하세요: lshed restore <profile>  (이전에 적용한 프로필이 없습니다)");
+  const link = opts.link ?? state?.link ?? false;
 
   const m = opts.manifest ?? await loadManifest(ctx);
   const plan = planProfile(ctx, m, profile);
@@ -118,12 +121,22 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
       continue;
     }
     const target = abs(ctx, it.rel);
-    const same = (await hashTree(target, ignoreOf(ctx))) === (await hashTree(it.src, ignoreOf(ctx)));
-    const mark = same ? "=" : (await exists(target)) ? "~" : "+";
-    ctx.log(`  ${mark} ${it.rel}`);
+    const there = (await exists(target)) || (await isLink(target)); // 끊어진 링크도 "있는 것" 으로 치워야 한다
+    const sameContent = there && (await hashTree(target, ignoreOf(ctx))) === (await hashTree(it.src, ignoreOf(ctx)));
+    const isLinked = await isLinkTo(target, it.src);
+    // 링크 모드면 창고를 가리키는 링크여야 같은 것이고, 복사 모드면 링크가 아니면서 내용이 같아야 같은 것이다.
+    const same = link ? isLinked : sameContent && !(await isLink(target));
+    const note = link ? "  (link)" : (await isLink(target)) ? "  (link → 복사)" : "";
+    const mark = same ? "=" : there ? "~" : "+";
+    ctx.log(`  ${mark} ${it.rel}${same ? "" : note}`);
     if (same) { placed.push(it.rel); continue; }
-    if (await exists(target)) await backUp(it.rel); // 관리 여부와 무관하게 내용이 다르면 백업
-    if (!opts.dryRun) await copyTree(it.src, target, ignoreOf(ctx));
+    if (there && !sameContent) await backUp(it.rel); // 관리 여부와 무관하게 내용이 다르면 백업
+    if (!opts.dryRun) {
+      if (!link) await copyTree(it.src, target, ignoreOf(ctx));
+      else if ((await linkTree(it.src, target, ignoreOf(ctx))) === "copy") {
+        ctx.log(`    ! 링크를 만들 수 없어 복사했습니다. 편집은 lshed save 로 반영하세요${process.platform === "win32" ? " (Windows 파일 링크는 개발자 모드가 필요합니다)" : ""}`);
+      }
+    }
     placed.push(it.rel);
   }
 
@@ -152,9 +165,9 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv };
   }
 
-  await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString() });
+  await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString(), ...(link ? { link } : {}) });
   const bdir = backup && backedUp.length ? backupDir : null;
-  ctx.log(`\n프로필 "${profile}" 적용: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.installed.length ? `, 패키지 설치 ${pkgRes.installed.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
+  ctx.log(`\n프로필 "${profile}" 적용${link ? " (link)" : ""}: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.installed.length ? `, 패키지 설치 ${pkgRes.installed.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
   reportMissingEnv(ctx, missingEnv);
   return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv };

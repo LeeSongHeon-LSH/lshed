@@ -109,8 +109,41 @@ export async function copyTree(src: string, dst: string, ignore: Ignore = DEFAUL
   });
 }
 
+/** 링크 자체만 지운다. fs.rm 은 링크를 따라가지 않으므로 창고로 가는 링크를 지워도 창고는 그대로다. */
 export async function removeTree(p: string): Promise<void> {
   await fs.rm(p, { recursive: true, force: true });
+}
+
+/** 심볼릭 링크(또는 Windows junction)인가. 끊어진 링크도 true. */
+export async function isLink(p: string): Promise<boolean> {
+  try { return (await fs.lstat(p)).isSymbolicLink(); } catch { return false; }
+}
+
+/** dst 가 src 를 가리키는 링크인가 */
+export async function isLinkTo(dst: string, src: string): Promise<boolean> {
+  try {
+    if (!(await fs.lstat(dst)).isSymbolicLink()) return false;
+    return normalizePath(await fs.realpath(dst)) === normalizePath(await fs.realpath(src));
+  } catch { return false; }
+}
+
+/**
+ * src 를 가리키는 링크를 dst 에 만든다 (§3.6 --link). dst 가 있으면 먼저 지운다.
+ * 디렉터리는 Windows 에서 junction 이라 권한이 필요 없다. 파일 링크는 Windows 에서 개발자 모드가 없으면 실패하므로
+ * 그때는 복사로 폴백하고 "copy" 를 돌려준다. 복사된 부품은 여느 복사본처럼 diff/save 대상이다.
+ */
+export async function linkTree(src: string, dst: string, ignore: Ignore = DEFAULT_IGNORE): Promise<"link" | "copy"> {
+  await fs.rm(dst, { recursive: true, force: true });
+  await fs.mkdir(path.dirname(dst), { recursive: true });
+  const target = path.resolve(src);
+  const dir = await isDir(target);
+  try {
+    await fs.symlink(target, dst, dir ? (process.platform === "win32" ? "junction" : "dir") : "file");
+    return "link";
+  } catch {
+    await copyTree(src, dst, ignore);
+    return "copy";
+  }
 }
 
 export type FileChange = { status: "A" | "M" | "D"; file: string };

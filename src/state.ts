@@ -10,6 +10,8 @@ export const StateSchema = z.object({
   /** 어댑터 루트 기준 상대 경로 (POSIX 구분자). lshed가 놓은 것만. */
   managed: z.array(z.string()),
   appliedAt: z.string(),
+  /** 파일 부품을 복사 대신 창고로 가는 링크로 놓았다 (restore --link). 다음 restore 도 같은 방식을 쓴다. */
+  link: z.boolean().optional(),
 });
 export type State = z.infer<typeof StateSchema>;
 

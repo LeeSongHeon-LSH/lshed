@@ -96,20 +96,22 @@ program
   .command("restore [profile]")
   .description("apply a profile (defaults to the last applied one; with no profile at all, opens the picker)")
   .option("--pick", "choose parts category by category and save the choice as a profile ([profile] pre-checks that profile)")
+  .option("--link", "place file parts as links into the shed instead of copies (edits land in the shed; remembered for later restores)")
+  .option("--no-link", "go back to copies on a machine that used --link")
   .option("--dry-run", "print what would change without touching anything")
   .option("--no-backup", "skip backing up files that get replaced or removed")
   .option("--yes", "run package install commands (they are shown, not run, without this)")
-  .action((profile: string | undefined, o: { pick?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
+  .action((profile: string | undefined, o: { pick?: boolean; link?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
     const firstTime = !profile && !(await readState(ctx.adapter));
     if (o.pick || (firstTime && tty)) {
       if (!tty) throw new Error("--pick 은 대화형 터미널이 필요합니다. 프로필 이름을 직접 지정하세요: lshed restore <profile>");
       if (firstTime && !o.pick) console.log("적용한 프로필이 없어 고르는 화면을 엽니다. 프로필을 바로 적용하려면: lshed restore <profile>\n");
-      await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes });
+      await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
       return;
     }
-    await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes });
+    await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
   }));
 
 program

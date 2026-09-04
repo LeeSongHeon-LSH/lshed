@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { promises as fs } from "node:fs";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import nodefs, { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
@@ -133,6 +133,93 @@ describe("restore", () => {
     await restore(ctx, "minimal");
     const res = await restore(ctx, undefined);
     expect(res.profile).toBe("minimal");
+  });
+});
+
+describe("restore --link (§3.6)", () => {
+  const isLink = async (p: string) => (await fs.lstat(p)).isSymbolicLink();
+  beforeEach(async () => {
+    await init(ctx);
+    await fs.appendFile(path.join(shed, "lshed.yaml"), "  minimal:\n    skills: [alpha]\n");
+    await fs.rm(root, { recursive: true, force: true }); // 새 기기처럼
+  });
+
+  it("파일 부품은 창고로 가는 링크, 생성 파일은 실제 파일. 편집이 창고에 바로 반영되고 diff/save 는 할 일이 없다", async () => {
+    const res = await restore(ctx, "default", { link: true });
+    for (const rel of ["skills/alpha", "agents/rev.md", "lshed/instructions/main.md"]) expect(await isLink(path.join(root, rel)), rel).toBe(true);
+    expect(await isLink(path.join(root, "CLAUDE.md"))).toBe(false);
+    expect(await r(path.join(root, "skills/alpha/ref/x.txt"))).toBe("x");
+    expect(res.backedUp).toEqual([]);
+    expect(logs.join("\n")).toContain("+ skills/alpha  (link)");
+    expect((await readState(ctx.adapter))?.link).toBe(true);
+
+    await w(path.join(root, "skills/alpha/SKILL.md"), "alpha edited through link");
+    expect(await r(path.join(shed, "skills/alpha/SKILL.md"))).toBe("alpha edited through link");
+    expect(await diff(ctx)).toEqual([]);
+    expect(await save(ctx)).toEqual([]);
+    expect((await status(ctx)).drifted).toEqual([]);
+
+    // 인자 없는 재적용은 링크를 유지하고 전부 =
+    logs = [];
+    await restore(ctx, undefined);
+    expect(logs.filter((l) => /^\s+[+~] /.test(l))).toEqual([]);
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(true);
+    expect((await readState(ctx.adapter))?.link).toBe(true);
+  });
+
+  it("복사본 → 링크 전환은 내용이 같으면 백업 없이, 다르면 백업하고 바꾼다", async () => {
+    await restore(ctx, "default");
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);
+    await w(path.join(root, "skills/beta/SKILL.md"), "beta edited locally, not saved");
+    logs = [];
+    const res = await restore(ctx, "default", { link: true });
+    expect(logs.join("\n")).toContain("~ skills/alpha  (link)");
+    expect(res.backedUp).toEqual(["skills/beta"]);
+    expect(await r(path.join(res.backupDir!, "skills/beta/SKILL.md"))).toBe("beta edited locally, not saved");
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(true);
+    expect(await r(path.join(root, "skills/beta/SKILL.md"))).toBe("beta"); // 창고 것
+  });
+
+  it("--no-link 는 복사로 되돌리고, 창고 내용은 그대로", async () => {
+    await restore(ctx, "default", { link: true });
+    logs = [];
+    const res = await restore(ctx, undefined, { link: false });
+    expect(logs.join("\n")).toContain("~ skills/alpha  (link → 복사)");
+    expect(res.backedUp).toEqual([]);
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);
+    expect(await r(path.join(root, "skills/alpha/SKILL.md"))).toBe("alpha v1");
+    expect(await r(path.join(shed, "skills/alpha/SKILL.md"))).toBe("alpha v1");
+    expect((await readState(ctx.adapter))?.link).toBeUndefined();
+  });
+
+  it("프로필 전환은 링크만 지우고 창고는 건드리지 않는다", async () => {
+    await restore(ctx, "default", { link: true });
+    const res = await restore(ctx, "minimal");
+    expect(res.removed).toContain("skills/beta");
+    expect(await exists(path.join(root, "skills/beta"))).toBe(false);
+    expect(await r(path.join(shed, "skills/beta/SKILL.md"))).toBe("beta");
+    expect(await r(path.join(shed, "agents/rev.md"))).toBe("reviewer");
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(true); // 전환해도 링크 모드 유지
+  });
+
+  it("dry-run 은 링크를 만들지 않는다", async () => {
+    await restore(ctx, "default", { link: true, dryRun: true });
+    expect(await exists(root)).toBe(false);
+    expect(await readState(ctx.adapter)).toBeNull();
+  });
+
+  it("링크를 못 만들면 복사로 폴백하고 알린다 (Windows 파일 링크)", async () => {
+    const spy = vi.spyOn(nodefs.promises, "symlink").mockRejectedValue(Object.assign(new Error("EPERM"), { code: "EPERM" }));
+    try {
+      await restore(ctx, "default", { link: true });
+    } finally { spy.mockRestore(); }
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);
+    expect(await r(path.join(root, "skills/alpha/SKILL.md"))).toBe("alpha v1");
+    expect(logs.join("\n")).toContain("링크를 만들 수 없어 복사했습니다");
+    expect((await readState(ctx.adapter))?.link).toBe(true); // 모드는 그대로: 다음엔 될 수도 있다
+    // 복사본이니 diff/save 가 여느 때처럼 동작
+    await w(path.join(root, "skills/alpha/SKILL.md"), "edited copy");
+    expect((await diff(ctx)).map((d) => d.item.id)).toEqual(["alpha"]);
   });
 });
 

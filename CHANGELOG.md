@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.9.0 — 2026-09-04
+## 0.10.0 — 2026-09-04
+
+Link instead of copy, on the machines where you edit.
+
+- `lshed restore --link` places skills, agents, commands and instruction fragments as links into the shed. Edits in `~/.claude` land in the shed directly; `diff` and `save` have nothing to do and `lshed sync` is the whole loop. MCP entries, settings keys and the generated `CLAUDE.md` are still written as before.
+- The choice is per machine and remembered in `state.json`: later bare `lshed restore` calls keep linking, `lshed status` shows `배치 link`, and `restore --no-link` goes back to copies. Other machines keep copying.
+- Turning a copy into a link backs the copy up only if it differs from the shed (an unsaved edit); turning a link back into a copy backs up nothing. Switching profiles removes the links and never touches the shed behind them.
+- Windows: directories become junctions and need no permission. Single-file parts need Developer Mode for a link; without it the file is copied, the log says so, and it behaves like any other copy.
+
+ — 2026-09-04
 
 Profiles can build on each other.
 

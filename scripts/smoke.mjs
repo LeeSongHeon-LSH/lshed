@@ -65,6 +65,18 @@ check("아무것도 제거되지 않음", r.out.includes("제거 0"));
 r = run(B, ["restore"]);
 check("재적용은 전부 =", r.code === 0 && !/^\s+[+~] /m.test(r.out));
 
+// --link: 디렉터리 부품은 링크(Windows 는 junction), 파일 부품은 링크 또는 복사 폴백. 편집이 창고에 바로 간다.
+r = run(B, ["restore", "--link"]);
+check("--link exit 0", r.code === 0 && r.out.includes("(link)"));
+check("skills/alpha 가 링크", (await fs.lstat(path.join(B, "skills/alpha"))).isSymbolicLink());
+check("agents/rev.md 는 링크 또는 복사본", (await fs.readFile(path.join(B, "agents/rev.md"), "utf8")) === "reviewer");
+await w(path.join(B, "skills/alpha/SKILL.md"), "alpha via link");
+check("링크 편집이 창고에 바로 반영", (await fs.readFile(path.join(shed, "skills/alpha/SKILL.md"), "utf8")) === "alpha via link");
+r = run(B, ["status"]);
+check("status: 배치 link, 드리프트 없음", r.out.includes("배치     link") && r.out.includes("드리프트 없음"));
+r = run(B, ["restore", "--no-link"]);
+check("--no-link: 복사로 복귀", r.code === 0 && !(await fs.lstat(path.join(B, "skills/alpha"))).isSymbolicLink() && (await fs.readFile(path.join(B, "skills/alpha/SKILL.md"), "utf8")) === "alpha via link");
+
 // B 에서 새 스킬 + 로컬 편집 → add / diff / save
 await w(path.join(B, "skills/gamma/SKILL.md"), "gamma");
 await w(path.join(B, "skills/alpha/SKILL.md"), "alpha edited");

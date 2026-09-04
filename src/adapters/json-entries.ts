@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { EntryCategory } from "./types.js";
+import type { Json } from "../core/entries.js";
 
 export interface JsonEntriesSpec {
   name: string;
@@ -13,6 +14,10 @@ export interface JsonEntriesSpec {
   expandsEnv: boolean;
   /** 다른 것이 관리하는 키. 담지 않는다 (예: enabledPlugins 는 플러그인 설치기 몫) */
   skip?: readonly string[];
+  /** 창고 형식 → 이 도구의 형식 (쓸 때). 없으면 그대로 */
+  toLocal?: (id: string, v: Json) => Json;
+  /** 이 도구의 형식 → 창고 형식 (읽을 때) */
+  fromLocal?: (id: string, v: Json) => Json;
 }
 
 /**
@@ -53,6 +58,7 @@ export class JsonEntries implements EntryCategory {
   async read(): Promise<Record<string, unknown>> {
     const out = { ...this.section(await this.load()) };
     for (const k of this.spec.skip ?? []) delete out[k];
+    if (this.spec.fromLocal) for (const [id, v] of Object.entries(out)) out[id] = this.spec.fromLocal(id, v as Json);
     return out;
   }
 
@@ -61,7 +67,7 @@ export class JsonEntries implements EntryCategory {
     const all = await this.load();
     const sect = { ...this.section(all) };
     if (value === null) delete sect[id];
-    else sect[id] = value;
+    else sect[id] = this.spec.toLocal ? this.spec.toLocal(id, value as Json) : value;
     const next = this.spec.under ? { ...all, [this.spec.under]: sect } : sect;
     await fs.mkdir(path.dirname(p), { recursive: true });
     const tmp = `${p}.lshed-${process.pid}.tmp`;

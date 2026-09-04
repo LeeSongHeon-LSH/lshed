@@ -108,6 +108,8 @@ r = run(C, ["--agent", "agents", "restore", "default"]);
 check("agents: skills 만 배치, 나머지는 알리고 건너뜀", r.code === 0 && (await there(path.join(C, "skills/alpha/SKILL.md"))) && r.out.includes("다루지 않아 건너뜁니다") && !(await there(path.join(C, "agents"))) && !(await there(`${C}.json`)));
 r = run(D, ["--agent", "codex", "restore", "default"]);
 check("codex: AGENTS.md 에 지침을 이어붙임", r.code === 0 && (await fs.readFile(path.join(D, "AGENTS.md"), "utf8")).includes("# rules"));
+const toml = await fs.readFile(path.join(D, "config.toml"), "utf8");
+check("codex: config.toml 에 MCP 를 변수 이름으로, 값은 없음", toml.includes("[mcp_servers.exa]") && toml.includes('env_vars = [ "EXA_API_KEY" ]') && !toml.includes("sk-secret") && !toml.includes("on-B"));
 r = run(D, ["--agent", "codex", "status"]);
 check("codex: 자기 state", r.out.includes("codex:") && r.out.includes("드리프트 없음"));
 check("B 의 state 는 그대로", JSON.parse(await fs.readFile(path.join(B, "lshed/state.json"), "utf8")).profile === "minimal");

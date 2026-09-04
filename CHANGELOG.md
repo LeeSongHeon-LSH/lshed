@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.11.0 — 2026-09-04
+## 0.12.0 — 2026-09-04
+
+MCP servers follow the shed into the other agents.
+
+- `restore --agent codex|gemini|copilot|cursor` now writes the profile's MCP servers too: Codex into `config.toml` (`[mcp_servers.*]`), Gemini into `settings.json`, Copilot into `mcp-config.json`, Cursor into `mcp.json`. The shed keeps Claude Code's shape; each target gets its own (`httpUrl`, `type: local` + `tools`, `${env:VAR}`, `env_vars` / `bearer_token_env_var`).
+- Secrets stay out of Codex and Cursor config files, which take variable names or `${env:VAR}`. Gemini and Copilot take values, filled from your shell at `restore` like settings keys.
+- Codex's `config.toml` is edited one table at a time. Comments, ordering and unrelated tables are left untouched.
+- `lshed init --agent gemini` (or any of the others) reads that tool's MCP servers into the shed, masked the same way as Claude Code's. `diff` and `save` work across the translation.
+
+ — 2026-09-04
 
 One shed, several agents.
 

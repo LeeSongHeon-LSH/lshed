@@ -2,6 +2,9 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { AgentAdapter, Category, EntryCategory, ScannedComponent } from "./types.js";
+import { JsonEntries } from "./json-entries.js";
+import { TomlEntries } from "./toml-entries.js";
+import { MCP_FORMS, type McpForm } from "./mcp-forms.js";
 
 /**
  * Agent Skills 표준(agentskills.io)을 따르는 에이전트들의 공통 어댑터 (§4.6).
@@ -15,6 +18,11 @@ export interface SkillsDirSpec {
   dir: string;
   /** 사용자 수준 지침 파일. 없으면 instructions 카테고리를 지원하지 않는다 */
   instructions?: { file: string; strategy: "import" | "concat" };
+  /**
+   * 사용자 수준 MCP 서버 설정. 창고 형식(Claude Code 의 것)과 이 도구 형식 사이는 mcp-forms 가 바꾼다.
+   * expandsEnv: 도구가 "${VAR}" 를 스스로 채우거나(cursor 는 ${env:VAR} 로, codex 는 env_vars 로 표현) 아니면 restore 가 채운다.
+   */
+  mcp?: { file: string; kind: "json" | "toml"; under: string; form: McpForm; expandsEnv: boolean };
   /** 스킬을 하위 디렉터리까지 재귀적으로 읽는 도구 (Codex, Cursor). 스캔은 어디서든 한 단계만 본다 */
   note?: string;
 }
@@ -27,9 +35,16 @@ export class SkillsDirAdapter implements AgentAdapter {
   constructor(private readonly spec: SkillsDirSpec, root?: string) {
     this.name = spec.name;
     this.root = root ?? (spec.envVar && process.env[spec.envVar]) ?? path.join(os.homedir(), spec.dir);
+    const m = spec.mcp;
+    if (!m) { this.entryCats = []; return; }
+    const form = MCP_FORMS[m.form];
+    const file = async () => path.join(this.root, m.file);
+    const common = { name: "mcp", file, under: m.under, secretKeys: ["env", "headers"], expandsEnv: m.expandsEnv, toLocal: (_id: string, v: import("../core/entries.js").Json) => form.toLocal(v), fromLocal: (_id: string, v: import("../core/entries.js").Json) => form.fromLocal(v) };
+    this.entryCats = [m.kind === "toml" ? new TomlEntries(common) : new JsonEntries(common)];
   }
   categories(): readonly Category[] { return [SKILLS]; }
-  entries(): readonly EntryCategory[] { return []; }
+  entries(): readonly EntryCategory[] { return this.entryCats; }
+  private readonly entryCats: readonly EntryCategory[];
   installers() { return []; }
   instructionsStrategy() { return this.spec.instructions?.strategy ?? "concat"; }
   instructionsFileName() { return this.spec.instructions?.file ?? null; }
@@ -52,7 +67,8 @@ export class SkillsDirAdapter implements AgentAdapter {
 }
 
 /**
- * 지원 도구. 경로는 각 도구 문서 기준 (2026-09 확인):
+ * 지원 도구. 경로는 각 도구 문서 기준 (2026-09 확인). MCP 파일: codex config.toml [mcp_servers], gemini settings.json,
+ * copilot mcp-config.json, cursor mcp.json (모두 mcpServers). ~/.agents 에는 MCP 규약이 없다.
  *  - codex: $CODEX_HOME 또는 ~/.codex, 전역 지침 AGENTS.md (import 문법 없음 → 이어붙임)
  *  - gemini: ~/.gemini, GEMINI.md 는 @import 를 지원하지만 허용 디렉터리 제한이 문서에 불명확해 이어붙임
  *  - copilot: $COPILOT_HOME 또는 ~/.copilot, copilot-instructions.md (@import 는 저장소 안에서만 → 이어붙임)
@@ -60,9 +76,13 @@ export class SkillsDirAdapter implements AgentAdapter {
  *  - agents: ~/.agents — 위 도구 전부가 함께 읽는 공용 위치. 지침 파일 없음
  */
 export const SKILLS_DIR_AGENTS: readonly SkillsDirSpec[] = [
-  { name: "codex", envVar: "CODEX_HOME", dir: ".codex", instructions: { file: "AGENTS.md", strategy: "concat" } },
-  { name: "gemini", dir: ".gemini", instructions: { file: "GEMINI.md", strategy: "concat" } },
-  { name: "copilot", envVar: "COPILOT_HOME", dir: ".copilot", instructions: { file: "copilot-instructions.md", strategy: "concat" } },
-  { name: "cursor", dir: ".cursor" },
+  { name: "codex", envVar: "CODEX_HOME", dir: ".codex", instructions: { file: "AGENTS.md", strategy: "concat" },
+    mcp: { file: "config.toml", kind: "toml", under: "mcp_servers", form: "codex", expandsEnv: true } },
+  { name: "gemini", dir: ".gemini", instructions: { file: "GEMINI.md", strategy: "concat" },
+    // env 블록은 $VAR 를 스스로 채우지만 headers 는 아니라서, 일관되게 restore 가 채운다
+    mcp: { file: "settings.json", kind: "json", under: "mcpServers", form: "gemini", expandsEnv: false } },
+  { name: "copilot", envVar: "COPILOT_HOME", dir: ".copilot", instructions: { file: "copilot-instructions.md", strategy: "concat" },
+    mcp: { file: "mcp-config.json", kind: "json", under: "mcpServers", form: "copilot", expandsEnv: false } },
+  { name: "cursor", dir: ".cursor", mcp: { file: "mcp.json", kind: "json", under: "mcpServers", form: "cursor", expandsEnv: true } },
   { name: "agents", dir: ".agents" },
 ];

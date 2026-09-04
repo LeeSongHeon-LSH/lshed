@@ -107,6 +107,28 @@ describe("restore", () => {
     await expect(restore(ctx, "nope")).rejects.toThrow(/프로필 "nope" 이 없습니다/);
   });
 
+  it("extends: 부모 부품 위에 자기 것을 얹고, 지침은 부모 조각이 먼저", async () => {
+    await w(path.join(shed, "instructions/extra.md"), "extra rules\n");
+    const y = await r(path.join(shed, "lshed.yaml"));
+    await fs.writeFile(path.join(shed, "lshed.yaml"), y
+      .replace("    - id: main\n", "    - id: main\n    - id: extra\n")
+      + "  lab:\n    extends: minimal\n    agents: [rev]\n    instructions: [main, extra]\n  lab2:\n    extends: [lab]\n");
+    const res = await restore(ctx, "lab");
+    expect(res.placed.sort()).toEqual(["CLAUDE.md", "agents/rev.md", "lshed/instructions/extra.md", "lshed/instructions/main.md", "skills/alpha"]);
+    expect(await exists(path.join(root, "skills/beta"))).toBe(false); // minimal 에 없으니 lab 에도 없다
+    const claude = await r(path.join(root, "CLAUDE.md"));
+    expect(claude.indexOf("main.md")).toBeLessThan(claude.indexOf("extra.md"));
+    // 손자 프로필로 바꿔도 같은 집합이라 제거·배치 없음
+    const again = await restore(ctx, "lab2");
+    expect(again.removed).toEqual([]);
+    expect((await readState(ctx.adapter))?.profile).toBe("lab2");
+    // list 는 상속으로 쓰는 프로필도 센다
+    const { listRows } = await import("../src/core/list.js");
+    const { loadManifest } = await import("../src/core/context.js");
+    const row = listRows(await loadManifest(ctx)).find((x) => x.id === "alpha")!;
+    expect(row.usedBy).toEqual(["default", "minimal", "lab", "lab2"]);
+  });
+
   it("인자 없으면 마지막 프로필", async () => {
     await restore(ctx, "minimal");
     const res = await restore(ctx, undefined);

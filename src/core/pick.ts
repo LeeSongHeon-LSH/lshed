@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import YAML from "yaml";
 import { type Ctx, INSTRUCTIONS, loadManifest, manifestPath } from "./context.js";
-import { PACKAGES, type Manifest } from "../manifest.js";
+import { PACKAGES, resolveProfile, type Manifest } from "../manifest.js";
 import { readState } from "../state.js";
 import { restore, type RestoreOptions, type RestoreResult } from "./restore.js";
 
@@ -70,7 +70,7 @@ export async function pick(ctx: Ctx, prompter: Prompter, opts: PickOptions = {})
     const names = Object.keys(m.profiles);
     throw new Error(`프로필 "${baseName}" 이 없습니다. 있는 프로필: ${names.length ? names.join(", ") : "(없음)"}`);
   }
-  const groups = pickGroups(ctx, m, baseName ? m.profiles[baseName] : undefined);
+  const groups = pickGroups(ctx, m, baseName ? resolveProfile(m, baseName) : undefined);
   if (!groups.length) throw new Error(`창고에 고를 것이 없습니다: ${ctx.shed}`);
 
   ctx.log(`창고: ${ctx.shed}  (${groups.map((g) => g.title).join(", ")})${baseName ? `  기준 프로필: ${baseName}` : ""}`);

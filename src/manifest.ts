@@ -39,7 +39,18 @@ export const PACKAGES = "packages";
 
 /** 카테고리 이름은 어댑터가 정한다. 스키마는 이름을 고정하지 않는다 (§4.1). */
 const ComponentsSchema = z.record(z.string(), z.array(ComponentSchema));
-const ProfileSchema = z.record(z.string(), z.array(z.string()));
+/**
+ * 프로필 = 카테고리 → id 목록. `extends` 키만 예외로 부모 프로필 이름(들)이다.
+ * `extends: base` 도 받아 `["base"]` 로 정규화한다. 카테고리 이름은 어댑터가 정하므로 "extends" 는 카테고리가 될 수 없다.
+ */
+export const EXTENDS = "extends";
+const ProfileSchema = z.preprocess(
+  (v) => (v && typeof v === "object" && !Array.isArray(v) && typeof (v as Record<string, unknown>)[EXTENDS] === "string"
+    ? { ...(v as Record<string, unknown>), [EXTENDS]: [(v as Record<string, unknown>)[EXTENDS]] }
+    : v),
+  z.record(z.string(), z.array(z.string())),
+);
+export type Profile = z.infer<typeof ProfileSchema>;
 
 export const ManifestSchema = z.object({
   version: z.literal(1),
@@ -99,7 +110,15 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
   }
 
   for (const [profile, cats] of Object.entries(m.profiles)) {
+    for (const parent of cats[EXTENDS] ?? []) {
+      if (!(parent in m.profiles)) problems.push(`profiles.${profile}.extends: 프로필 "${parent}" 이 없음`);
+    }
+    if (cats[EXTENDS]?.length) {
+      const cycle = findCycle(m, profile);
+      if (cycle) problems.push(`profiles.${profile}.extends: 순환 상속 (${cycle.join(" → ")})`);
+    }
     for (const [cat, ids] of Object.entries(cats)) {
+      if (cat === EXTENDS) continue;
       if (cat === PACKAGES) {
         for (const id of ids) if (!pkgIds.has(id)) problems.push(`profiles.${profile}.packages: "${id}" 는 packages 에 없음`);
         continue;
@@ -130,9 +149,43 @@ export function stringifyManifest(m: Manifest): string {
   return YAML.stringify(out, { lineWidth: 0 });
 }
 
-/** 프로필이 요구하는 패키지 목록 */
+/** 프로필 이름에서 시작해 extends 를 따라가다 자기 자신으로 돌아오면 그 경로. 없으면 null */
+function findCycle(m: Manifest, start: string, path: string[] = [start]): string[] | null {
+  for (const parent of m.profiles[path[path.length - 1]]?.[EXTENDS] ?? []) {
+    if (parent === start) return [...path, parent];
+    if (path.includes(parent) || !(parent in m.profiles)) continue;
+    const found = findCycle(m, start, [...path, parent]);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * 프로필을 extends 까지 풀어 카테고리 → id 목록으로. 부모 것이 앞, 자기 것이 뒤, 중복은 한 번.
+ * instructions 는 순서가 의미이므로(§3.3) 부모 조각이 먼저 import 된다. 빼기는 없다 — 덜 원하면 상속하지 말고 나열한다.
+ */
+export function resolveProfile(m: Manifest, profile: string, seen: string[] = []): Profile {
+  const p = m.profiles[profile];
+  if (!p) {
+    const names = Object.keys(m.profiles);
+    throw new Error(`프로필 "${profile}" 이 없습니다. 있는 프로필: ${names.length ? names.join(", ") : "(없음)"}`);
+  }
+  if (seen.includes(profile)) throw new ManifestError(`profiles.${profile}.extends: 순환 상속 (${[...seen, profile].join(" → ")})`);
+  const out: Record<string, string[]> = {};
+  const push = (cat: string, ids: string[]) => {
+    const list = (out[cat] ??= []);
+    for (const id of ids) if (!list.includes(id)) list.push(id);
+  };
+  for (const parent of p[EXTENDS] ?? []) {
+    for (const [cat, ids] of Object.entries(resolveProfile(m, parent, [...seen, profile]))) push(cat, ids);
+  }
+  for (const [cat, ids] of Object.entries(p)) if (cat !== EXTENDS) push(cat, ids);
+  return out;
+}
+
+/** 프로필이 요구하는 패키지 목록 (상속 포함) */
 export function packagesOf(m: Manifest, profile: string): Package[] {
-  const ids = m.profiles[profile]?.[PACKAGES] ?? [];
+  const ids = resolveProfile(m, profile)[PACKAGES] ?? [];
   return ids.map((id) => m.packages.find((p) => p.id === id)!);
 }
 
@@ -140,7 +193,7 @@ export function packagesOf(m: Manifest, profile: string): Package[] {
 export function unusedComponents(m: Manifest): { category: string; id: string }[] {
   const used = new Set<string>();
   for (const cats of Object.values(m.profiles)) {
-    for (const [cat, ids] of Object.entries(cats)) for (const id of ids) used.add(`${cat}/${id}`);
+    for (const [cat, ids] of Object.entries(cats)) if (cat !== EXTENDS) for (const id of ids) used.add(`${cat}/${id}`);
   }
   const out: { category: string; id: string }[] = [];
   for (const [cat, comps] of Object.entries(m.components)) {

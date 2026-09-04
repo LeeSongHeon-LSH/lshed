@@ -61,6 +61,16 @@ describe("pickGroups", () => {
     expect(gs.find((g) => g.category === "mcp")!.options[0].checked).toBe(false);
   });
 
+  it("기준 프로필이 extends 면 상속받은 것도 체크된다", async () => {
+    const m = await loadManifest(ctx);
+    m.profiles.lite = { skills: ["beta"] };
+    m.profiles.lab = { extends: ["lite"], agents: ["rev"] };
+    const { resolveProfile } = await import("../src/manifest.js");
+    const gs = pickGroups(ctx, m, resolveProfile(m, "lab"));
+    expect(gs.find((g) => g.category === "skills")!.options.map((o) => o.checked)).toEqual([false, true]);
+    expect(gs.find((g) => g.category === "agents")!.options[0].checked).toBe(true);
+  });
+
   it("호스트명은 프로필 이름으로 다듬는다", () => {
     expect(defaultProfileName("Lees-MacBook.local")).toBe("lees-macbook.local");
     expect(defaultProfileName("my box!")).toBe("my-box");

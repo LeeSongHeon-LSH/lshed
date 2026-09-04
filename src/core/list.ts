@@ -1,12 +1,12 @@
 import type { Manifest } from "../manifest.js";
-import { PACKAGES } from "../manifest.js";
+import { PACKAGES, resolveProfile } from "../manifest.js";
 
 export interface Row { kind: "component" | "package"; category: string; id: string; usedBy: string[] }
 
-/** 창고의 모든 부품·패키지와 각각을 쓰는 프로필 */
+/** 창고의 모든 부품·패키지와 각각을 쓰는 프로필 (상속으로 쓰는 것도 포함) */
 export function listRows(m: Manifest): Row[] {
-  const usedBy = (cat: string, id: string) =>
-    Object.entries(m.profiles).filter(([, cats]) => (cats[cat] ?? []).includes(id)).map(([name]) => name);
+  const resolved = Object.keys(m.profiles).map((name) => [name, resolveProfile(m, name)] as const);
+  const usedBy = (cat: string, id: string) => resolved.filter(([, cats]) => (cats[cat] ?? []).includes(id)).map(([name]) => name);
   const rows: Row[] = [];
   for (const [cat, comps] of Object.entries(m.components)) {
     for (const c of comps) rows.push({ kind: "component", category: cat, id: c.id, usedBy: usedBy(cat, c.id) });

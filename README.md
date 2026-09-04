@@ -245,6 +245,24 @@ Switching removes only what the previous profile placed (`-`), keeps what both u
 
 Instructions fragments are ordered. `restore` writes a `CLAUDE.md` that `@`-imports each fragment, so editing a fragment in the shed shows up on the next `restore` and there is nothing to merge.
 
+A profile can build on another one with `extends`, so a machine-specific profile lists only what is different:
+
+```yaml
+profiles:
+  default:
+    skills: [add-drivers, domain-modeling]
+    instructions: [main]
+  laptop:
+    extends: default            # everything in default, plus:
+    packages: [gstack]
+    mcp: [notion]
+  lab:
+    extends: [default]          # a list works too, applied in order
+    instructions: [lab-rules]   # comes after default's `main`
+```
+
+Inheritance only adds. The parent's parts come first, then the profile's own, and instructions keep that order in the generated `CLAUDE.md`. To get *less* than the parent, do not extend it; list what you want. A missing parent or a cycle is reported as a `lshed.yaml` error before anything is touched, and `lshed list` counts a part as used by every profile that inherits it.
+
 ### Adding things later
 
 Write a new skill, add an MCP server with `claude mcp add`, clone a toolkit into `~/.claude/skills/`. Then:

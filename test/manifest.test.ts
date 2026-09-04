@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseManifest, unusedComponents, effectiveSource, stringifyManifest } from "../src/manifest.js";
+import { parseManifest, unusedComponents, effectiveSource, stringifyManifest, resolveProfile, packagesOf } from "../src/manifest.js";
 
 const GOOD = `
 version: 1
@@ -50,6 +50,51 @@ describe("parseManifest", () => {
   });
   it("stringify → parse 왕복", () => {
     const m = parseManifest(GOOD);
+    expect(parseManifest(stringifyManifest(m))).toEqual(m);
+  });
+});
+
+describe("프로필 상속 (extends)", () => {
+  const base = GOOD.replace("  teaching:\n    skills: [paper-review]\n", "") + `
+  teaching:
+    extends: research
+    skills: [paper-review]
+    instructions: [teaching-style]
+  minimal:
+    extends: [teaching]
+`;
+  const withTeaching = base.replace("  instructions:\n    - id: base", "  instructions:\n    - id: teaching-style\n    - id: base");
+
+  it("문자열도 목록도 받고, 부모 것이 앞·자기 것이 뒤·중복은 한 번", () => {
+    const m = parseManifest(withTeaching);
+    expect(m.profiles.teaching.extends).toEqual(["research"]);
+    expect(resolveProfile(m, "teaching")).toEqual({
+      skills: ["paper-review", "superpowers"],
+      instructions: ["base", "teaching-style"],
+    });
+    // 두 단계 상속, 자기 항목이 없어도 됨. extends 키는 결과에 없다
+    expect(resolveProfile(m, "minimal")).toEqual(resolveProfile(m, "teaching"));
+    expect(resolveProfile(m, "research")).toEqual({ skills: ["paper-review", "superpowers"], instructions: ["base"] });
+  });
+  it("패키지도 상속된다", () => {
+    const m = parseManifest(withTeaching + "  tools:\n    packages: [gstack]\n  lab:\n    extends: tools\n" + `packages:
+  - id: gstack
+    source: github:garrytan/gstack@main
+    into: skills/gstack
+`);
+    expect(packagesOf(m, "lab").map((p) => p.id)).toEqual(["gstack"]);
+    expect(packagesOf(m, "research")).toEqual([]);
+  });
+  it("없는 부모는 참조 오류", () => {
+    expect(() => parseManifest(GOOD + "  x:\n    extends: nope\n")).toThrow(/profiles.x.extends: 프로필 "nope" 이 없음/);
+  });
+  it("순환 상속은 참조 오류", () => {
+    expect(() => parseManifest(GOOD + "  a:\n    extends: b\n  b:\n    extends: [a]\n")).toThrow(/순환 상속 \(a → b → a\)/);
+    expect(() => parseManifest(GOOD + "  a:\n    extends: a\n")).toThrow(/순환 상속 \(a → a\)/);
+  });
+  it("extends 는 카테고리로 검증되지 않고, 미사용 계산에서도 빠진다", () => {
+    const m = parseManifest(withTeaching, ["skills", "instructions"]);
+    expect(unusedComponents(m)).toEqual([]);
     expect(parseManifest(stringifyManifest(m))).toEqual(m);
   });
 });

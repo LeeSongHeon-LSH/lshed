@@ -4,7 +4,7 @@ import type { Category, EntryCategory, ScannedComponent } from "../adapters/type
 import type { Ctx } from "./context.js";
 import { detectPackages, detectGenerated, type DetectedPackage } from "./packages.js";
 import type { Json } from "./entries.js";
-import type { Manifest } from "../manifest.js";
+import { resolveProfile, type Manifest } from "../manifest.js";
 
 /** 로컬에서 발견한 것 하나. init 과 add 가 같은 분류를 쓴다 (§3.7). */
 export type Found =
@@ -77,7 +77,7 @@ export function notInManifest(m: Manifest, d: Discovered): Found[] {
 
 /** 매니페스트에는 있는데 이 프로필이 안 쓰는 것 중 로컬에 있는 것 (add 가 힌트로 보여준다). */
 export function inManifestNotInProfile(m: Manifest, profile: string, d: Discovered): string[] {
-  const p = m.profiles[profile] ?? {};
+  const p = profile in m.profiles ? resolveProfile(m, profile) : {};
   return d.items
     .filter((f) => !notInManifest(m, d).includes(f))
     .filter((f) => !(p[f.category] ?? []).includes(f.id))

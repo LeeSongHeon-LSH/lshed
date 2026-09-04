@@ -166,6 +166,9 @@ profiles:                     # 이름은 예시. 사용자가 정의한다
   teaching:
     skills: [grading-helper]
     instructions: [base, teaching-style]
+  laptop:
+    extends: research                         # research 전부 + 아래. 부모 것이 앞, 빼기는 없음
+    instructions: [laptop-rules]
 ```
 
 관례: `source`를 생략하면 `file:./<category>/<id>`로 간주한다. `init`이 만드는 매니페스트는 대부분 이 형태다.
@@ -553,7 +556,7 @@ Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%U
 
 ## 11. 미결 질문
 
-- **프로필 상속** (`extends: base`) — v0.1은 명시 나열. 중복이 불편해지면 v0.2에서 도입.
+- ~~**프로필 상속** (`extends: base`)~~ — **해결 (2026-09-04, 0.9.0).** `extends: base` 또는 `extends: [a, b]`. 부모를 먼저 풀고 자기 것을 뒤에 붙이며 중복은 한 번, 빼기는 없다(덜 원하면 상속하지 말고 나열). 지침은 순서가 의미라 부모 조각이 먼저 import 된다. 없는 부모·순환은 lshed.yaml 참조 오류. 프로필을 읽는 곳(restore 계획, 패키지, list 의 사용처, add 힌트, `--pick` 기준 체크)은 전부 해석된 프로필을 쓴다. `--pick` 이 기기별 프로필을 만들기 시작하면서 "공통 + 기기 차이" 표현이 필요해져 도입.
 - ~~**`agents/`·`commands/`의 하위 디렉터리**~~ — **해결 (2026-09-03, 0.7.6).** 문서 기준: `agents/` 는 하위 디렉터리를 **재귀적으로 읽고**, 이름은 경로가 아니라 frontmatter `name` 에서 온다. `commands/` 는 문서가 침묵. 스킬은 사용자 루트에서 `skills/<name>/SKILL.md` 한 단계다.
   lshed 는 최상위 `.md` 만 스캔했으므로 폴더로 정리한 에이전트가 창고에서 조용히 빠졌다. 파일형 카테고리를 재귀 스캔하고 id 에 경로를 그대로 담는다(`team/reviewer`).
   lshed 의 일은 파일을 있는 자리 그대로 옮기는 것이지 재배치가 아니다 — 평탄화하면 사용자의 정리가 사라지고 id 충돌이 생긴다. commands 도 같은 규칙으로 옮긴다: Claude Code 가 안 읽더라도 원래 기기에 있던 그대로다.

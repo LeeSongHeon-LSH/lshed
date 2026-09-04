@@ -5,7 +5,7 @@ import type { Installer } from "../installers/types.js";
 import { gitInstaller } from "../installers/git.js";
 import { parseSource } from "../source.js";
 import type { AgentAdapter, Category, EntryCategory } from "../adapters/types.js";
-import { parseManifest, type Manifest, type Component, effectiveSource, PACKAGES } from "../manifest.js";
+import { parseManifest, resolveProfile, type Manifest, type Component, effectiveSource, PACKAGES } from "../manifest.js";
 import { resolveSource } from "../resolvers/file.js";
 import { LSHED_DIR } from "../state.js";
 import { DEFAULT_IGNORE } from "../ignore.js";
@@ -119,11 +119,7 @@ export interface PlanItem {
 }
 
 export function planProfile(ctx: Ctx, m: Manifest, profile: string): PlanItem[] {
-  const p = m.profiles[profile];
-  if (!p) {
-    const names = Object.keys(m.profiles);
-    throw new Error(`프로필 "${profile}" 이 없습니다. 있는 프로필: ${names.length ? names.join(", ") : "(없음)"}`);
-  }
+  const p = resolveProfile(m, profile);
   const items: PlanItem[] = [];
   for (const [category, ids] of Object.entries(p)) {
     if (category === PACKAGES) continue;

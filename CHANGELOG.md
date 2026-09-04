@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0 — 2026-09-04
+
+Profiles can build on each other.
+
+- `extends: default` (or `extends: [a, b]`) inside a profile pulls in everything the parent lists, then adds the profile's own parts. The parent's parts come first and duplicates appear once, so instructions fragments keep a predictable order in `CLAUDE.md`. Inheritance only adds; for less than the parent, list what you want instead of extending.
+- A parent that does not exist, or profiles that extend each other in a cycle, is a `lshed.yaml` error reported before anything is touched.
+- Everything that reads a profile sees the resolved one: `restore`, package installs, `lshed list` (a part counts as used by profiles that inherit it), the `add` hint, and `restore <profile> --pick` (inherited parts start checked).
+
 ## 0.8.0 — 2026-09-04
 
 Pick what a machine gets instead of writing a profile by hand.

@@ -133,7 +133,7 @@ describe("MCP 를 다른 에이전트로 (§7.4)", () => {
     await w(path.join(root, "config.toml"), "# keep me\nmodel = \"gpt-5\"\n");
     const ctx = ctxOf(createAdapter("codex", root));
     const res = await restore(ctx, "default");
-    expect(res.placed.sort()).toEqual(["mcp:exa", "mcp:notion", "skills/a"]);
+    expect(res.placed.sort()).toEqual(["../.agents/skills/a", "mcp:exa", "mcp:notion"]);   // codex 의 스킬은 홈의 .agents/skills
     const t = await r(path.join(root, "config.toml"));
     expect(t).toContain("# keep me");
     expect(t).toContain('env_vars = [ "EXA_API_KEY" ]'); expect(t).toContain('bearer_token_env_var = "NOTION_AUTHORIZATION"');

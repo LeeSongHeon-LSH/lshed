@@ -43,7 +43,7 @@ export async function ingest(ctx: Ctx, doc: Document, profile: string, items: Fo
       continue;
     }
     if (f.kind === "component") {
-      const dst = path.join(ctx.shed, f.cat.root, f.cat.kind === "dir" ? f.id : `${f.id}.md`);
+      const dst = path.join(ctx.shed, f.cat.name, f.cat.kind === "dir" ? f.id : `${f.id}.md`);   // 창고는 카테고리 이름, 로컬 위치(cat.root)와 다를 수 있다
       await copyTree(f.path, dst, ignoreOf(ctx));
       ctx.log(`  + ${f.category}/${f.id}`);
     } else {

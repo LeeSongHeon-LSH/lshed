@@ -574,7 +574,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 (5) 빈 프로필로 `restore none` 해 흔적을 지운다. 암호어는 실행마다 난수라 이전 실행의 잔재로 통과할 수 없다.
 
 이 기기(Codex 0.153.2 설치됨)에서 VM 전에 알게 된 것:
-- Codex 는 `$CODEX_HOME/skills` 와 `$HOME/.agents/skills` **둘 다** 스킬 루트로 읽는다(`codex debug prompt-input` 의 skill roots 표). 다만 소스는 `$CODEX_HOME/skills` 를 *deprecated, 호환용* 이라 적고 현재 문서는 `.agents/skills` 만 말한다. lshed 의 `codex` 대상은 아직 `~/.codex/skills` 에 놓는다 — `~/.agents/skills` 로 옮길지는 미결.
+- Codex 는 `$CODEX_HOME/skills` 와 `$HOME/.agents/skills` **둘 다** 스킬 루트로 읽는다(`codex debug prompt-input` 의 skill roots 표). 다만 소스는 `$CODEX_HOME/skills` 를 *deprecated, 호환용* 이라 적고 현재 문서는 `.agents/skills` 만 말한다. lshed 의 `codex` 대상은 0.13 까지 `~/.codex/skills` 에 놓았고, **0.14.0 에서 `~/.agents/skills` 로 옮겼다** (스펙 `skillsHome`, 카테고리 루트는 어댑터 루트 기준 상대 경로 `../.agents/skills`; `--root` 를 준 경우 홈은 그 부모라 테스트가 진짜 홈에 쓰지 않는다). 같은 기기에서 `agents` 대상과 스킬 디렉터리를 공유하므로 둘 중 하나만 쓰라고 README 에 적었다.
 - `$CODEX_HOME/AGENTS.md` 이어붙임, `config.toml` 의 `[mcp_servers.*]`(env_vars, bearer_token_env_var) 를 Codex 가 파싱, 스킬·링크된 스킬 읽기까지 Codex probe 전부 통과.
 - Codex 읽기 전용 샌드박스(bubblewrap)가 user namespace 를 못 만드는 호스트에서는 모델이 스킬 파일을 못 열고 문맥의 다른 값을 답한다. probe 는 일회용 VM 전제로 `--sandbox danger-full-access` 를 쓴다.
 - 지침 코드워드가 문맥에 있으면 저추론 모델이 스킬 질문에 그것을 답하기도 한다. probe 는 스킬 질문을 스킬만 있는 프로필에서 하고(지침 조각 배치 전, 그리고 `--link` 도 스킬 프로필로), 질문마다 최대 3회(120초) 시도한다. `codex exec` 가 세션 배너를 찍기 전에 chatgpt.com 연결을 쥔 채 멈추는 일이 이따금 있어서(lshed 와 무관) 재시도가 필요했다.
@@ -602,14 +602,14 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 **이름** — 완료 항목 정리
 - [x] npm `lshed` 선점 (0.0.0, 2026-08-31)
 - [x] `which lshed` 충돌 없음 (2026-09-02)
-- [ ] GitHub `LeeSongHeon-LSH/lshed` 저장소 생성
+- [x] GitHub `LeeSongHeon-LSH/lshed` 저장소 생성 — 2026-09-02 (구현 목록의 첫 커밋·v0.1.0 릴리스와 같은 날)
 
 **설계**
 - [x] v0.1 스코프 확정 (§8)
 - [x] 매니페스트 스키마 초안 (§3.2)
 - [x] 상태 모델·소유권 규칙 (§3.4, §3.5)
-- [ ] `init` 스캔 규칙 상세 (숨김 파일, 심볼릭 링크, 플러그인 캐시 제외)
-- [ ] `ClaudeCodeAdapter` 경로 표 확정 (agents/commands 하위 디렉터리 포함)
+- [x] `init` 스캔 규칙 상세 (숨김 파일, 심볼릭 링크, 플러그인 캐시 제외) — 0.1.1 무시 목록·링크 따라가기, 0.2.0 패키지·생성물 분류, 0.7.6 재귀 스캔
+- [x] `ClaudeCodeAdapter` 경로 표 확정 (agents/commands 하위 디렉터리 포함) — 0.7.6, §11
 
 **구현**
 - [x] 프로젝트 스캐폴딩 (§9 스택) — 2026-09-02
@@ -628,11 +628,22 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 0.2.1 list / remove / prune — 2026-09-02
 - [x] 0.3.0 플러그인 설치기 — 2026-09-02
 - [x] 0.4.0 MCP 항목형 부품 + ${VAR} 마스킹 — 2026-09-03 (실제 Claude Code 가 사용자 범위에서 확장하는지 프로브로 검증)
-- [ ] npm `lshed@0.4.0` 발행 (0.1.1~0.3.0 도 미발행)
+- [x] npm 발행 — 0.4.0 은 2026-09-03, 이후 0.6.0·0.7.0·0.7.2·0.7.4·0.8.0·0.10.0·0.12.0·0.13.0 (0.1.1~0.3.0 중 0.2.1·0.3.0 발행, 나머지는 건너뜀)
 - [x] 0.5.0 `lshed add` — init 의 분류(discover)·수집(ingest)을 공용화해 증분으로. `exclude:` 를 매니페스트에 기록 — 2026-09-03
 - [x] 0.6.0 `lshed sync` + README 사용 안내 개정 — 2026-09-03
 - [x] 0.7.0 settings 항목형 + ${HOME} + 시크릿 단어 단위 — 2026-09-03
 - [x] 0.7.3 의존성 번들 + 단일 실행파일 5종 + 릴리스 워크플로 — 2026-09-03
+- [x] 0.7.4~0.7.6 macOS/Windows 경로 수정, 결정적 매니페스트 순서, agents/commands 재귀 — 2026-09-03 (CI ubuntu/macos/windows × node 20/22 초록)
+- [x] 0.8.0 `restore --pick` 카테고리별 체크리스트 → 프로필 저장 — 2026-09-04
+- [x] 0.9.0 프로필 `extends` — 2026-09-04
+- [x] 0.10.0 `restore --link` 기기별 링크 배치 (Windows junction·파일 복사 폴백) — 2026-09-04
+- [x] 0.11.0 `--agent codex|gemini|copilot|cursor|agents` 공통 SkillsDirAdapter — 2026-09-04
+- [x] 0.12.0 타 도구 MCP 형식 변환 (Codex config.toml 표 편집) — 2026-09-04
+- [x] 0.12.1 VM probe (`scripts/vm/`) + CLAUDE_CONFIG_DIR 아래 `.claude.json` 위치 수정 — 2026-09-05
+- [x] 0.13.0 `--agent agy` (Antigravity) — 2026-09-05, README 영어/한국어 병기
+- [ ] Gemini CLI·Copilot CLI·Cursor 를 VM 에서 probe (§10.2) — 사용자: 이미지 굽고 cloud-init 으로 부팅
+- [ ] 사용자 실제 Windows 노트북에서 §10.1 3층 (실행파일로 restore --dry-run, --link 의 junction·복사 폴백)
+- [ ] 실제 창고 ~/harness 를 `--agent agy` 로 이 기기에 적용 (도그푸딩)
 
 ---
 

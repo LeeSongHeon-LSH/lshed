@@ -317,13 +317,13 @@ Inheritance only adds. The parent's parts come first, then the profile's own, an
 
 ### Other agents, same shed · 다른 에이전트도 같은 창고로
 
-Codex, Gemini CLI, Copilot CLI, Cursor and Google Antigravity (`agy`) all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all but Antigravity also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`:
+Codex, Gemini CLI, Copilot CLI, Cursor and Google Antigravity (`agy`) all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all but Antigravity also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`. For Codex, skills go to `~/.agents/skills` because that is the location Codex documents, so use either `--agent codex` or `--agent agents` for skills on one machine, not both:
 
-Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity(`agy`)는 모두 `<자기 설정 디렉터리>/skills/<이름>/SKILL.md`를 읽습니다. Claude Code와 같은 배치이고, Antigravity를 뺀 나머지는 공용 `~/.agents/skills/`도 읽습니다. 그래서 창고 하나로 전부를 채울 수 있습니다. 대상은 `--agent`로 고릅니다.
+Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity(`agy`)는 모두 `<자기 설정 디렉터리>/skills/<이름>/SKILL.md`를 읽습니다. Claude Code와 같은 배치이고, Antigravity를 뺀 나머지는 공용 `~/.agents/skills/`도 읽습니다. 그래서 창고 하나로 전부를 채울 수 있습니다. 대상은 `--agent`로 고릅니다. Codex의 스킬은 Codex 문서가 정한 위치인 `~/.agents/skills`에 놓으므로, 한 기기에서 스킬은 `--agent codex`와 `--agent agents` 중 하나로만 넣으세요.
 
 ```
 lshed restore --agent agents            # ~/.agents/skills: every tool that follows the convention reads it  ·  규약을 따르는 모든 도구가 읽는 공용 위치
-lshed restore --agent codex             # ~/.codex/skills + ~/.codex/AGENTS.md
+lshed restore --agent codex             # ~/.agents/skills + ~/.codex/AGENTS.md + config.toml
 lshed restore --agent gemini --link     # ~/.gemini/skills + ~/.gemini/GEMINI.md, as links  ·  링크로
 lshed restore --agent agy               # ~/.gemini/config/skills + ~/.gemini/AGENTS.md (Antigravity IDE and CLI)
 ```
@@ -331,7 +331,7 @@ lshed restore --agent agy               # ~/.gemini/config/skills + ~/.gemini/AG
 | `--agent` | root · 루트 | skills · 스킬 | instructions file · 지침 파일 | MCP servers · MCP 서버 |
 |---|---|---|---|---|
 | `claude-code` (default) | `~/.claude` or `$CLAUDE_CONFIG_DIR` | yes, plus agents, commands, settings | `CLAUDE.md`, `@`-imports fragments | `~/.claude.json` |
-| `codex` | `~/.codex` or `$CODEX_HOME` | yes | `AGENTS.md`, fragments concatenated | `config.toml` `[mcp_servers.*]` |
+| `codex` | `~/.codex` or `$CODEX_HOME` | yes, in `~/.agents/skills` (Codex's documented location; `~/.codex/skills` is deprecated) | `AGENTS.md`, fragments concatenated | `config.toml` `[mcp_servers.*]` |
 | `gemini` | `~/.gemini` | yes | `GEMINI.md`, concatenated | `settings.json` |
 | `copilot` | `~/.copilot` or `$COPILOT_HOME` | yes | `copilot-instructions.md`, concatenated | `mcp-config.json` |
 | `cursor` | `~/.cursor` | yes | none (Cursor's user rules live in its settings UI) | `mcp.json` |
@@ -644,7 +644,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 ~/.claude.json  mcpServers.<id>                 ← one key per mcp component; the rest of the file is untouched  ·  부품마다 키 하나, 나머지는 그대로
 
 ~/.codex/  ~/.gemini/  ~/.copilot/  ~/.cursor/  ~/.gemini/config/  ~/.agents/
-  skills/  <instructions file>  <mcp file>      ← the same, per --agent (see the table above)  ·  --agent 별로 같은 구조
+  skills/  <instructions file>  <mcp file>      ← the same, per --agent (see the table above; codex skills live in ~/.agents/skills)  ·  --agent 별로 같은 구조 (codex 의 스킬은 ~/.agents/skills)
   lshed/state.json  lshed/backups/              ← each root keeps its own  ·  루트마다 따로
 ```
 

@@ -56,6 +56,8 @@ mcp_file_of() {
     *) echo "" ;;
   esac
 }
+# where lshed puts skills for this target: Codex reads ~/.agents/skills (its $CODEX_HOME/skills is deprecated)
+skills_dir_of() { case $1 in codex) echo "$HOME/.agents/skills" ;; *) echo "$(root_of "$1")/skills" ;; esac; }
 # does the tool expand ${VAR} itself (placeholder/name stays in the file) or does restore fill it?
 keeps_placeholder() { case $1 in codex|cursor|claude-code) return 0 ;; *) return 1 ;; esac; }
 # which CLIs to ask. ~/.agents is read by every tool, so ask all that are installed.
@@ -113,7 +115,7 @@ excerpt() { printf '%s' "$1" | tr '\n' ' ' | cut -c1-160; }
 probe() {
   local tool=$1
   local root instr mcpf shed
-  root=$(root_of "$tool"); instr=$(instr_of "$tool"); mcpf=$(mcp_file_of "$tool")
+  root=$(root_of "$tool"); instr=$(instr_of "$tool"); mcpf=$(mcp_file_of "$tool"); local skills; skills=$(skills_dir_of "$tool")
   shed="$PROBE_DIR/shed-$tool-$RUN"
   OUT="$PROBE_DIR/results/$tool-$RUN.md"; ERR="$PROBE_DIR/results/$tool-$RUN.stderr"
   : >"$OUT"; : >"$ERR"
@@ -176,7 +178,7 @@ EOF
   r=$($LSHED --agent "$tool" --shed "$shed" restore skill 2>&1); local rc=$?
   printf '%s\n' "$r" | sed 's/^/    /' >>"$OUT"
   check "place: restore skill exits 0" "$([ $rc = 0 ] && echo 0 || echo 1)"
-  check "place: skill file holds the passphrase" "$(grep -qs "$SKILL_PP" "$root/skills/lshed-probe/SKILL.md" && echo 0 || echo 1)" "$root/skills/lshed-probe/SKILL.md"
+  check "place: skill file holds the passphrase" "$(grep -qs "$SKILL_PP" "$skills/lshed-probe/SKILL.md" && echo 0 || echo 1)" "$skills/lshed-probe/SKILL.md"
   # Codex can render the model-visible prompt without calling a model: a deterministic check of the skill roots
   if { [ "$tool" = codex ] || [ "$tool" = agents ]; } && command -v codex >/dev/null; then
     r=$(cd "$PROBE_DIR/cwd" && $DETACH timeout 120 codex debug prompt-input "hi" </dev/null 2>>"$ERR")
@@ -246,9 +248,9 @@ EOF
   r=$($LSHED --agent "$tool" --shed "$shed" restore skill --link 2>&1); rc=$?   # skill profile again: no codeword in context
   printf '%s\n' "$r" | sed 's/^/    /' >>"$OUT"
   check "link: restore skill --link exits 0" "$([ $rc = 0 ] && echo 0 || echo 1)"
-  check "link: skill dir is a symlink into the shed" "$([ -L "$root/skills/lshed-probe" ] && echo 0 || echo 1)" "$(readlink "$root/skills/lshed-probe" 2>/dev/null)"
+  check "link: skill dir is a symlink into the shed" "$([ -L "$skills/lshed-probe" ] && echo 0 || echo 1)" "$(readlink "$skills/lshed-probe" 2>/dev/null)"
   sed -i "s/$SKILL_PP/$LINK_PP/" "$shed/skills/lshed-probe/SKILL.md"
-  check "link: edit in the shed shows through the link" "$(grep -qs "$LINK_PP" "$root/skills/lshed-probe/SKILL.md" && echo 0 || echo 1)"
+  check "link: edit in the shed shows through the link" "$(grep -qs "$LINK_PP" "$skills/lshed-probe/SKILL.md" && echo 0 || echo 1)"
   if [ "$ASK" = 1 ] && [ -n "$askers" ]; then
     for cli in $askers; do
       command -v "$cli" >/dev/null || continue
@@ -260,7 +262,7 @@ EOF
   r=$($LSHED --agent "$tool" --shed "$shed" restore none --no-link 2>&1); rc=$?
   printf '%s\n' "$r" | sed 's/^/    /' >>"$OUT"
   check "cleanup: restore none exits 0" "$([ $rc = 0 ] && echo 0 || echo 1)"
-  check "cleanup: skill removed" "$([ ! -e "$root/skills/lshed-probe" ] && echo 0 || echo 1)"
+  check "cleanup: skill removed" "$([ ! -e "$skills/lshed-probe" ] && echo 0 || echo 1)"
   if [ "$WITH_MCP" = 1 ] && [ -n "$mcpf" ]; then
     check "cleanup: MCP entries removed" "$(! grep -qs "lshed-probe-http" "$mcpf" && echo 0 || echo 1)"
   fi

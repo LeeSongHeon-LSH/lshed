@@ -23,6 +23,11 @@ export interface SkillsDirSpec {
    * expandsEnv: 도구가 "${VAR}" 를 스스로 채우거나(cursor 는 ${env:VAR} 로, codex 는 env_vars 로 표현) 아니면 restore 가 채운다.
    */
   mcp?: { file: string; kind: "json" | "toml"; under: string; form: McpForm; expandsEnv: boolean };
+  /**
+   * 스킬을 루트가 아니라 홈 아래 이 경로에 둔다 (Codex: 문서상 사용자 스킬 위치는 `~/.agents/skills`, `$CODEX_HOME/skills` 는 deprecated).
+   * 카테고리 루트는 어댑터 루트 기준 상대 경로가 되므로 `../.agents/skills` 처럼 위로 올라간다.
+   */
+  skillsHome?: string;
   /** 스킬을 하위 디렉터리까지 재귀적으로 읽는 도구 (Codex, Cursor). 스캔은 어디서든 한 단계만 본다 */
   note?: string;
 }
@@ -32,9 +37,19 @@ const SKILLS: Category = { name: "skills", root: "skills", kind: "dir" };
 export class SkillsDirAdapter implements AgentAdapter {
   readonly name: string;
   readonly root: string;
-  constructor(private readonly spec: SkillsDirSpec, root?: string) {
+  private readonly skills: Category;
+  /**
+   * root 를 주면 기본 위치 대신 그것 (테스트·--root). home 은 skillsHome 의 기준으로, 루트를 준 경우 기본은 그 부모
+   * (임시 루트로 돌리는 테스트가 진짜 홈에 쓰지 않도록), 아니면 실제 홈.
+   */
+  constructor(private readonly spec: SkillsDirSpec, root?: string, home?: string) {
     this.name = spec.name;
     this.root = root ?? (spec.envVar && process.env[spec.envVar]) ?? path.join(os.homedir(), spec.dir);
+    if (spec.skillsHome) {
+      const base = home ?? (root ? path.dirname(root) : os.homedir());
+      const rel = path.relative(this.root, path.join(base, spec.skillsHome)).split(path.sep).join("/");
+      this.skills = { ...SKILLS, root: rel };
+    } else this.skills = SKILLS;
     const m = spec.mcp;
     if (!m) { this.entryCats = []; return; }
     const form = MCP_FORMS[m.form];
@@ -42,7 +57,7 @@ export class SkillsDirAdapter implements AgentAdapter {
     const common = { name: "mcp", file, under: m.under, secretKeys: ["env", "headers"], expandsEnv: m.expandsEnv, toLocal: (_id: string, v: import("../core/entries.js").Json) => form.toLocal(v), fromLocal: (_id: string, v: import("../core/entries.js").Json) => form.fromLocal(v) };
     this.entryCats = [m.kind === "toml" ? new TomlEntries(common) : new JsonEntries(common)];
   }
-  categories(): readonly Category[] { return [SKILLS]; }
+  categories(): readonly Category[] { return [this.skills]; }
   entries(): readonly EntryCategory[] { return this.entryCats; }
   private readonly entryCats: readonly EntryCategory[];
   installers() { return []; }
@@ -51,7 +66,7 @@ export class SkillsDirAdapter implements AgentAdapter {
 
   /** skills/<name>/ 한 단계. 숨김 디렉터리는 건너뛴다. 링크도 stat 으로 판정해 잡는다. */
   async scan(): Promise<ScannedComponent[]> {
-    const dir = path.join(this.root, SKILLS.root);
+    const dir = path.join(this.root, this.skills.root);
     let names: string[];
     try { names = await fs.readdir(dir); } catch { return []; }
     names.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -60,7 +75,7 @@ export class SkillsDirAdapter implements AgentAdapter {
       if (name.startsWith(".")) continue;
       const full = path.join(dir, name);
       try { if (!(await fs.stat(full)).isDirectory()) continue; } catch { continue; }
-      out.push({ category: SKILLS.name, id: name, path: full });
+      out.push({ category: this.skills.name, id: name, path: full });
     }
     return out;
   }
@@ -69,7 +84,8 @@ export class SkillsDirAdapter implements AgentAdapter {
 /**
  * 지원 도구. 경로는 각 도구 문서 기준 (2026-09 확인). MCP 파일: codex config.toml [mcp_servers], gemini settings.json,
  * copilot mcp-config.json, cursor mcp.json (모두 mcpServers). ~/.agents 에는 MCP 규약이 없다.
- *  - codex: $CODEX_HOME 또는 ~/.codex, 전역 지침 AGENTS.md (import 문법 없음 → 이어붙임)
+ *  - codex: $CODEX_HOME 또는 ~/.codex 에 AGENTS.md (import 문법 없음 → 이어붙임)·config.toml. 스킬은 ~/.agents/skills —
+ *    Codex 0.153 이 $CODEX_HOME/skills 도 읽지만 소스에 deprecated 로 적혀 있고 문서는 .agents/skills 만 말한다 (2026-09-05 실측)
  *  - gemini: ~/.gemini, GEMINI.md 는 @import 를 지원하지만 허용 디렉터리 제한이 문서에 불명확해 이어붙임
  *  - copilot: $COPILOT_HOME 또는 ~/.copilot, copilot-instructions.md (@import 는 저장소 안에서만 → 이어붙임)
  *  - cursor: ~/.cursor, 사용자 규칙은 설정 UI 에만 있어 지침 파일 없음
@@ -77,7 +93,7 @@ export class SkillsDirAdapter implements AgentAdapter {
  *  - agents: ~/.agents — 위 도구 전부가 함께 읽는 공용 위치. 지침 파일 없음
  */
 export const SKILLS_DIR_AGENTS: readonly SkillsDirSpec[] = [
-  { name: "codex", envVar: "CODEX_HOME", dir: ".codex", instructions: { file: "AGENTS.md", strategy: "concat" },
+  { name: "codex", envVar: "CODEX_HOME", dir: ".codex", skillsHome: ".agents/skills", instructions: { file: "AGENTS.md", strategy: "concat" },
     mcp: { file: "config.toml", kind: "toml", under: "mcp_servers", form: "codex", expandsEnv: true } },
   { name: "gemini", dir: ".gemini", instructions: { file: "GEMINI.md", strategy: "concat" },
     // env 블록은 $VAR 를 스스로 채우지만 headers 는 아니라서, 일관되게 restore 가 채운다

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.0 — 2026-09-05
+
+`--agent codex` now puts skills in `~/.agents/skills/`, the location Codex documents, instead of `~/.codex/skills/`.
+
+- Codex 0.153 still reads `$CODEX_HOME/skills`, but its source marks that directory deprecated and the docs name only `.agents/skills`. `AGENTS.md` and `config.toml` stay under `~/.codex` (or `$CODEX_HOME`). The managed set records the skills as `../.agents/skills/<id>` relative to the Codex root; switching profiles removes them there, and backups stay inside `~/.codex/lshed/backups/`.
+- `--root <dir>` keeps the same shape with the directory's parent as the home, so a scratch root never writes into your real `~/.agents`.
+- Since the `agents` target places into the same directory, use one of `--agent codex` and `--agent agents` per machine for skills, not both.
+- Shed paths are now derived from the category name, never from where the agent keeps that category locally.
+
 ## 0.13.0 — 2026-09-05
 
 `--agent agy` places into Google Antigravity (the `agy` CLI and the IDE).

@@ -46,6 +46,23 @@ export const gemini = {
   },
 };
 
+/* ── Antigravity (agy): ~/.gemini/config/mcp_config.json mcpServers. type 없음, http 는 serverUrl, `disabled` 는 도구 상태 ── */
+export const agy = {
+  toLocal(v: Json): Json {
+    if (!isObj(v)) return v;
+    const rest = withoutType(v);
+    if ((v.type === "http" || v.type === "sse") && typeof v.url === "string") { const { url, ...r } = rest; return { serverUrl: url, ...r }; }
+    return rest;
+  },
+  fromLocal(v: Json): Json {
+    if (!isObj(v)) return v;
+    const { disabled, ...r } = v;
+    const out: Obj = disabled === false || disabled === undefined ? r : v;   // 꺼 둔 서버는 그 표시를 창고까지 가져간다
+    if (typeof out.serverUrl === "string") { const { serverUrl, ...rest } = out; return { type: "http", url: serverUrl, ...rest }; }
+    return canonical(out);
+  },
+};
+
 /* ── Copilot CLI: ~/.copilot/mcp-config.json mcpServers. type local|http|sse, tools 필수 ── */
 export const copilot = {
   toLocal(v: Json): Json {
@@ -130,5 +147,5 @@ export const codex = {
   },
 };
 
-export const MCP_FORMS = { gemini, copilot, cursor, codex } as const;
+export const MCP_FORMS = { gemini, copilot, cursor, codex, agy } as const;
 export type McpForm = keyof typeof MCP_FORMS;

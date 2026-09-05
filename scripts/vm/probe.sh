@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # lshed VM probe — does the tool really read what `lshed restore --agent <tool>` placed?
 #
-#   probe.sh <codex|gemini|copilot|cursor|agents|claude-code|all>
+#   probe.sh <codex|gemini|copilot|cursor|agy|agents|claude-code|all>
 #
 # For each tool it builds a throwaway shed with a passphrase in a skill, a codeword in an
 # instructions fragment and two MCP servers with ${VAR} secrets, restores it into the
@@ -35,13 +35,14 @@ root_of() {
     copilot) echo "${COPILOT_HOME:-$HOME/.copilot}" ;;
     cursor) echo "$HOME/.cursor" ;;
     agents) echo "$HOME/.agents" ;;
+    agy) echo "$HOME/.gemini/config" ;;   # shared by Antigravity IDE and CLI; rules live one level up
     claude-code) echo "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" ;;
   esac
 }
 instr_of() {
   case $1 in
     codex) echo AGENTS.md ;; gemini) echo GEMINI.md ;; copilot) echo copilot-instructions.md ;;
-    claude-code) echo CLAUDE.md ;; *) echo "" ;;
+    agy) echo ../AGENTS.md ;; claude-code) echo CLAUDE.md ;; *) echo "" ;;
   esac
 }
 mcp_file_of() {
@@ -50,6 +51,7 @@ mcp_file_of() {
     gemini) echo "$(root_of gemini)/settings.json" ;;
     copilot) echo "$(root_of copilot)/mcp-config.json" ;;
     cursor) echo "$(root_of cursor)/mcp.json" ;;
+    agy) echo "$(root_of agy)/mcp_config.json" ;;
     claude-code) if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then echo "$CLAUDE_CONFIG_DIR/.claude.json"; else echo "$HOME/.claude.json"; fi ;;
     *) echo "" ;;
   esac
@@ -59,7 +61,7 @@ keeps_placeholder() { case $1 in codex|cursor|claude-code) return 0 ;; *) return
 # which CLIs to ask. ~/.agents is read by every tool, so ask all that are installed.
 askers_of() {
   case $1 in
-    codex) echo codex ;; gemini) echo gemini ;; copilot) echo copilot ;; cursor) echo agent ;;
+    codex) echo codex ;; gemini) echo gemini ;; copilot) echo copilot ;; cursor) echo agent ;; agy) echo agy ;;
     claude-code) echo claude ;;
     agents) for b in codex gemini copilot agent; do command -v "$b" >/dev/null && echo "$b"; done ;;
   esac
@@ -81,6 +83,7 @@ ask() { # ask <cli> <prompt>  → answer on stdout
                 | { if command -v jq >/dev/null; then jq -r '.response // empty'; else cat; fi; } ;;
       copilot) $DETACH timeout 120 copilot -p "$prompt" -s --allow-all-tools ;;
       agent)  $DETACH timeout 120 agent -p "$prompt" --output-format text ;;
+      agy)    $DETACH timeout 120 agy -p "$prompt" --output-format text --dangerously-skip-permissions ;;
       claude) $DETACH timeout 120 claude -p "$prompt" --model haiku ;;
     esac
   ) 2>>"$ERR"
@@ -193,7 +196,7 @@ EOF
     fi
     # the tool's own parser is the real test of the file format
     local lister=""
-    case $tool in codex) lister=codex ;; gemini) lister=gemini ;; claude-code) lister=claude ;; esac
+    case $tool in codex) lister=codex ;; gemini) lister=gemini ;; agy) lister=agy ;; claude-code) lister=claude ;; esac
     if [ -n "$lister" ] && command -v "$lister" >/dev/null; then
       r=$(cd "$PROBE_DIR/cwd" && timeout 120 "$lister" mcp list 2>&1)
       check "mcp: '$lister mcp list' shows the server" "$(printf '%s' "$r" | grep -q lshed-probe-http && echo 0 || echo 1)" "$(excerpt "$r")"
@@ -266,9 +269,9 @@ EOF
 }
 
 case ${1:-} in
-  codex|gemini|copilot|cursor|agents|claude-code) probe "$1" ;;
-  all) for t in codex gemini copilot cursor agents; do probe "$t"; done ;;
-  *) echo "usage: probe.sh <codex|gemini|copilot|cursor|agents|claude-code|all>" >&2; exit 2 ;;
+  codex|gemini|copilot|cursor|agy|agents|claude-code) probe "$1" ;;
+  all) for t in codex gemini copilot cursor agy agents; do probe "$t"; done ;;
+  *) echo "usage: probe.sh <codex|gemini|copilot|cursor|agy|agents|claude-code|all>" >&2; exit 2 ;;
 esac
 
 echo

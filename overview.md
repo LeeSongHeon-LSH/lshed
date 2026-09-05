@@ -580,6 +580,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - 지침 코드워드가 문맥에 있으면 저추론 모델이 스킬 질문에 그것을 답하기도 한다. probe 는 스킬 질문을 스킬만 있는 프로필에서 하고(지침 조각 배치 전, 그리고 `--link` 도 스킬 프로필로), 질문마다 최대 3회(120초) 시도한다. `codex exec` 가 세션 배너를 찍기 전에 chatgpt.com 연결을 쥔 채 멈추는 일이 이따금 있어서(lshed 와 무관) 재시도가 필요했다.
 - 도구 호출은 `setsid` 로 터미널에서 떼고 stdin 을 닫는다. 가짜 MCP 서버는 DNS 가 끼지 않도록 닫힌 로컬 포트(127.0.0.1:9)를 가리킨다.
 - 최종: Codex 대상 probe 17개 검사 전부 통과, `agents` 대상(~/.agents/skills 를 Codex 가 읽음, 링크 포함) 통과.
+- **agy(0.13.0)**: 사용자에게 Antigravity CLI(agy 1.1.26)가 있어 어댑터를 추가하고 같은 probe 로 확인했다. agy 의 `/skills` 가 보여 준 전역 스킬 위치는 `~/.gemini/config/skills`(IDE·CLI 공용), `~/.gemini/skills`, `~/.gemini/antigravity-cli/skills` 이고 `~/.agents/skills` 는 아니다. 전역 규칙은 `~/.gemini/AGENTS.md` 와 `GEMINI.md` 둘 다 읽는다(각각 다른 코드워드로 확인). 그래서 루트는 `~/.gemini/config`, 지침은 `../AGENTS.md`(Gemini CLI 와 GEMINI.md 를 다투지 않도록), MCP 는 `config/mcp_config.json`(type 없음, http 는 serverUrl, `disabled` 는 도구 상태). 루트 위의 부품은 백업 경로에서 `..` 을 `__` 로 바꿔 백업 디렉터리 안에 둔다. 격리 HOME + 복사한 OAuth 토큰으로 probe 전부 1회 시도에 통과. VM 에선 `modelProvider: "gemini"` + GEMINI_API_KEY 로 헤드리스 로그인.
 - probe 를 `claude-code` 대상으로 격리된 `CLAUDE_CONFIG_DIR` 에 돌리다 **lshed 버그 하나를 잡았다(0.12.1)**: Claude Code 를 아직 한 번도 안 돌린 기기에서 `CLAUDE_CONFIG_DIR` 가 있으면 어댑터가 안쪽 `.claude.json` 이 없다는 이유로 형제 `<dir>.json` 에 MCP 를 썼고, `claude mcp list` 는 그것을 읽지 않았다. 환경변수로 루트가 정해졌으면 언제나 안쪽 파일을 쓰도록 고침. 기본 `~/.claude` 에서는 변화 없음.
 
 ## 11. 미결 질문

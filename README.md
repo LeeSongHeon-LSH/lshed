@@ -247,12 +247,13 @@ Instructions fragments are ordered. `restore` writes a `CLAUDE.md` that `@`-impo
 
 ### Other agents, same shed
 
-Codex, Gemini CLI, Copilot CLI and Cursor all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all of them also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`:
+Codex, Gemini CLI, Copilot CLI, Cursor and Google Antigravity (`agy`) all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all but Antigravity also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`:
 
 ```
 lshed restore --agent agents            # ~/.agents/skills: every tool that follows the convention reads it
 lshed restore --agent codex             # ~/.codex/skills + ~/.codex/AGENTS.md
 lshed restore --agent gemini --link     # ~/.gemini/skills + ~/.gemini/GEMINI.md, as links
+lshed restore --agent agy               # ~/.gemini/config/skills + ~/.gemini/AGENTS.md (Antigravity IDE and CLI)
 ```
 
 | `--agent` | root | skills | instructions file | MCP servers |
@@ -262,9 +263,10 @@ lshed restore --agent gemini --link     # ~/.gemini/skills + ~/.gemini/GEMINI.md
 | `gemini` | `~/.gemini` | yes | `GEMINI.md`, concatenated | `settings.json` |
 | `copilot` | `~/.copilot` or `$COPILOT_HOME` | yes | `copilot-instructions.md`, concatenated | `mcp-config.json` |
 | `cursor` | `~/.cursor` | yes | none (Cursor's user rules live in its settings UI) | `mcp.json` |
+| `agy` | `~/.gemini/config` | yes | `../AGENTS.md`, concatenated (agy reads `GEMINI.md` too, but Gemini CLI owns that one) | `mcp_config.json` |
 | `agents` | `~/.agents` | yes | none | none |
 
-MCP entries are stored in the shed in Claude Code's shape and translated on the way out: Gemini gets `httpUrl` and no `type`, Copilot gets `type: local` and `tools: ["*"]`, Cursor gets `${env:VAR}` placeholders and Codex gets `env_vars` / `bearer_token_env_var` / `env_http_headers` with the variable *names*, so for those two the secret values never touch the config file. Gemini and Copilot do not expand placeholders, so lshed fills them from your shell at `restore`. Codex's `config.toml` is edited table by table; your comments and other settings stay as they are. `lshed init --agent gemini` reads the same files back into the shed shape, secrets masked.
+MCP entries are stored in the shed in Claude Code's shape and translated on the way out: Gemini gets `httpUrl` and no `type`, Antigravity gets `serverUrl`, Copilot gets `type: local` and `tools: ["*"]`, Cursor gets `${env:VAR}` placeholders and Codex gets `env_vars` / `bearer_token_env_var` / `env_http_headers` with the variable *names*, so for those two the secret values never touch the config file. Gemini, Antigravity and Copilot do not expand placeholders, so lshed fills them from your shell at `restore`. Codex's `config.toml` is edited table by table; your comments and other settings stay as they are. `lshed init --agent gemini` reads the same files back into the shed shape, secrets masked.
 
 Each agent root keeps its own `lshed/state.json`, so restoring into `~/.codex` never touches what lshed placed in `~/.claude`, and each can use a different profile or `--link` choice. Parts the target does not understand are announced and skipped: a profile with settings keys restores into Codex without them, with a line saying `codex 은 settings 를 다루지 않아 건너뜁니다`. Claude plugin packages are skipped the same way; `github:`/`git:` packages are cloned into every agent root that restores the profile, so give the other agents a profile without them if that is not what you want. `lshed init --agent codex` works too, and a shed made from Codex restores into Claude Code with `CLAUDE.md` generated from the same fragments. The shed's `agent:` is only a default for `--agent` (`$LSHED_AGENT` also works).
 

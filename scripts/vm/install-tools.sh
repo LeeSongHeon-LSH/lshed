@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Bake a Linux VM image for the lshed probe: every agent CLI lshed can place into, plus lshed itself.
+# Bake a Linux VM image for the lshed probe: every agent CLI lshed can place into (Codex, Gemini CLI, Copilot CLI, Cursor CLI, Antigravity CLI), plus lshed itself.
 # Ubuntu 22.04/24.04 (Debian works too). Run once as a sudo-capable user, then snapshot the image.
 # No credentials go in here — inject them at boot with cloud-init.yaml.
 #
@@ -20,8 +20,9 @@ fi
 
 sudo npm install -g @openai/codex @google/gemini-cli @github/copilot
 
-# Cursor CLI installs into ~/.local/bin/agent
+# Cursor CLI installs into ~/.local/bin/agent, Antigravity CLI (agy) into ~/.local/bin/agy
 curl -fsS https://cursor.com/install | bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash
 grep -q '.local/bin' ~/.profile 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >>~/.profile
 
 case $FROM in
@@ -39,4 +40,4 @@ sudo chmod +x /opt/lshed/scripts/vm/probe.sh
 
 echo
 echo "installed:"
-for b in node codex gemini copilot "$HOME/.local/bin/agent" lshed; do printf '  %-40s %s\n' "$b" "$("$b" --version 2>/dev/null | head -1 || echo missing)"; done
+for b in node codex gemini copilot "$HOME/.local/bin/agent" "$HOME/.local/bin/agy" lshed; do printf '  %-40s %s\n' "$b" "$("$b" --version 2>/dev/null | head -1 || echo missing)"; done

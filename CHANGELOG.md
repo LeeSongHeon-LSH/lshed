@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0 — 2026-09-05
+
+`--agent agy` places into Google Antigravity (the `agy` CLI and the IDE).
+
+- Skills go to `~/.gemini/config/skills/`, the one global location both the Antigravity IDE and CLI read. Instructions are concatenated into `~/.gemini/AGENTS.md`, one level above that root: agy reads both `AGENTS.md` and `GEMINI.md` there, and Gemini CLI also owns `GEMINI.md`, so lshed leaves that one alone. MCP servers go to `~/.gemini/config/mcp_config.json` in agy's shape (no `type`, `serverUrl` for http); `${VAR}` is filled by `restore`.
+- A part above the root (`../AGENTS.md`) is backed up under `lshed/backups/<stamp>/__/` so backups never escape the backup directory.
+- Verified on this machine with agy 1.1.26 through the VM probe (`scripts/vm/probe.sh agy`): skill, rules file, MCP list, and a linked skill all read. agy does not read `~/.agents/skills`, so it is not part of the `agents` target.
+
 ## 0.12.1 — 2026-09-05
 
 - Fix: with `CLAUDE_CONFIG_DIR` set on a machine where Claude Code has not run yet, `restore` wrote MCP servers to `<dir>.json` next to the config dir instead of `<dir>/.claude.json` inside it, where Claude Code actually reads them. Found by the VM probe below. Without `CLAUDE_CONFIG_DIR` nothing changes.

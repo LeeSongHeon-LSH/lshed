@@ -94,7 +94,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     if (!(await exists(from))) return;
     backedUp.push(rel);
     if (opts.dryRun || !backup) return;
-    await copyTree(from, path.join(backupDir, ...rel.split("/")), ignoreOf(ctx));
+    await copyTree(from, path.join(backupDir, ...rel.split("/").map((seg) => (seg === ".." ? "__" : seg))), ignoreOf(ctx));
   }
 
   // 1) 제거 대상 (이전 프로필에만 있던 것)

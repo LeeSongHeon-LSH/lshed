@@ -18,7 +18,7 @@ write_files:
       COPILOT_GITHUB_TOKEN=
       CURSOR_API_KEY=
       # which targets to probe (space separated): codex gemini copilot cursor agents
-      PROBE_TARGETS=codex gemini copilot cursor agents
+      PROBE_TARGETS=codex gemini copilot cursor agy agents
       # set to 0 to only check the files lshed writes, without calling any model
       LSHED_PROBE_ASK=1
 
@@ -35,12 +35,14 @@ runcmd:
       export LSHED_PROBE_DIR=/var/lib/lshed-probe
       # Codex wants the key through its own login, not just the variable
       if [ -n "${OPENAI_API_KEY:-}" ] && ! [ -f "$HOME/.codex/auth.json" ]; then printenv OPENAI_API_KEY | codex login --with-api-key; fi
+      # Antigravity CLI (agy) signs in with OAuth; headless it can use the Gemini API instead (1.1.13+): provider in settings + GEMINI_API_KEY
+      if [ -n "${GEMINI_API_KEY:-}" ] && [ ! -f "$HOME/.gemini/antigravity-cli/settings.json" ]; then mkdir -p "$HOME/.gemini/antigravity-cli"; printf "{ \"modelProvider\": \"gemini\" }\n" >"$HOME/.gemini/antigravity-cli/settings.json"; fi
       # Copilot CLI trusts folders listed in config.json; the probe asks from $LSHED_PROBE_DIR/cwd
       mkdir -p "$HOME/.copilot" "$LSHED_PROBE_DIR/cwd"
       if [ ! -f "$HOME/.copilot/config.json" ]; then printf "{ \"trusted_folders\": [\"%s\"] }\n" "$LSHED_PROBE_DIR/cwd" >"$HOME/.copilot/config.json"; fi
       {
         echo "lshed probe on $(hostname) $(date -Is)"
-        for b in codex gemini copilot agent lshed; do printf "  %-8s %s\n" "$b" "$($b --version 2>/dev/null | head -1 || echo missing)"; done
+        for b in codex gemini copilot agent agy lshed; do printf "  %-8s %s\n" "$b" "$($b --version 2>/dev/null | head -1 || echo missing)"; done
         for t in $PROBE_TARGETS; do /opt/lshed/scripts/vm/probe.sh "$t" || true; done
       } 2>&1 | tee "$LSHED_PROBE_DIR/summary.txt"
     '

@@ -37,7 +37,7 @@ describe("SkillsDirAdapter", () => {
   });
 
   it("레지스트리: 이름·루트·환경변수·지침 파일", () => {
-    expect(adapterNames()).toEqual(["claude-code", "codex", "gemini", "copilot", "cursor", "agents"]);
+    expect(adapterNames()).toEqual(["claude-code", "codex", "gemini", "copilot", "cursor", "agy", "agents"]);
     expect(createAdapter("claude-code", "/x")).toBeInstanceOf(ClaudeCodeAdapter);
     const codex = createAdapter("codex", "/x");
     expect(codex).toBeInstanceOf(SkillsDirAdapter);
@@ -53,7 +53,7 @@ describe("SkillsDirAdapter", () => {
       if (saved === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = saved;
     }
     expect(createAdapter("gemini").root).toBe(path.join(os.homedir(), ".gemini"));
-    expect(SKILLS_DIR_AGENTS.map((s) => s.dir)).toEqual([".codex", ".gemini", ".copilot", ".cursor", ".agents"]);
+    expect(SKILLS_DIR_AGENTS.map((s) => s.dir)).toEqual([".codex", ".gemini", ".copilot", ".cursor", ".gemini/config", ".agents"]);
   });
 });
 
@@ -105,6 +105,24 @@ describe("창고 하나를 여러 에이전트가 쓴다 (§4.6)", () => {
     expect(agentsMd).toContain("be nice");
     expect(agentsMd).not.toContain("@lshed/"); // import 문법이 없으니 내용을 넣는다
     expect((await fs.lstat(path.join(root, "skills/alpha"))).isSymbolicLink()).toBe(true);
+  });
+
+  it("agy: 스킬은 config/skills, 규칙은 한 단계 위 ../AGENTS.md, 백업은 백업 디렉터리 안에 머문다", async () => {
+    const gemini = path.join(tmp, "gemini");                 // ~/.gemini 역할
+    const root = path.join(gemini, "config");
+    await w(path.join(gemini, "AGENTS.md"), "my own rules\n");
+    const ctx = ctxOf(createAdapter("agy", root));
+    process.env.EXA_API_KEY = "sk";
+    let res;
+    try { res = await restore(ctx, "default"); } finally { delete process.env.EXA_API_KEY; }
+    expect(await r(path.join(root, "skills/alpha/SKILL.md"))).toBe("alpha");
+    expect(await r(path.join(gemini, "AGENTS.md"))).toContain("# my rules");
+    const mcp = JSON.parse(await r(path.join(root, "mcp_config.json")));
+    expect(mcp.mcpServers.exa).toEqual({ command: "x", env: { EXA_API_KEY: "sk" } });   // type 없음, restore 가 값을 채움
+    expect(res.backedUp).toEqual(["../AGENTS.md"]);
+    expect(await r(path.join(res.backupDir!, "__", "AGENTS.md"))).toBe("my own rules\n");
+    expect(await exists(path.join(root, "lshed", "AGENTS.md"))).toBe(false);
+    expect((await readState(ctx.adapter))!.managed).toContain("../AGENTS.md");
   });
 
   it("codex 기기에서 init 한 창고를 Claude Code 가 restore 한다 (agent 필드는 기본값일 뿐)", async () => {

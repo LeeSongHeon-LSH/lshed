@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { gemini, copilot, cursor, codex, canonical } from "../src/adapters/mcp-forms.js";
+import { gemini, copilot, cursor, codex, agy, canonical } from "../src/adapters/mcp-forms.js";
 import { TomlEntries, removeBlock } from "../src/adapters/toml-entries.js";
 import { createAdapter } from "../src/adapters/registry.js";
 import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
@@ -44,6 +44,14 @@ describe("MCP 형식 변환 (창고 = Claude Code 형식)", () => {
     expect(cursor.fromLocal(cursor.toLocal(HTTP))).toEqual(HTTP);
     expect(cursor.fromLocal(l)).toEqual({ ...(STDIO as object), args: ["${HOME}/bin/x"] });
   });
+  it("agy: type 없음, http 는 serverUrl, disabled:false 는 되돌릴 때 사라짐", () => {
+    const http = { type: "http", url: "https://m/x", headers: { Authorization: "Bearer ${T}" } };
+    expect(agy.toLocal(http)).toEqual({ serverUrl: "https://m/x", headers: { Authorization: "Bearer ${T}" } });
+    expect(agy.fromLocal({ serverUrl: "https://m/x", disabled: false, headers: { Authorization: "Bearer ${T}" } })).toEqual(http);
+    expect(agy.toLocal({ type: "stdio", command: "c", env: { K: "${K}" } })).toEqual({ command: "c", env: { K: "${K}" } });
+    expect(agy.fromLocal({ command: "c", disabled: true })).toEqual({ type: "stdio", command: "c", disabled: true });
+  });
+
   it("codex: 자리표시자를 env_vars / bearer_token_env_var / env_http_headers 로, 되돌리기", () => {
     const s = codex.toLocal({ ...(STDIO as object), args: ["${HOME}/x"] }, "/home/me") as { [k: string]: Json };
     expect(s).toEqual({ command: "npx", args: ["/home/me/x"], env: { MODE: "fast" }, env_vars: ["EXA_API_KEY"] });

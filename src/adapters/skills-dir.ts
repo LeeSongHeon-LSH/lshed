@@ -73,6 +73,7 @@ export class SkillsDirAdapter implements AgentAdapter {
  *  - gemini: ~/.gemini, GEMINI.md 는 @import 를 지원하지만 허용 디렉터리 제한이 문서에 불명확해 이어붙임
  *  - copilot: $COPILOT_HOME 또는 ~/.copilot, copilot-instructions.md (@import 는 저장소 안에서만 → 이어붙임)
  *  - cursor: ~/.cursor, 사용자 규칙은 설정 UI 에만 있어 지침 파일 없음
+ *  - agy: ~/.gemini/config (Antigravity IDE·CLI 공용), 규칙은 ../AGENTS.md, MCP 는 mcp_config.json (http 는 serverUrl)
  *  - agents: ~/.agents — 위 도구 전부가 함께 읽는 공용 위치. 지침 파일 없음
  */
 export const SKILLS_DIR_AGENTS: readonly SkillsDirSpec[] = [
@@ -84,5 +85,9 @@ export const SKILLS_DIR_AGENTS: readonly SkillsDirSpec[] = [
   { name: "copilot", envVar: "COPILOT_HOME", dir: ".copilot", instructions: { file: "copilot-instructions.md", strategy: "concat" },
     mcp: { file: "mcp-config.json", kind: "json", under: "mcpServers", form: "copilot", expandsEnv: false } },
   { name: "cursor", dir: ".cursor", mcp: { file: "mcp.json", kind: "json", under: "mcpServers", form: "cursor", expandsEnv: true } },
+  // Antigravity (agy CLI + IDE): ~/.gemini/config 이 IDE·CLI 가 함께 읽는 곳(skills, mcp_config.json). 전역 규칙은 한 단계 위 ~/.gemini 의
+  // AGENTS.md 또는 GEMINI.md — Gemini CLI 도 GEMINI.md 를 쓰므로(충돌 보고됨) AGENTS.md 를 쓴다. 둘 다 읽음은 agy 1.1.26 에 물어 확인.
+  { name: "agy", dir: ".gemini/config", instructions: { file: "../AGENTS.md", strategy: "concat" },
+    mcp: { file: "mcp_config.json", kind: "json", under: "mcpServers", form: "agy", expandsEnv: false } },
   { name: "agents", dir: ".agents" },
 ];

@@ -22,6 +22,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     // Claude Code 는 CLAUDE_CONFIG_DIR 가 있으면 설정 전체(.claude.json 포함)를 그 안에 둔다
     this.root = root ?? process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
     const root_ = this.root;
+    // CLAUDE_CONFIG_DIR 아래에서는 Claude Code 가 .claude.json 을 언제나 그 안에 만든다 — 아직 없는 새 기기라도 형제 파일을 쓰면 읽히지 않는다
+    const insideOnly = !root && !!process.env.CLAUDE_CONFIG_DIR;
     this.entryCats = [
       /**
        * 사용자 범위 MCP (§7.4): ~/.claude 의 형제 ~/.claude.json 의 mcpServers. CLAUDE_CONFIG_DIR 처럼 루트 안에 있으면 그것.
@@ -29,7 +31,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
        */
       new JsonEntries({
         name: "mcp",
-        file: async () => { const inside = path.join(root_, ".claude.json"); return (await exists(inside)) ? inside : `${root_}.json`; },
+        file: async () => { const inside = path.join(root_, ".claude.json"); return insideOnly || (await exists(inside)) ? inside : `${root_}.json`; },
         under: "mcpServers",
         secretKeys: ["env", "headers"],
         expandsEnv: true,

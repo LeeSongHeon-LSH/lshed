@@ -131,6 +131,20 @@ describe("restore: 다른 기기의 ~/.claude.json 에 그 키만 넣는다", ()
     expect(marks.every((l) => l.trim().startsWith("="))).toBe(true);
   });
 
+  it("CLAUDE_CONFIG_DIR 아래 새 기기: .claude.json 을 그 안에 만든다 (형제 파일은 Claude Code 가 안 읽음)", async () => {
+    const dir = path.join(tmp, "C");
+    const prev = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = dir;
+    try {
+      const ctx: Ctx = { adapter: new ClaudeCodeAdapter(), shed, log: (l) => logs.push(l), exec: async () => {} };
+      await restore(ctx, "minimal");
+      expect((await rj(path.join(dir, ".claude.json"))).mcpServers.plain).toEqual(plain);
+      await expect(fs.access(`${dir}.json`)).rejects.toThrow();
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = prev;
+    }
+  });
+
   it("dry-run 은 파일을 건드리지 않는다", async () => {
     await restore(ctxFor(rootB), "default", { dryRun: true });
     expect(Object.keys((await rj(`${rootB}.json`)).mcpServers)).toEqual(["theirs"]);

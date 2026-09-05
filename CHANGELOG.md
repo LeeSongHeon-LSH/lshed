@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1 — 2026-09-05
+
+- Fix: with `CLAUDE_CONFIG_DIR` set on a machine where Claude Code has not run yet, `restore` wrote MCP servers to `<dir>.json` next to the config dir instead of `<dir>/.claude.json` inside it, where Claude Code actually reads them. Found by the VM probe below. Without `CLAUDE_CONFIG_DIR` nothing changes.
+
+VM probe for the other agents (`scripts/vm/`): `install-tools.sh` bakes an image with Codex, Gemini CLI, Copilot CLI, Cursor CLI and lshed; `cloud-init.yaml` injects API keys at boot and runs `probe.sh`, which restores a throwaway shed into each tool's real root and asks the tool, non-interactively, for a passphrase kept in a skill, a codeword kept in the instructions file, and the same skill again after `--link`. Where a tool can parse its own config without a model (`codex mcp list`, `gemini mcp list`, `codex debug prompt-input`) that is checked too. Run on this machine against Codex 0.153.2: Codex reads `$CODEX_HOME/skills` (deprecated in its source; the docs now name only `~/.agents/skills`), `$CODEX_HOME/AGENTS.md`, the `[mcp_servers.*]` table lshed writes, and a linked skill.
+
 ## 0.12.0 — 2026-09-04
 
 MCP servers follow the shed into the other agents.

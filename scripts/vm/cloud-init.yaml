@@ -1,0 +1,50 @@
+#cloud-config
+# lshed probe — boot-time user data for an image baked with install-tools.sh.
+# Fill the four keys, boot the VM, and read /var/lib/lshed-probe/*.md (or `journalctl -u cloud-final`).
+# The keys live only in /etc/lshed-probe.env (0600, root) and in the probe user's process environment;
+# they never enter the image. Leave a key empty to skip that tool's questions (files are still checked).
+#
+#   openstack server create --image lshed-probe --flavor m1.small --user-data scripts/vm/cloud-init.yaml probe-1
+#   openstack console log show probe-1 | grep -A40 'lshed probe:'
+#   scp ubuntu@<ip>:/var/lib/lshed-probe/'*' ./results/
+
+write_files:
+  - path: /etc/lshed-probe.env
+    permissions: "0600"
+    owner: root:root
+    content: |
+      OPENAI_API_KEY=
+      GEMINI_API_KEY=
+      COPILOT_GITHUB_TOKEN=
+      CURSOR_API_KEY=
+      # which targets to probe (space separated): codex gemini copilot cursor agents
+      PROBE_TARGETS=codex gemini copilot cursor agents
+      # set to 0 to only check the files lshed writes, without calling any model
+      LSHED_PROBE_ASK=1
+
+runcmd:
+  - |
+    set -u
+    USER_NAME=$(getent passwd 1000 | cut -d: -f1)
+    install -d -o "$USER_NAME" -g "$USER_NAME" /var/lib/lshed-probe
+    # refresh the probe script so a newer commit can be tested on an old image
+    (git -C /opt/lshed pull -q 2>/dev/null || true)
+    sudo -u "$USER_NAME" -i bash -lc '
+      set -a; . /etc/lshed-probe.env; set +a
+      export PATH="$HOME/.local/bin:$PATH"
+      export LSHED_PROBE_DIR=/var/lib/lshed-probe
+      # Codex wants the key through its own login, not just the variable
+      if [ -n "${OPENAI_API_KEY:-}" ] && ! [ -f "$HOME/.codex/auth.json" ]; then printenv OPENAI_API_KEY | codex login --with-api-key; fi
+      # Copilot CLI trusts folders listed in config.json; the probe asks from $LSHED_PROBE_DIR/cwd
+      mkdir -p "$HOME/.copilot" "$LSHED_PROBE_DIR/cwd"
+      if [ ! -f "$HOME/.copilot/config.json" ]; then printf "{ \"trusted_folders\": [\"%s\"] }\n" "$LSHED_PROBE_DIR/cwd" >"$HOME/.copilot/config.json"; fi
+      {
+        echo "lshed probe on $(hostname) $(date -Is)"
+        for b in codex gemini copilot agent lshed; do printf "  %-8s %s\n" "$b" "$($b --version 2>/dev/null | head -1 || echo missing)"; done
+        for t in $PROBE_TARGETS; do /opt/lshed/scripts/vm/probe.sh "$t" || true; done
+      } 2>&1 | tee "$LSHED_PROBE_DIR/summary.txt"
+    '
+    # results are readable over the serial console too
+    cat /var/lib/lshed-probe/summary.txt
+
+final_message: "lshed probe finished after $UPTIME s — see /var/lib/lshed-probe/summary.txt"

@@ -561,6 +561,27 @@ Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%U
 경로 비교는 `fsutil.ts` 의 `normalizePath`/`isInside`/`realpathish` 한 곳으로 모았고,
 링크된 디렉터리를 만들어 리눅스에서도 이 부류를 재현하는 회귀 테스트를 두었다.
 
+### 10.2 다른 에이전트 검증: VM probe (2026-09-05)
+
+`--agent codex|gemini|copilot|cursor|agents` 는 각 도구의 문서를 보고 만들었으므로, 도구 자체로 확인하는 층이 하나 더 필요하다.
+`scripts/vm/` 에 셋이 있다. `install-tools.sh` 로 이미지를 한 번 굽고(Node 22, Codex, Gemini CLI, Copilot CLI, Cursor CLI, lshed, 이 저장소 `/opt/lshed`),
+`cloud-init.yaml` 로 부팅하면서 API 키만 넣으면 `probe.sh` 가 도구마다 돌고 `/var/lib/lshed-probe/` 에 결과를 남긴다.
+
+probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 지침 조각, `${VAR}` 시크릿을 가진 MCP 둘) 를 `restore --agent <tool>` 로 실제 루트에 놓고 파일을 확인하고,
+(2) 도구 자체의 파서가 있으면 그것으로도 본다(`codex mcp list`, `gemini mcp list`, `codex debug prompt-input` 은 모델 없이 스킬 루트를 보여 준다),
+(3) `codex exec` / `gemini -p` / `copilot -p` / `agent -p` 로 암호어를 물어 실제로 읽는지 보고,
+(4) `restore --link` 뒤 창고를 고쳐 다시 물어 링크를 따라가는지 보고,
+(5) 빈 프로필로 `restore none` 해 흔적을 지운다. 암호어는 실행마다 난수라 이전 실행의 잔재로 통과할 수 없다.
+
+이 기기(Codex 0.153.2 설치됨)에서 VM 전에 알게 된 것:
+- Codex 는 `$CODEX_HOME/skills` 와 `$HOME/.agents/skills` **둘 다** 스킬 루트로 읽는다(`codex debug prompt-input` 의 skill roots 표). 다만 소스는 `$CODEX_HOME/skills` 를 *deprecated, 호환용* 이라 적고 현재 문서는 `.agents/skills` 만 말한다. lshed 의 `codex` 대상은 아직 `~/.codex/skills` 에 놓는다 — `~/.agents/skills` 로 옮길지는 미결.
+- `$CODEX_HOME/AGENTS.md` 이어붙임, `config.toml` 의 `[mcp_servers.*]`(env_vars, bearer_token_env_var) 를 Codex 가 파싱, 스킬·링크된 스킬 읽기까지 Codex probe 전부 통과.
+- Codex 읽기 전용 샌드박스(bubblewrap)가 user namespace 를 못 만드는 호스트에서는 모델이 스킬 파일을 못 열고 문맥의 다른 값을 답한다. probe 는 일회용 VM 전제로 `--sandbox danger-full-access` 를 쓴다.
+- 지침 코드워드가 문맥에 있으면 저추론 모델이 스킬 질문에 그것을 답하기도 한다. probe 는 스킬 질문을 스킬만 있는 프로필에서 하고(지침 조각 배치 전, 그리고 `--link` 도 스킬 프로필로), 질문마다 최대 3회(120초) 시도한다. `codex exec` 가 세션 배너를 찍기 전에 chatgpt.com 연결을 쥔 채 멈추는 일이 이따금 있어서(lshed 와 무관) 재시도가 필요했다.
+- 도구 호출은 `setsid` 로 터미널에서 떼고 stdin 을 닫는다. 가짜 MCP 서버는 DNS 가 끼지 않도록 닫힌 로컬 포트(127.0.0.1:9)를 가리킨다.
+- 최종: Codex 대상 probe 17개 검사 전부 통과, `agents` 대상(~/.agents/skills 를 Codex 가 읽음, 링크 포함) 통과.
+- probe 를 `claude-code` 대상으로 격리된 `CLAUDE_CONFIG_DIR` 에 돌리다 **lshed 버그 하나를 잡았다(0.12.1)**: Claude Code 를 아직 한 번도 안 돌린 기기에서 `CLAUDE_CONFIG_DIR` 가 있으면 어댑터가 안쪽 `.claude.json` 이 없다는 이유로 형제 `<dir>.json` 에 MCP 를 썼고, `claude mcp list` 는 그것을 읽지 않았다. 환경변수로 루트가 정해졌으면 언제나 안쪽 파일을 쓰도록 고침. 기본 `~/.claude` 에서는 변화 없음.
+
 ## 11. 미결 질문
 
 - ~~**다른 에이전트 어댑터**~~ — **해결 (2026-09-04, 0.11.0).** Codex·Gemini CLI·Copilot CLI·Cursor 가 전부 Agent Skills 표준(`<root>/skills/<name>/SKILL.md`)을 쓰고 공용 `~/.agents/skills/` 도 읽으므로, 도구별 어댑터 대신 `SkillsDirAdapter` 하나에 루트·지침 파일만 다른 스펙 5개(codex/gemini/copilot/cursor/agents)를 넣었다. 창고는 하나이고 `--agent` 로 배치 대상을 고른다(`$LSHED_AGENT`, 창고의 `agent:` 는 기본값). 매니페스트 검증은 현재 어댑터가 아니라 **창고를 만든 에이전트** 기준이라 다른 에이전트로 열어도 오류가 아니며, 모르는 카테고리(mcp, settings, agents, instructions 없음)와 설치기 없는 패키지(claude-plugin:)는 알리고 건너뛴다. state 는 에이전트 루트마다 따로. 지침은 Codex/Gemini/Copilot 모두 이어붙임(Codex 는 import 문법이 없고, Gemini 는 @import 의 허용 디렉터리가 문서에 불명확, Copilot 은 저장소 안에서만). Cursor·~/.agents 는 사용자 지침 파일이 없어 `instructionsFileName()` 이 null. 실환경: 사용자의 `~/.agents/skills` 에 `skills` CLI 로 설치한 5개가 이미 있고 창고와 내용이 같아 dry-run 이 `=` 5, `+` 1(add-drivers) 로 나왔다. MCP 는 0.12.0 에서 추가: 창고 형식은 Claude Code 것 그대로 두고 `adapters/mcp-forms.ts` 가 도구별로 바꾼다(gemini: type 없음·httpUrl, copilot: type local·tools, cursor: `${env:VAR}`·`${userHome}`, codex: env_vars·bearer_token_env_var·env_http_headers 로 변수 *이름*을 적음). 변환은 어댑터의 read/write 안에서만 일어나 core 는 모른다. Codex 의 config.toml 은 `TomlEntries` 가 `[mcp_servers.<id>]` 표 블록만 잘라 붙여 주석·다른 표를 보존(smol-toml 은 읽기와 블록 생성에만). expandsEnv 는 codex·cursor true(이름으로 표현), gemini·copilot false(restore 가 채움). 이름이 다른 자리표시자(env.K = "${OTHER}")는 Codex 로 표현할 수 없어 문자열 그대로 남는다.

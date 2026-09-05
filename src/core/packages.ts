@@ -14,6 +14,17 @@ export type { DetectedPackage } from "../installers/types.js";
 export async function detectPackages(ctx: Ctx, found: ScannedComponent[]): Promise<DetectedPackage[]> {
   const out: DetectedPackage[] = [];
   for (const inst of installersFor(ctx)) out.push(...(await inst.detect(ctx, found)));
+  // 이름이 같은 패키지 (한 플러그인짜리 마켓플레이스 "x" 와 그 플러그인 "x@x" 가 흔하다): 먼저 온 쪽(설치기 우선순위)이 이름을 갖고,
+  // 뒤의 것은 출처의 나머지(claude-plugin 이면 "x@x")나 스킴 접미사로 구분한다. 설치기 순서가 고정이라 기기마다 같은 id 가 나온다.
+  const seen = new Set<string>();
+  for (const p of out) {
+    if (seen.has(p.id)) {
+      const i = p.source.indexOf(":");
+      const scheme = p.source.slice(0, i), rest = p.source.slice(i + 1);
+      p.id = scheme === "claude-plugin" ? rest : `${p.id}-${scheme}`;
+    }
+    seen.add(p.id);
+  }
   return out;
 }
 

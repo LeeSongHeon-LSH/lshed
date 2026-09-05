@@ -39,7 +39,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       /**
        * settings.json (§7.6): 최상위 키 하나 = 항목 하나 (hooks, permissions, env, model, ...).
        * 병합하지 않는다. 키를 통째로 소유하고, 로컬 편집은 diff/save 로 되가져온다.
-       * enabledPlugins 는 플러그인 설치기가 만드는 상태라 담지 않는다. ${VAR} 는 Claude Code 가 안 채우므로 restore 가 채운다.
+       * enabledPlugins 와 extraKnownMarketplaces 는 플러그인 설치기가 만드는 상태라 담지 않는다. ${VAR} 는 Claude Code 가 안 채우므로 restore 가 채운다.
        */
       new JsonEntries({
         name: "settings",
@@ -47,7 +47,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
         secretKeys: [],
         secretRootIds: ["env"],
         expandsEnv: false,
-        skip: ["enabledPlugins"],
+        skip: ["enabledPlugins", "extraKnownMarketplaces"],   // 둘 다 플러그인 설치기가 쓰는 상태: 마켓플레이스·플러그인 패키지가 restore 로 되살린다
       }),
     ];
   }

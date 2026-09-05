@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1 — 2026-09-05
+
+Two things `lshed status` got wrong on a real machine after a one-plugin marketplace was added.
+
+- A marketplace and a plugin with the same name (`llm-guidelines` from `llm-guidelines@llm-guidelines`) were both recorded as `packages/llm-guidelines`. The marketplace keeps the name (its own commands need it); the plugin becomes `llm-guidelines@llm-guidelines`. Installer order is fixed, so every machine derives the same ids.
+- `extraKnownMarketplaces` in `settings.json` is state Claude Code writes when a marketplace is added, like `enabledPlugins`; `init` and `add` no longer offer it. The `claude-marketplace:` package brings it back on `restore`.
+
 ## 0.14.0 — 2026-09-05
 
 `--agent codex` now puts skills in `~/.agents/skills/`, the location Codex documents, instead of `~/.codex/skills/`.

@@ -28,7 +28,7 @@ beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-set-"));
   rootA = path.join(tmp, "A"); rootB = path.join(tmp, "B"); shed = path.join(tmp, "shed"); logs = [];
   await w(path.join(rootA, "skills/mine/SKILL.md"), "authored");
-  await w(path.join(rootA, "settings.json"), J({ model: "opus", theme: "dark", hooks, permissions, env, enabledPlugins: { "exa@official": true } }));
+  await w(path.join(rootA, "settings.json"), J({ model: "opus", theme: "dark", hooks, permissions, env, enabledPlugins: { "exa@official": true }, extraKnownMarketplaces: { official: { source: { source: "github", repo: "anthropics/claude-plugins-official" } } } }));
   delete process.env.ANTHROPIC_API_KEY;
 });
 afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
@@ -56,6 +56,7 @@ describe("settings: 키 하나가 항목 하나", () => {
     expect((await readState(ctx.adapter))?.managed).toEqual(expect.arrayContaining(["settings:hooks", "settings:env", "settings:model"]));
     expect((await status(ctx)).drifted).toEqual([]); // 로컬은 실제 값·실제 경로지만 드리프트가 아니다
     expect(await fs.access(path.join(shed, "settings/enabledPlugins.json")).catch(() => "none")).toBe("none");
+    expect(await fs.access(path.join(shed, "settings/extraKnownMarketplaces.json")).catch(() => "none")).toBe("none");   // 마켓플레이스 패키지의 몫
   });
 
   it("restore: 다른 기기의 settings.json 에 키만 넣고, ${HOME} 과 시크릿은 lshed 가 채운다", async () => {
@@ -94,7 +95,7 @@ describe("settings: 키 하나가 항목 하나", () => {
     const res = await restore(ctx, "bare");
     expect(res.removed).toEqual(["settings:env", "settings:hooks", "settings:permissions", "settings:theme", "skills/mine"]);
     const s = await rj(path.join(rootA, "settings.json"));
-    expect(Object.keys(s).sort()).toEqual(["enabledPlugins", "model"]);
+    expect(Object.keys(s).sort()).toEqual(["enabledPlugins", "extraKnownMarketplaces", "model"]);   // 둘 다 lshed 가 관리하지 않는 키
     expect(await rj(path.join(res.backupDir!, "settings/permissions.json"))).toEqual(permissions);
   });
 

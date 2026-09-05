@@ -58,6 +58,26 @@ beforeEach(async () => {
 afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
 
 describe("init: 플러그인과 마켓플레이스를 패키지로 기록", () => {
+  it("플러그인 하나짜리 마켓플레이스: 이름이 같아도 id 가 겹치지 않고, 둘 다 새 기기에 설치된다", async () => {
+    await w(path.join(rootA, "plugins/known_marketplaces.json"), J({
+      "claude-plugins-official": { source: { source: "github", repo: "anthropics/claude-plugins-official" } },
+      "llm-guidelines": { source: { source: "github", repo: "se-uhd/llm-guidelines" } },
+    }));
+    await w(path.join(rootA, "plugins/installed_plugins.json"), J({ version: 2, plugins: {
+      "llm-guidelines@llm-guidelines": [{ scope: "user", version: "1.0.0", installPath: "/x" }],
+    } }));
+    const { manifest } = await init(ctxFor(rootA));
+    const ids = manifest.packages.map((p) => `${p.id} ${p.source}`);
+    expect(ids).toContain("llm-guidelines claude-marketplace:se-uhd/llm-guidelines");           // 마켓플레이스가 이름을 갖는다 (자기 명령에 필요)
+    expect(ids).toContain("llm-guidelines@llm-guidelines claude-plugin:llm-guidelines@llm-guidelines");
+    expect(manifest.profiles.default.packages).toEqual(["claude-plugins-official", "llm-guidelines", "llm-guidelines@llm-guidelines"]);
+    calls = [];
+    await restore(ctxFor(rootB), "default");
+    expect(calls.map((c) => c.slice(1, 4).join(" "))).toEqual(expect.arrayContaining(["plugin marketplace add", "plugin install llm-guidelines@llm-guidelines"]));
+    const f = JSON.parse(await r(path.join(rootB, "plugins/installed_plugins.json")));
+    expect(f.plugins["llm-guidelines@llm-guidelines"][0].scope).toBe("user");
+  });
+
   it("user 범위만, into 없이, 버전을 락에", async () => {
     const res = await init(ctxFor(rootA));
     expect(res.packages.sort()).toEqual(["claude-plugins-official", "exa", "notion"]);

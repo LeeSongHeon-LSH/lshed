@@ -553,8 +553,8 @@ $ lshed add
     settings/theme
 ```
 
-- `enabledPlugins` is never taken: the plugin packages own it, and `restore` rebuilds it by installing them.
-  `enabledPlugins`는 담지 않습니다. 플러그인 패키지의 몫이고, `restore`가 설치하면서 다시 만듭니다.
+- `enabledPlugins` and `extraKnownMarketplaces` are never taken: the plugin and marketplace packages own them, and `restore` rebuilds them by installing those.
+  `enabledPlugins`와 `extraKnownMarketplaces`는 담지 않습니다. 플러그인·마켓플레이스 패키지의 몫이고, `restore`가 설치하면서 다시 만듭니다.
 - Absolute paths under your home directory become `${HOME}/…` in the shed, so a hook command written on one machine works on another. Claude Code does not expand variables in `settings.json`, so `restore` fills `${HOME}` and any `${VAR}` itself from your shell; unset variables are reported and left as placeholders.
   홈 아래 절대 경로는 창고에서 `${HOME}/…`가 되어, 한 기기에서 쓴 훅 명령이 다른 기기에서도 돕니다. Claude Code는 `settings.json`의 변수를 채우지 않으므로 `restore`가 `${HOME}`과 `${VAR}`를 셸에서 직접 채우고, 없는 변수는 알린 뒤 자리표시자로 둡니다.
 - `env` is treated as a secret map: keys that look secret are masked, the rest (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`, …) travel as they are.

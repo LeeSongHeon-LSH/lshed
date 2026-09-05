@@ -27,7 +27,7 @@ export type Component = z.infer<typeof ComponentSchema>;
  * into 는 어댑터 루트 기준 상대 경로. 패키지는 관리 집합에 들어가지 않는다.
  */
 const PackageSchema = z.object({
-  id: z.string().regex(/^[\w.-]+$/, "id는 영문·숫자·._- 만 허용"),
+  id: z.string().regex(/^[\w.@-]+$/, "id는 영문·숫자·._@- 만 허용"),   // 패키지 id 는 경로가 아니다. 플러그인은 "이름@마켓플레이스" 로 구분될 수 있다
   source: z.string(),
   /** git 계열 패키지의 위치 (어댑터 루트 기준). 어댑터 설치기 스킴은 필요 없다 */
   into: z.string().regex(/^[^/\\][^\\]*$/, "into 는 루트 기준 상대 경로 (POSIX)").optional(),

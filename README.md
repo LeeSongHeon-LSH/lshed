@@ -22,9 +22,9 @@ Every new laptop, server, container or WSL box means setting up `~/.claude` agai
 
 새 노트북, 서버, 컨테이너, WSL을 하나 늘릴 때마다 `~/.claude`를 다시 꾸며야 합니다. 가장 뻔한 해법은 `~/.claude` 자체를 git에 넣는 것이고, 많은 사람에게는 그것이 정답입니다.
 
-**When a `.gitignore` is enough.** You are one person, every machine gets the same setup, and everything in `~/.claude` is yours. Then this does the job and you should not install lshed:
+**When a plain git repository is enough.** You are one person, every machine gets the same setup, and everything in `~/.claude` is yours. Then make `~/.claude` itself a git repository and you should not install lshed. Git does the moving; the `.gitignore` only keeps machine state (sessions, caches) out of it:
 
-**`.gitignore`로 충분한 경우.** 혼자 쓰고, 모든 기기가 같은 구성이며, `~/.claude` 안의 것이 전부 직접 만든 것이라면 아래로 끝납니다. 이 경우 lshed를 설치할 이유가 없습니다.
+**`~/.claude`를 그냥 git 저장소로 두면 충분한 경우.** 혼자 쓰고, 모든 기기가 같은 구성이며, `~/.claude` 안의 것이 전부 직접 만든 것이라면 `~/.claude` 자체를 git 저장소로 만들면 끝나고, lshed를 설치할 이유가 없습니다. 옮기는 것은 git이고, `.gitignore`는 세션 기록·캐시 같은 기기 상태값을 저장소에서 빼는 제외 목록일 뿐입니다.
 
 ```
 cd ~/.claude && git init
@@ -32,9 +32,9 @@ printf 'projects/\ncache/\nsessions/\nshell-snapshots/\nhistory.jsonl\n*.bak*\n'
 git add skills agents commands CLAUDE.md settings.json .gitignore && git commit -m init
 ```
 
-No new concepts, no copy step: the directory you edit is the repository. Cloning it on the next machine is the whole restore.
+No new concepts, no copy step: the directory you edit is the repository. `git push` here and `git clone <remote> ~/.claude` on the next machine is the whole restore.
 
-새로 배울 개념도, 복사 단계도 없습니다. 편집하는 디렉터리가 곧 저장소이고, 다음 기기에서는 clone이 곧 복원입니다.
+새로 배울 개념도, 복사 단계도 없습니다. 편집하는 디렉터리가 곧 저장소이고, 여기서 `git push`한 뒤 다음 기기에서 `git clone <원격> ~/.claude`하는 것이 곧 복원입니다.
 
 **Where that stops working.** The repository above starts to hurt as soon as `~/.claude` is not just yours:
 
@@ -61,9 +61,9 @@ lshed는 이 다섯 경우를 위해 있습니다. 창고는 여전히 git 안�
 | **Profiles** · 프로필 | named recipes — `research`, `work`, `minimal` — that pick a subset of parts; write them in `lshed.yaml`, or let `restore --pick` build one from a checklist. `research`, `work`, `minimal`처럼 이름 붙인 조합입니다. `lshed.yaml`에 적거나, `restore --pick`의 체크리스트로 만듭니다. |
 | **Managed set** · 관리 집합 | lshed remembers what it placed, so switching profiles or restoring onto an existing machine removes only its own files and never touches yours. lshed는 자기가 놓은 것을 기억하므로, 프로필을 바꾸거나 기존 기기에 복원해도 자기 파일만 치우고 여러분의 파일은 건드리지 않습니다. |
 
-The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed (or use `restore --link` on machines where you edit a lot, and skip the copy step), and lshed has to know each agent's layout, which the plain repository does not. If none of the five cases applies to you, the `.gitignore` wins.
+The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed (or use `restore --link` on machines where you edit a lot, and skip the copy step), and lshed has to know each agent's layout, which the plain repository does not. If none of the five cases applies to you, the plain repository wins.
 
-대가도 있습니다. 편집은 `~/.claude`에서 하고 `lshed save`로 창고에 복사해야 하며(많이 편집하는 기기에서는 `restore --link`로 복사 단계를 없앨 수 있습니다), lshed는 각 에이전트의 파일 배치를 알아야 합니다. 다섯 경우 중 하나도 해당하지 않으면 `.gitignore`가 낫습니다.
+대가도 있습니다. 편집은 `~/.claude`에서 하고 `lshed save`로 창고에 복사해야 하며(많이 편집하는 기기에서는 `restore --link`로 복사 단계를 없앨 수 있습니다), lshed는 각 에이전트의 파일 배치를 알아야 합니다. 다섯 경우 중 하나도 해당하지 않으면 그냥 git 저장소가 낫습니다.
 
 ## Install · 설치
 

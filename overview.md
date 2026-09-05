@@ -643,7 +643,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 0.13.0 `--agent agy` (Antigravity) — 2026-09-05, README 영어/한국어 병기
 - [ ] Gemini CLI·Copilot CLI·Cursor 를 VM 에서 probe (§10.2) — 사용자: 이미지 굽고 cloud-init 으로 부팅
 - [ ] 사용자 실제 Windows 노트북에서 §10.1 3층 (실행파일로 restore --dry-run, --link 의 junction·복사 폴백)
-- [ ] 실제 창고 ~/harness 를 `--agent agy` 로 이 기기에 적용 (도그푸딩)
+- [x] 실제 창고 ~/harness 를 `--agent agy`·`--agent codex` 로 이 기기에 적용 (도그푸딩, `tools` 프로필 + --link) — 2026-09-05. 잡은 것: 한 플러그인짜리 마켓플레이스의 id 충돌, `extraKnownMarketplaces` 를 후보로 잡던 것, Antigravity 의 빈 mcp_config.json 을 못 읽던 것 (0.14.1)
 
 ---
 

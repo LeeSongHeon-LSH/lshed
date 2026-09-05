@@ -6,6 +6,7 @@ Two things `lshed status` got wrong on a real machine after a one-plugin marketp
 
 - A marketplace and a plugin with the same name (`llm-guidelines` from `llm-guidelines@llm-guidelines`) were both recorded as `packages/llm-guidelines`. The marketplace keeps the name (its own commands need it); the plugin becomes `llm-guidelines@llm-guidelines`. Installer order is fixed, so every machine derives the same ids.
 - `extraKnownMarketplaces` in `settings.json` is state Claude Code writes when a marketplace is added, like `enabledPlugins`; `init` and `add` no longer offer it. The `claude-marketplace:` package brings it back on `restore`.
+- An empty JSON entry file (Antigravity creates `mcp_config.json` with no content) reads as `{}` instead of failing `status` and `restore`.
 
 ## 0.14.0 — 2026-09-05
 

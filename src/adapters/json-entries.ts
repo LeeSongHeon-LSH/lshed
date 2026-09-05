@@ -43,7 +43,8 @@ export class JsonEntries implements EntryCategory {
   private async load(): Promise<Record<string, unknown>> {
     const p = await this.file();
     try {
-      return JSON.parse(await fs.readFile(p, "utf8")) as Record<string, unknown>;
+      const text = await fs.readFile(p, "utf8");
+      return (text.trim() ? JSON.parse(text) : {}) as Record<string, unknown>;   // 도구가 빈 파일로 만들어 두기도 한다 (Antigravity 의 mcp_config.json)
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
       throw new Error(`${p} 을 읽을 수 없습니다: ${(e as Error).message}`);

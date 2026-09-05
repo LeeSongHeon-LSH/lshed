@@ -128,6 +128,7 @@ describe("창고 하나를 여러 에이전트가 쓴다 (§4.6)", () => {
     const gemini = path.join(tmp, "gemini");                 // ~/.gemini 역할
     const root = path.join(gemini, "config");
     await w(path.join(gemini, "AGENTS.md"), "my own rules\n");
+    await w(path.join(root, "mcp_config.json"), "");                 // Antigravity 는 빈 파일로 만들어 둔다
     const ctx = ctxOf(createAdapter("agy", root));
     process.env.EXA_API_KEY = "sk";
     let res;

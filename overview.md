@@ -1,10 +1,10 @@
 # lshed — 하네스 휴대 도구 설계 문서 (v0.1)
 
-> **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13)
+> **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13) · 2026-09-05 (0.14.1 기준으로 상태 갱신)
 > **프로젝트명**: `lshed` (읽기: 엘셰드 / *el-shed*)
 > **성격**: 오픈소스 CLI 도구 / 개인 취미 프로젝트로 시작
-> **상태**: v0.3.0 구현 완료(패키지·락·update·list/remove/prune·플러그인 설치기), 실환경 적용·새 기기 복원 검증 완료. npm 발행 대기
-> **이름 확보**: npm `lshed@0.0.0` 선점 완료 · `which lshed` 충돌 없음 · GitHub `lshed` 저장소는 미생성
+> **상태 (2026-09-05)**: 0.14.1. 개발 항목은 §12 기준으로 모두 닫혔다 — 부품·프로필·관리 집합, 패키지(git·Claude 플러그인)·락, MCP·settings 항목형, add/sync, `--pick`, `extends`, `--link`, 다른 에이전트(`--agent codex|gemini|copilot|cursor|agy|agents`)와 MCP 형식 변환, 단독 실행파일 5종, 3 OS CI. 남은 것은 검증 둘: Gemini CLI·Copilot CLI·Cursor 의 VM probe(§10.2, 런북은 `scripts/vm/README.md`)와 사용자 실제 Windows 기기(§10.1). 이 기기는 Claude Code·Codex·Antigravity 가 모두 실제 창고 `~/harness` 를 링크로 쓴다.
+> **배포**: GitHub `LeeSongHeon-LSH/lshed`(public), npm `lshed`(latest 0.14.0, 0.14.1 은 로컬 태그), 릴리스마다 실행파일 5종 + SHA256SUMS
 > **배경 기록**(비용·수익·연구 연결·폐기 대안): `notes/background.md`
 
 ---
@@ -301,7 +301,7 @@ commit → pull --rebase → push 를 묶고, 충돌이면 rebase 를 되돌려 
 | 홈 디렉터리 | `os.homedir()` 단일 창구 |
 | 줄바꿈 | 지침 파일은 그대로 복사, 생성 파일은 LF |
 
-플랫폼 의존 코드는 한 모듈에 모은다. v0.1 검증은 Linux/WSL, v0.3에서 macOS/Windows.
+플랫폼 의존 코드는 한 모듈에 모은다(`fsutil.ts`). 0.7.4~0.7.5 에서 CI 가 macOS·Windows 러너에서 실제로 돌며 경로 비교 버그 셋을 잡았고(§10.1), 지금은 ubuntu/macos/windows × node 20/22 매트릭스와 각 OS 의 CLI 스모크가 push 마다 돈다. Windows 는 `--link` 에 junction, 파일 링크는 개발자 모드 없으면 복사 폴백.
 
 ### 4.6 에이전트 어댑터
 
@@ -312,7 +312,20 @@ AgentAdapter
   scan(): 현재 설치된 부품 목록
 ```
 
-v0.1은 `ClaudeCodeAdapter` 하나다. 어댑터 경계만 지키면 Codex CLI 등은 나중에 붙인다.
+실제 인터페이스는 여기에 `entries()`(MCP·settings 같은 JSON/TOML 항목형 카테고리), `installers()`(플러그인 같은 어댑터 고유 설치기), `instructionsFileName()`(null 이면 지침 없음)이 더 있다(`src/adapters/types.ts`).
+
+어댑터 둘: `ClaudeCodeAdapter`(skills·agents·commands·instructions·mcp·settings, 플러그인 설치기)와, Agent Skills 표준을 따르는 도구들을 스펙 표 하나로 다루는 `SkillsDirAdapter`(`src/adapters/skills-dir.ts`). 스펙(0.14.1):
+
+| `--agent` | 루트 | 스킬 | 지침 | MCP |
+|---|---|---|---|---|
+| `codex` | `$CODEX_HOME` 또는 `~/.codex` | `~/.agents/skills` (루트 밖, `skillsHome`) | `AGENTS.md` 이어붙임 | `config.toml` `[mcp_servers.*]` (TomlEntries, 변수 이름) |
+| `gemini` | `~/.gemini` | `skills/` | `GEMINI.md` 이어붙임 | `settings.json` (httpUrl, restore 가 값 채움) |
+| `copilot` | `$COPILOT_HOME` 또는 `~/.copilot` | `skills/` | `copilot-instructions.md` 이어붙임 | `mcp-config.json` (type local, tools) |
+| `cursor` | `~/.cursor` | `skills/` | 없음 | `mcp.json` (`${env:VAR}`) |
+| `agy` | `~/.gemini/config` | `skills/` | `../AGENTS.md` 이어붙임 | `mcp_config.json` (serverUrl, restore 가 값 채움) |
+| `agents` | `~/.agents` | `skills/` | 없음 | 없음 |
+
+카테고리 루트는 어댑터 루트 기준 상대 경로라 `../.agents/skills` 처럼 위로 갈 수 있고, 백업은 `..` 을 `__` 로 바꿔 백업 디렉터리 안에 머문다. 창고 쪽 경로는 카테고리 *이름* 으로만 만든다.
 
 ---
 
@@ -484,12 +497,27 @@ v0.2  남이 쓸 수 있는 수준
 
 v0.3
    ✓ settings.json — 병합 대신 키 단위 소유 (§7.6)                       ← 0.7.0
-   - macOS / Windows 검증
-   - --link 옵션 검토
+   ✓ 의존성 번들 + 단독 실행파일 5종 + 릴리스 워크플로                   ← 0.7.3
+   ✓ macOS / Windows — CI 러너에서 잡은 경로 버그 셋 수정, 3 OS 스모크     ← 0.7.4~0.7.6
+   ✓ restore --pick (카테고리별 체크리스트 → 프로필 저장)                 ← 0.8.0
+   ✓ 프로필 extends                                                     ← 0.9.0
+   ✓ restore --link (기기별, Windows junction)                          ← 0.10.0
+
+v0.4  다른 도구
+   ✓ --agent codex|gemini|copilot|cursor|agents (SkillsDirAdapter)     ← 0.11.0
+   ✓ 타 도구 MCP 형식 변환 (Codex config.toml 표 편집)                   ← 0.12.0
+   ✓ VM probe (scripts/vm), CLAUDE_CONFIG_DIR 아래 .claude.json         ← 0.12.1
+   ✓ --agent agy (Antigravity)                                          ← 0.13.0
+   ✓ Codex 스킬을 ~/.agents/skills 로                                    ← 0.14.0
+   ✓ 도그푸딩이 잡은 셋 (마켓플레이스/플러그인 id, extraKnownMarketplaces, 빈 JSON) ← 0.14.1
+
+검증 (사용자 기기·키 필요)
+   - Gemini CLI · Copilot CLI · Cursor 를 VM probe 로 (§10.2, scripts/vm/README.md 런북)
+   - 실제 Windows 기기에서 §10.1 3층
 
 이후 (선택)
-   - 다른 에이전트 어댑터
    - 시크릿 B~D 옵션
+   - 다른 도구의 settings·rules 폴더·플러그인 (지금은 스킬·지침·MCP 만 옮긴다)
 ```
 
 > v0.1부터 §4의 범용성 원칙(하드코딩 금지, 어댑터 경계, 스킴 문법)은 지킨다. 나중에 고치는 비용이 더 크다.
@@ -562,6 +590,8 @@ Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%U
 링크된 디렉터리를 만들어 리눅스에서도 이 부류를 재현하는 회귀 테스트를 두었다.
 
 ### 10.2 다른 에이전트 검증: VM probe (2026-09-05)
+
+> 실행 절차(런북)는 `scripts/vm/README.md` 의 "Runbook" 절에 있다. 사용자가 OpenStack 과 OS 이미지를 준비하면 그 절차대로 바로 돌린다.
 
 `--agent codex|gemini|copilot|cursor|agents` 는 각 도구의 문서를 보고 만들었으므로, 도구 자체로 확인하는 층이 하나 더 필요하다.
 `scripts/vm/` 에 셋이 있다. `install-tools.sh` 로 이미지를 한 번 굽고(Node 22, Codex, Gemini CLI, Copilot CLI, Cursor CLI, lshed, 이 저장소 `/opt/lshed`),

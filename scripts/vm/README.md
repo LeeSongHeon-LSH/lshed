@@ -48,4 +48,81 @@ HOME=/tmp/h LSHED_PROBE_ASK=0 LSHED_BIN="node $PWD/dist/cli.js" scripts/vm/probe
 - A low-effort model that already has the instructions codeword in context sometimes answers with it instead of opening the skill. The probe therefore asks the skill question under a skill-only profile, before and after the instructions fragment is placed, and gives every question two attempts.
 - `codex exec` occasionally stalls before printing its session banner, holding an open connection to chatgpt.com (ChatGPT login) — independent of lshed. Every question therefore gets up to three attempts of 120 s.
 - Antigravity CLI (`agy` 1.1.26) is installed and signed in here, so the `agy` target ran for real from an isolated `HOME` with a copied OAuth token: skill in `~/.gemini/config/skills`, rules in `~/.gemini/AGENTS.md`, `agy mcp list` parsing lshed's `mcp_config.json`, and the linked skill all passed on the first attempt. agy's `/skills` lists `~/.gemini/config/skills`, `~/.gemini/skills` and `~/.gemini/antigravity-cli/skills`, not `~/.agents/skills`. Headless on a VM, agy needs `modelProvider: "gemini"` in `~/.gemini/antigravity-cli/settings.json` plus `GEMINI_API_KEY` (1.1.13+); `cloud-init.yaml` writes that when the key is given.
-- Gemini, Copilot and Cursor are not installed here; only their file placement is verified locally.
+- `claude-code` also passes for file placement under an isolated `CLAUDE_CONFIG_DIR`, which is how the 0.12.1 `.claude.json` bug was found.
+- Gemini, Copilot and Cursor are not installed here; only their file placement is verified locally. They are what the VM run is for.
+
+## Runbook: the day the VM is ready
+
+Everything below assumes the repository at the tag you want to test is on GitHub and `lshed@latest` on npm is that version (`install-tools.sh` installs from npm; use `LSHED_FROM=release` for the binary, or `LSHED_FROM=/path/to/checkout` for an unpublished commit).
+
+### 1. Bake the Linux image once
+
+Boot a stock **Ubuntu 24.04** cloud image (22.04 works too), then:
+
+```
+git clone https://github.com/LeeSongHeon-LSH/lshed /tmp/lshed
+bash /tmp/lshed/scripts/vm/install-tools.sh        # ~10 min: Node 22, codex, gemini, copilot, agent (Cursor), agy, lshed, /opt/lshed
+```
+
+The last lines print every tool's version. Snapshot the instance as an image (say `lshed-probe`). No key is on it.
+
+### 2. Collect the keys
+
+| tool | variable | where it comes from | note |
+|---|---|---|---|
+| Gemini CLI, and agy | `GEMINI_API_KEY` | Google AI Studio | agy uses it through `modelProvider: "gemini"`, which cloud-init writes |
+| Copilot CLI | `COPILOT_GITHUB_TOKEN` | GitHub → Settings → Developer settings → fine-grained PAT on the **personal** account with the **Copilot Requests** permission | needs an active Copilot subscription |
+| Cursor | `CURSOR_API_KEY` | cursor.com dashboard → API keys | |
+| Codex | `OPENAI_API_KEY` | platform.openai.com | optional: Codex already passed on this machine; leave empty to skip its questions |
+
+An empty variable skips that tool's model questions; file placement is still checked.
+
+### 3. Boot with the keys and run
+
+Fill the four values in `cloud-init.yaml` (`write_files` → `/etc/lshed-probe.env`), then:
+
+```
+openstack server create --image lshed-probe --flavor <2 vCPU / 4 GB is plenty> --key-name <key> \
+  --user-data scripts/vm/cloud-init.yaml probe-1
+openstack console log show probe-1 | grep -A200 'lshed probe on'      # results also scroll past on the console
+ssh ubuntu@<ip> cat /var/lib/lshed-probe/summary.txt
+scp -r ubuntu@<ip>:/var/lib/lshed-probe ./probe-results-$(date +%F)
+```
+
+Without cloud-init the same thing by hand, after `ssh`:
+
+```
+export GEMINI_API_KEY=... COPILOT_GITHUB_TOKEN=... CURSOR_API_KEY=...
+mkdir -p ~/.gemini/antigravity-cli && echo '{ "modelProvider": "gemini" }' > ~/.gemini/antigravity-cli/settings.json
+/opt/lshed/scripts/vm/probe.sh gemini; /opt/lshed/scripts/vm/probe.sh copilot; /opt/lshed/scripts/vm/probe.sh cursor
+/opt/lshed/scripts/vm/probe.sh agy; /opt/lshed/scripts/vm/probe.sh agents
+```
+
+One target takes one to three minutes; the whole `all` run about ten. The VM is disposable: the probe restores an empty profile at the end, but nothing on it is worth keeping anyway.
+
+### 4. Reading the result
+
+Every target prints the same list. What each failure means:
+
+| failing line | meaning | what changes |
+|---|---|---|
+| `place: …` | lshed wrote the wrong file, path or format | adapter spec (`src/adapters/skills-dir.ts`) or the MCP form (`mcp-forms.ts`); an lshed bug |
+| `mcp: '<tool> mcp list' …` | the file is there but the tool's own parser rejects it | MCP form for that tool |
+| `ask (…): skill passphrase` with `place` green | the tool reads skills from somewhere else, or needs a flag to load them | the spec's root/skills dir, or the `ask()` command line in `probe.sh` |
+| `ask (…): instructions codeword` | the tool does not read that user-level rules file | the spec's `instructions.file`, or drop instructions for that tool |
+| `ask (…): linked skill read` with the copy passing | the tool does not follow symlinks | document `--link` as unsupported for that tool |
+| every `ask` empty, `.stderr` shows a login or trust prompt | auth or folder trust, not lshed | fix the key, or the trust file cloud-init writes |
+
+Bring back `summary.txt`, `results/*.md` and the `*.stderr` files. The stderr is what tells a trust prompt from a wrong path.
+
+### 5. The Windows check (not automated)
+
+The probe is a bash script for Linux. The Windows layer (§10.1 in `overview.md`) is a short manual run on a Windows 11 or Server 2022 image:
+
+1. Download `lshed-windows-x64.exe` from the release, rename to `lshed.exe`, put it on `PATH`.
+2. Get a shed onto the machine. `~/harness` on the Linux box has no remote today, so either push it to a private repository first (`git remote add origin … && lshed sync`) or copy it with `git bundle`.
+3. `lshed restore tools --shed C:\path\to\harness --agent agents --dry-run`, then without `--dry-run`. Then `lshed restore --link`: `dir %USERPROFILE%\.agents\skills` must show `<JUNCTION>` entries, and editing a `SKILL.md` through the junction must change the file in the shed. `lshed status` → `배치 link`, `드리프트 없음`. `lshed restore --no-link` goes back to copies.
+4. If Claude Code is installed and signed in there, repeat with the default target (`lshed restore default --shed …`) and check `claude mcp list` and a skill through `claude -p`.
+
+What to look for: `.cmd` wrappers being found (`claude.cmd`, `codex.cmd`), backslash paths in `state.json` and backups, and the file-part copy fallback message when Developer Mode is off.
+

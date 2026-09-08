@@ -113,9 +113,9 @@ describe("lshed restore --pick", () => {
 
     const again = scripted({ skills: ["alpha"] }, "lite2");
     await pick(ctx, again.p);
-    expect(logs.join("\n")).toContain("기준 프로필: lite");
+    expect(logs.join("\n")).toContain("base profile: lite");
     expect(again.seen.find((g) => g.category === "skills")!.options.map((o) => o.checked)).toEqual([true, false]);
-    await expect(pick(ctx, p, { base: "nope" })).rejects.toThrow('프로필 "nope" 이 없습니다');
+    await expect(pick(ctx, p, { base: "nope" })).rejects.toThrow('no profile "nope"');
   });
 
   it("dry-run 은 lshed.yaml 도 로컬도 건드리지 않고 계획만 보여준다", async () => {
@@ -126,7 +126,7 @@ describe("lshed restore --pick", () => {
     expect(await r(path.join(shed, "lshed.yaml"))).toBe(before);
     expect(await exists(root)).toBe(false);
     expect(await readState(ctx.adapter)).toBeNull();
-    expect(logs.join("\n")).toContain("(dry-run) 프로필 \"srv\" 은 lshed.yaml 에 쓰지 않았습니다");
+    expect(logs.join("\n")).toContain("(dry-run) profile \"srv\" was not written to lshed.yaml");
     expect(logs.join("\n")).toContain("+ mcp:exa");
   });
 
@@ -135,7 +135,7 @@ describe("lshed restore --pick", () => {
     const no = scripted({ skills: ["alpha"] }, "default", false);
     expect(await pick(ctx, no.p)).toBeNull();
     expect(await r(path.join(shed, "lshed.yaml"))).toBe(before);
-    expect(logs.join("\n")).toContain("취소했습니다");
+    expect(logs.join("\n")).toContain("Cancelled.");
 
     const yes = scripted({ skills: ["alpha"] }, "default", true);
     await pick(ctx, yes.p);
@@ -149,7 +149,7 @@ describe("lshed restore --pick", () => {
     expect(cancel.seen.length).toBe(1); // 첫 화면에서 멈춤
     const nothing = scripted({});
     expect(await pick(ctx, nothing.p)).toBeNull();
-    expect(logs.join("\n")).toContain("아무것도 고르지 않았습니다");
+    expect(logs.join("\n")).toContain("Nothing picked.");
     expect(await r(path.join(shed, "lshed.yaml"))).toBe(before);
     expect(await readState(ctx.adapter)).toBeNull();
   });
@@ -158,6 +158,6 @@ describe("lshed restore --pick", () => {
     const { p } = scripted({ skills: ["alpha"] }, undefined);
     const res = await pick(ctx, p, { name: "box-1" });
     expect(res?.profile).toBe("box-1");
-    await expect(pick(ctx, scripted({ skills: ["alpha"] }).p, { name: "a b" })).rejects.toThrow("영문·숫자·._- 만");
+    await expect(pick(ctx, scripted({ skills: ["alpha"] }).p, { name: "a b" })).rejects.toThrow("only letters, digits and ._- are allowed");
   });
 });

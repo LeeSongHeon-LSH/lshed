@@ -128,6 +128,6 @@ describe("settings: 키 하나가 항목 하나", () => {
     await w(path.join(rootA, "settings.json"), J({ model: "opus", hooks: { Stop: [{ hooks: [{ type: "command", command: `${tk}/hook.sh` }] }] } }));
     logs = [];
     await add(ctx);
-    expect(logs.join("\n")).toMatch(/settings\/hooks\s+! 패키지 tk 안을 가리킵니다/);
+    expect(logs.join("\n")).toMatch(/settings\/hooks\s+! points into package tk/);
   });
 });

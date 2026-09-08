@@ -27,20 +27,20 @@ describe("parseManifest", () => {
     expect(effectiveSource("skills", m.components.skills[0])).toBe("file:./skills/paper-review");
   });
   it("version 불일치", () => {
-    expect(() => parseManifest("version: 2\n")).toThrow(/형식 오류/);
+    expect(() => parseManifest("version: 2\n")).toThrow(/is malformed/);
   });
   it("프로필이 없는 부품을 참조", () => {
-    expect(() => parseManifest(GOOD + "  x:\n    skills: [nope]\n")).toThrow(/"nope" 는 components에 없음/);
+    expect(() => parseManifest(GOOD + "  x:\n    skills: [nope]\n")).toThrow(/"nope" is not in components/);
   });
   it("id 중복", () => {
     const dup = GOOD.replace("- id: superpowers\n      source: github:obra/superpowers@v2.1", "- id: paper-review");
-    expect(() => parseManifest(dup)).toThrow(/중복/);
+    expect(() => parseManifest(dup)).toThrow(/duplicate/);
   });
   it("스킴 없는 source 거부", () => {
-    expect(() => parseManifest(GOOD.replace("file:./instructions/base.md", "./instructions/base.md"))).toThrow(/스킴/);
+    expect(() => parseManifest(GOOD.replace("file:./instructions/base.md", "./instructions/base.md"))).toThrow(/scheme/);
   });
   it("어댑터가 모르는 카테고리 거부", () => {
-    expect(() => parseManifest(GOOD, ["skills"])).toThrow(/알 수 없는 카테고리 "instructions"/);
+    expect(() => parseManifest(GOOD, ["skills"])).toThrow(/unknown category "instructions"/);
   });
   it("미사용 부품 탐지", () => {
     const m = parseManifest(GOOD + "  # unused\ncomponents2: 0\n".replace("components2: 0\n", ""));
@@ -86,11 +86,11 @@ describe("프로필 상속 (extends)", () => {
     expect(packagesOf(m, "research")).toEqual([]);
   });
   it("없는 부모는 참조 오류", () => {
-    expect(() => parseManifest(GOOD + "  x:\n    extends: nope\n")).toThrow(/profiles.x.extends: 프로필 "nope" 이 없음/);
+    expect(() => parseManifest(GOOD + "  x:\n    extends: nope\n")).toThrow(/profiles.x.extends: no profile "nope"/);
   });
   it("순환 상속은 참조 오류", () => {
-    expect(() => parseManifest(GOOD + "  a:\n    extends: b\n  b:\n    extends: [a]\n")).toThrow(/순환 상속 \(a → b → a\)/);
-    expect(() => parseManifest(GOOD + "  a:\n    extends: a\n")).toThrow(/순환 상속 \(a → a\)/);
+    expect(() => parseManifest(GOOD + "  a:\n    extends: b\n  b:\n    extends: [a]\n")).toThrow(/inheritance cycle \(a → b → a\)/);
+    expect(() => parseManifest(GOOD + "  a:\n    extends: a\n")).toThrow(/inheritance cycle \(a → a\)/);
   });
   it("extends 는 카테고리로 검증되지 않고, 미사용 계산에서도 빠진다", () => {
     const m = parseManifest(withTeaching, ["skills", "instructions"]);
@@ -134,17 +134,17 @@ profiles:
     expect(m.profiles.default.packages).toEqual(["gstack"]);
   });
   it("file: 출처는 패키지가 될 수 없다", () => {
-    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "file:./x"))).toThrow(/file: 일 수 없습니다/);
+    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "file:./x"))).toThrow(/cannot be file:/);
   });
   it("github: 패키지는 into 가 필요하고, 부품은 어댑터 스킴을 쓸 수 없다", () => {
-    expect(() => parseManifest(P.replace("    into: skills/gstack\n", ""))).toThrow(/into 가 필요/);
-    expect(() => parseManifest("version: 1\ncomponents:\n  skills:\n    - id: x\n      source: claude-plugin:x@m\n")).toThrow(/부품 출처는 file:/);
+    expect(() => parseManifest(P.replace("    into: skills/gstack\n", ""))).toThrow(/needs into/);
+    expect(() => parseManifest("version: 1\ncomponents:\n  skills:\n    - id: x\n      source: claude-plugin:x@m\n")).toThrow(/a part's source must be file:/);
   });
   it("설치기가 없는 스킴은 거부", () => {
-    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "registry:foo"), undefined, ["github", "git"])).toThrow(/설치기가 없습니다/);
+    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "registry:foo"), undefined, ["github", "git"])).toThrow(/no installer handles/);
   });
   it("프로필이 없는 패키지를 참조", () => {
-    expect(() => parseManifest(P.replace("packages: [gstack]", "packages: [nope]"))).toThrow(/"nope" 는 packages 에 없음/);
+    expect(() => parseManifest(P.replace("packages: [gstack]", "packages: [nope]"))).toThrow(/"nope" is not in packages/);
   });
   it("packages 는 어댑터 카테고리 검사에 걸리지 않는다", () => {
     expect(() => parseManifest(P, ["skills"])).not.toThrow();

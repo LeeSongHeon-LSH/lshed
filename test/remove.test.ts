@@ -41,10 +41,10 @@ describe("list", () => {
 
 describe("remove", () => {
   it("프로필이 쓰는 것은 거부", async () => {
-    await expect(remove(ctx, "alpha")).rejects.toThrow(/프로필 default 이 쓰고/);
+    await expect(remove(ctx, "alpha")).rejects.toThrow(/still used by profile default/);
   });
   it("모호한 id 는 거부, category/id 로는 된다", async () => {
-    await expect(remove(ctx, "beta")).rejects.toThrow(/모호/);
+    await expect(remove(ctx, "beta")).rejects.toThrow(/ambiguous/);
     const res = await remove(ctx, "skills/beta");
     expect(res.deleted).toBe(path.join(shed, "skills/beta"));
     expect(await exists(path.join(shed, "skills/beta"))).toBe(false);
@@ -64,7 +64,7 @@ describe("remove", () => {
     expect(await r(path.join(shed, "lshed.lock"))).not.toContain("tk");
   });
   it("없는 것", async () => {
-    await expect(remove(ctx, "nope")).rejects.toThrow(/창고에 없습니다/);
+    await expect(remove(ctx, "nope")).rejects.toThrow(/is not in the shed/);
   });
 });
 
@@ -72,7 +72,7 @@ describe("prune", () => {
   it("--yes 없으면 목록만", async () => {
     expect(await prune(ctx)).toEqual([]);
     expect(await exists(path.join(shed, "skills/beta"))).toBe(true);
-    expect(logs.join("\n")).toMatch(/미사용 2개/);
+    expect(logs.join("\n")).toMatch(/2 unused/);
   });
   it("--yes 면 전부 제거", async () => {
     expect((await prune(ctx, { yes: true })).sort()).toEqual(["packages/tk", "skills/beta"]);

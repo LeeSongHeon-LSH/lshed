@@ -50,7 +50,7 @@ describe("init", () => {
   });
   it("이미 초기화된 창고는 거부", async () => {
     await init(ctx);
-    await expect(init(ctx)).rejects.toThrow(/이미 초기화/);
+    await expect(init(ctx)).rejects.toThrow(/already initialized/);
   });
 });
 
@@ -104,7 +104,7 @@ describe("restore", () => {
   });
 
   it("없는 프로필은 오류", async () => {
-    await expect(restore(ctx, "nope")).rejects.toThrow(/프로필 "nope" 이 없습니다/);
+    await expect(restore(ctx, "nope")).rejects.toThrow(/no profile "nope"/);
   });
 
   it("extends: 부모 부품 위에 자기 것을 얹고, 지침은 부모 조각이 먼저", async () => {
@@ -184,7 +184,7 @@ describe("restore --link (§3.6)", () => {
     await restore(ctx, "default", { link: true });
     logs = [];
     const res = await restore(ctx, undefined, { link: false });
-    expect(logs.join("\n")).toContain("~ skills/alpha  (link → 복사)");
+    expect(logs.join("\n")).toContain("~ skills/alpha  (link → copy)");
     expect(res.backedUp).toEqual([]);
     expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);
     expect(await r(path.join(root, "skills/alpha/SKILL.md"))).toBe("alpha v1");
@@ -215,7 +215,7 @@ describe("restore --link (§3.6)", () => {
     } finally { spy.mockRestore(); }
     expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);
     expect(await r(path.join(root, "skills/alpha/SKILL.md"))).toBe("alpha v1");
-    expect(logs.join("\n")).toContain("링크를 만들 수 없어 복사했습니다");
+    expect(logs.join("\n")).toContain("could not link, copied instead");
     expect((await readState(ctx.adapter))?.link).toBe(true); // 모드는 그대로: 다음엔 될 수도 있다
     // 복사본이니 diff/save 가 여느 때처럼 동작
     await w(path.join(root, "skills/alpha/SKILL.md"), "edited copy");
@@ -254,7 +254,7 @@ describe("diff / save / status", () => {
     const y = await r(path.join(shed, "lshed.yaml"));
     await fs.writeFile(path.join(shed, "lshed.yaml"), y.replace("- id: rev", "- id: rev\n    - id: alpha").replace("agents:\n      - rev", "agents:\n      - rev\n      - alpha"));
     await w(path.join(shed, "agents/alpha.md"), "a");
-    await expect(save(ctx, ["alpha"])).rejects.toThrow(/모호/);
+    await expect(save(ctx, ["alpha"])).rejects.toThrow(/ambiguous/);
     expect(await save(ctx, ["agents/alpha"])).toEqual([]);
   });
 });
@@ -289,7 +289,7 @@ describe("창고를 갈아탈 때", () => {
     logs = [];
     const res = await restore(ctx2, "default", { dryRun: true });
     expect(res.removed).toEqual(["skills/beta"]);
-    expect(logs.join("\n")).toContain(`마지막으로 적용한 창고가 다릅니다: ${shed}`);
+    expect(logs.join("\n")).toContain(`The last restore came from a different shed: ${shed}`);
     expect(logs.join("\n")).toContain("lshed add");
   });
 });

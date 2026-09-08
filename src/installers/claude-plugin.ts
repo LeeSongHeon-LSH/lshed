@@ -25,7 +25,7 @@ const marketplacesPath = (ctx: Ctx) => path.join(ctx.adapter.root, "plugins", "k
 
 function rest(pkg: Package): string {
   const s = parseSource(pkg.source);
-  if (s.scheme !== "other") throw new Error(`package ${pkg.id}: ${pkg.source} 는 플러그인 출처가 아닙니다`);
+  if (s.scheme !== "other") throw new Error(`package ${pkg.id}: ${pkg.source} is not a plugin source`);
   return s.rest;
 }
 
@@ -33,7 +33,7 @@ async function claude(ctx: Ctx, args: string[]): Promise<void> {
   try {
     await ctx.exec("claude", args);
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new Error("claude CLI 를 찾을 수 없습니다. Claude Code 가 설치되어 있어야 플러그인을 복원할 수 있습니다.");
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") throw new Error("claude CLI not found. Claude Code must be installed to restore plugins.");
     throw e;
   }
 }
@@ -49,7 +49,7 @@ export const marketplaceInstaller: Installer = {
     for (const [name, v] of Object.entries(m)) {
       const src = v.source;
       if (src.source === "github" && src.repo) out.push({ id: name, source: `claude-marketplace:${src.repo}`, rev: src.repo });
-      else ctx.log(`  ! marketplace ${name}: ${src.source} 출처는 아직 기록하지 못합니다 (건너뜀)`);
+      else ctx.log(`  ! marketplace ${name}: cannot record a ${src.source} source yet (skipped)`);
     }
     return out;
   },
@@ -121,6 +121,6 @@ export const pluginInstaller: Installer = {
     return (await this.status(ctx, pkg)).rev ?? "?";
   },
 
-  describe(pkg, locked) { return `claude plugin install ${rest(pkg)}${locked ? `  (전에 ${locked}; 고정은 안 됨)` : ""}`; },
+  describe(pkg, locked) { return `claude plugin install ${rest(pkg)}${locked ? `  (was ${locked}; cannot be pinned)` : ""}`; },
   cwd(ctx) { return ctx.adapter.root; },
 };

@@ -54,7 +54,7 @@ export function defaultProfileName(host = os.hostname()): string {
 
 export function validateProfileName(v: string): string | undefined {
   if (!v) return undefined; // 빈 입력은 기본값
-  return PROFILE_NAME_RE.test(v) ? undefined : "영문·숫자·._- 만 쓸 수 있습니다";
+  return PROFILE_NAME_RE.test(v) ? undefined : "only letters, digits and ._- are allowed";
 }
 
 /**
@@ -68,14 +68,14 @@ export async function pick(ctx: Ctx, prompter: Prompter, opts: PickOptions = {})
   const baseName = opts.base ?? state?.profile;
   if (baseName && !m.profiles[baseName]) {
     const names = Object.keys(m.profiles);
-    throw new Error(`프로필 "${baseName}" 이 없습니다. 있는 프로필: ${names.length ? names.join(", ") : "(없음)"}`);
+    throw new Error(`no profile "${baseName}". Profiles: ${names.length ? names.join(", ") : "(none)"}`);
   }
   const groups = pickGroups(ctx, m, baseName ? resolveProfile(m, baseName) : undefined);
-  if (!groups.length) throw new Error(`창고에 고를 것이 없습니다: ${ctx.shed}`);
+  if (!groups.length) throw new Error(`Nothing to pick from in the shed: ${ctx.shed}`);
   const unknown = Object.keys(m.components).filter((c) => !knownCategories(ctx.adapter).includes(c));
-  if (unknown.length) ctx.log(`  · ${ctx.adapter.name} 은 ${unknown.join(", ")} 를 다루지 않아 이 화면에 없습니다 (다른 에이전트로 restore 할 때 씁니다)`);
+  if (unknown.length) ctx.log(`  · ${ctx.adapter.name} does not handle ${unknown.join(", ")}, so they are not offered here (they apply when restoring with another agent)`);
 
-  ctx.log(`창고: ${ctx.shed}  (${groups.map((g) => g.title).join(", ")})${baseName ? `  기준 프로필: ${baseName}` : ""}`);
+  ctx.log(`shed: ${ctx.shed}  (${groups.map((g) => g.title).join(", ")})${baseName ? `  base profile: ${baseName}` : ""}`);
   const selection: Record<string, string[]> = {};
   for (const g of groups) {
     const ids = await prompter.multiselect(g);
@@ -85,33 +85,33 @@ export async function pick(ctx: Ctx, prompter: Prompter, opts: PickOptions = {})
     if (chosen.length) selection[g.category] = chosen;
   }
   if (!Object.keys(selection).length) {
-    ctx.log("아무것도 고르지 않았습니다. 바뀐 것은 없습니다.");
+    ctx.log("Nothing picked. Nothing changed.");
     return null;
   }
 
   let name = opts.name;
   if (!name) {
-    const typed = await prompter.text("이 선택을 저장할 프로필 이름", defaultProfileName(), validateProfileName);
+    const typed = await prompter.text("Profile name to save this selection as", defaultProfileName(), validateProfileName);
     if (typed === undefined) return cancelled(ctx);
     name = typed || defaultProfileName();
   }
   const err = validateProfileName(name);
-  if (err) throw new Error(`프로필 이름 "${name}": ${err}`);
+  if (err) throw new Error(`profile name "${name}": ${err}`);
   if (m.profiles[name] && !opts.dryRun) {
-    const ok = await prompter.confirm(`프로필 "${name}" 이 이미 있습니다. 이 선택으로 덮어쓸까요?`);
+    const ok = await prompter.confirm(`Profile "${name}" already exists. Overwrite it with this selection?`);
     if (!ok) return cancelled(ctx);
   }
 
   m.profiles[name] = selection;
   if (opts.dryRun) {
-    ctx.log(`\n(dry-run) 프로필 "${name}" 은 lshed.yaml 에 쓰지 않았습니다:`);
+    ctx.log(`\n(dry-run) profile "${name}" was not written to lshed.yaml:`);
     for (const [cat, ids] of Object.entries(selection)) ctx.log(`  ${cat}: ${ids.join(", ")}`);
     ctx.log("");
   } else {
     const doc = YAML.parseDocument(await fs.readFile(manifestPath(ctx), "utf8"));
     doc.setIn(["profiles", name], doc.createNode(selection));
     await fs.writeFile(manifestPath(ctx), doc.toString({ lineWidth: 0 }));
-    ctx.log(`\n프로필 "${name}" 을 lshed.yaml 에 저장했습니다. 다른 기기에서도 쓰려면 lshed sync 로 올리세요.\n`);
+    ctx.log(`\nProfile "${name}" saved to lshed.yaml. To use it on other machines, push it with lshed sync.\n`);
   }
 
   const restored = await restore(ctx, name, { dryRun: opts.dryRun, backup: opts.backup, yes: opts.yes, link: opts.link, manifest: m });
@@ -119,6 +119,6 @@ export async function pick(ctx: Ctx, prompter: Prompter, opts: PickOptions = {})
 }
 
 function cancelled(ctx: Ctx): null {
-  ctx.log("취소했습니다. 바뀐 것은 없습니다.");
+  ctx.log("Cancelled. Nothing changed.");
   return null;
 }

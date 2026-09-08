@@ -37,22 +37,40 @@ export async function status(ctx: Ctx): Promise<Status> {
   return { state, drifted: d.map((x) => `${x.item.category}/${x.item.id}`), packages, missingEnv, fresh };
 }
 
+/**
+ * 사람이 읽는 status. 행의 집합은 늘 같다 (첫 블록: 무엇이 어디에, 둘째 블록: 상태) — 문제가 없을 때도 "none" 으로 자리를 지켜
+ * 눈이 늘 같은 자리를 보게 한다. 문제가 있는 항목만 "!" 로 시작하는 들여쓴 줄에 하나씩 풀어 쓰고, 나머지는 한 줄에 쉼표로 나열한다.
+ */
 export function formatStatus(s: Status, adapterRoot: string, agent = "claude-code"): string {
-  if (!s.state) return `적용된 프로필이 없습니다 (${agent}: ${adapterRoot}).\n  lshed init --shed <dir>   또는   lshed restore <profile>`;
+  if (!s.state) return `No profile applied (${agent}: ${adapterRoot}).\n  lshed init --shed <dir>   or   lshed restore <profile>`;
+  const row = (label: string, text: string) => `${label.padEnd(9)}  ${text}`;
+  const detail = (id: string, w: number, text: string) => `${" ".repeat(11)}! ${id.padEnd(w)}  ${text}`;
   const lines = [
-    `프로필   ${s.state.profile}`,
-    `창고     ${s.state.shed}`,
-    `적용     ${s.state.appliedAt}`,
-    `관리 중  ${s.state.managed.length}개 경로 (${agent}: ${adapterRoot})`,
+    row("profile", s.state.profile),
+    row("shed", s.state.shed),
+    row("applied", s.state.appliedAt),
+    row("managed", `${s.state.managed.length} paths (${agent}: ${adapterRoot})`),
+    row("placement", s.state.link ? "links (file parts point into the shed; edits land there directly)" : "copies"),
+    "",
+    row("drift", s.drifted.length ? `${s.drifted.length}: ${s.drifted.join(", ")}  → lshed diff` : "none"),
   ];
-  if (s.state.link) lines.push("배치     link (파일 부품은 창고로 가는 링크 — 편집이 바로 창고에 반영됨)");
-  lines.push(s.drifted.length ? `드리프트 ${s.drifted.length}개: ${s.drifted.join(", ")}  → lshed diff` : "드리프트 없음");
   const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
-  for (const p of s.packages) {
-    const where = !p.present ? "설치 안 됨 → lshed restore" : !p.locked ? `${short(p.rev)} (락 없음)` : p.rev === p.locked ? `${short(p.rev)} = lock` : `${short(p.rev)} ≠ lock ${short(p.locked)} → lshed update`;
-    lines.push(`패키지   ${p.pkg.id}  ${where}`);
+  const inSync = s.packages.filter((p) => p.present && p.locked && p.rev === p.locked);
+  const off = s.packages.filter((p) => !inSync.includes(p));
+  if (!s.packages.length) lines.push(row("packages", "none"));
+  else {
+    const n = off.length ? `${inSync.length} of ${s.packages.length}` : `${s.packages.length}`;
+    lines.push(row("packages", `${n} in sync${inSync.length ? `: ${inSync.map((p) => p.pkg.id).join(", ")}` : ""}`));
+    const w = Math.max(...off.map((p) => p.pkg.id.length));
+    for (const p of off) {
+      const what = !p.present ? "not installed  → lshed restore" : !p.locked ? `${short(p.rev)} (not in lock)` : `${short(p.rev)} ≠ lock ${short(p.locked)}  → lshed update`;
+      lines.push(detail(p.pkg.id, w, what));
+    }
   }
-  for (const m of s.missingEnv) lines.push(`환경변수 ${m.rel}: ${m.vars.join(", ")} 없음  → 셸에서 export 하세요`);
-  if (s.fresh.length) lines.push(`창고 밖  ${s.fresh.length}개: ${s.fresh.join(", ")}  → lshed add`);
+  const nEnv = s.missingEnv.reduce((n, m) => n + m.vars.length, 0);
+  lines.push(row("env", nEnv ? `${nEnv} not set` : "all set"));
+  const wEnv = Math.max(0, ...s.missingEnv.map((m) => m.rel.length));
+  for (const m of s.missingEnv) lines.push(detail(m.rel, wEnv, `${m.vars.join(", ")}  → export in your shell`));
+  lines.push(row("outside", s.fresh.length ? `${s.fresh.length}: ${s.fresh.join(", ")}  → lshed add` : "none"));
   return lines.join("\n");
 }

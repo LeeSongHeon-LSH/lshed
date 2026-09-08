@@ -54,7 +54,7 @@ describe("SkillsDirAdapter", () => {
     expect(createAdapter("agents", "/x").instructionsFileName()).toBeNull();
     expect(createAdapter("cursor", "/x").instructionsFileName()).toBeNull();
     expect(createAdapter("copilot", "/x").instructionsFileName()).toBe("copilot-instructions.md");
-    expect(() => createAdapter("nope")).toThrow(/모르는 에이전트 "nope"/);
+    expect(() => createAdapter("nope")).toThrow(/Unknown agent "nope"/);
     const saved = process.env.CODEX_HOME;
     process.env.CODEX_HOME = path.join(tmp, "elsewhere");
     try { expect(createAdapter("codex").root).toBe(path.join(tmp, "elsewhere")); } finally {
@@ -93,9 +93,9 @@ describe("창고 하나를 여러 에이전트가 쓴다 (§4.6)", () => {
     expect(await exists(`${root}.json`)).toBe(false);
     expect(await exists(path.join(root, "CLAUDE.md"))).toBe(false);
     const out = logs.join("\n");
-    expect(out).toMatch(/agents 은 .*mcp.* 를 다루지 않아 건너뜁니다/);
-    expect(out).toContain("agents 은 agents, mcp, instructions 를");
-    expect(out).toContain("package exa  (claude-plugin: 는 agents 로 설치할 수 없어 건너뜀)");
+    expect(out).toMatch(/agents does not handle .*mcp.*, skipped/);
+    expect(out).toContain("agents does not handle agents, mcp, instructions");
+    expect(out).toContain("package exa  (claude-plugin: cannot be installed by agents, skipped)");
     // state 는 에이전트 루트마다 따로
     expect((await readState(ctx.adapter))?.managed).toEqual(["skills/alpha", "skills/beta"]);
     expect((await readState(new ClaudeCodeAdapter(claudeRoot)))?.managed).toContain("agents/rev.md");
@@ -159,7 +159,7 @@ describe("창고 하나를 여러 에이전트가 쓴다 (§4.6)", () => {
     const res = await restore(ctx, "default");
     expect(res.placed.sort()).toEqual(["CLAUDE.md", "lshed/instructions/main.md", "skills/gamma"]);
     expect(await r(path.join(claude2, "CLAUDE.md"))).toContain("@lshed/instructions/main.md");
-    expect(logs.join("\n")).not.toContain("건너뜁니다");
+    expect(logs.join("\n")).not.toContain("does not handle");
   });
 
   it("지침 파일이 없는 에이전트(cursor)로 init 하면 instructions 없이 만들어진다", async () => {
@@ -172,6 +172,6 @@ describe("창고 하나를 여러 에이전트가 쓴다 (§4.6)", () => {
 
   it("모르는 agent 가 적힌 매니페스트는 거부", async () => {
     await fs.writeFile(path.join(shed, "lshed.yaml"), (await r(path.join(shed, "lshed.yaml"))).replace("agent: claude-code", "agent: windsurf"));
-    await expect(loadManifest(ctxOf(createAdapter("codex", path.join(tmp, "x"))))).rejects.toThrow(/agent "windsurf" 를 모릅니다/);
+    await expect(loadManifest(ctxOf(createAdapter("codex", path.join(tmp, "x"))))).rejects.toThrow(/Unknown agent "windsurf"/);
   });
 });

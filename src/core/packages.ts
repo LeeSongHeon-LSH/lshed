@@ -98,7 +98,7 @@ export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
     if (opts.dryRun) continue;
     const rev = await inst.install(ctx, pkg, st.locked, opts);
     if (rev !== st.locked) {
-      if (st.locked) ctx.log(`    락은 ${short(st.locked)} 이지만 ${short(rev)} 이 설치됨. 락을 따라가게 갱신`);
+      if (st.locked) ctx.log(`    lock says ${short(st.locked)} but ${short(rev)} got installed; lock updated to match`);
       lock.packages[pkg.id] = { source: pkg.source, rev };
       res.lockChanged = true;
     }
@@ -121,19 +121,20 @@ export async function maybeInstall(ctx: Ctx, pkg: Package, dir: string, opts: In
 
 export function reportPending(ctx: Ctx, res: EnsureResult): void {
   if (!res.pendingInstalls.length) return;
-  ctx.log(`\n설치 명령 ${res.pendingInstalls.length}개를 실행하지 않았습니다. 확인 후 '--yes' 로 다시 실행하거나 직접 돌리세요:`);
+  const n = res.pendingInstalls.length;
+  ctx.log(`\n${n} install ${n === 1 ? "command was" : "commands were"} not run. Check ${n === 1 ? "it" : "them"}, then rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
   for (const p of res.pendingInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
 }
 
 /** update --dry-run 의 한 줄: 업스트림을 읽기만 해서 = (최신) / ~ (옮겨질 거리) / ? (미리 알 수 없음·조회 실패) */
 async function previewUpdate(ctx: Ctx, pkg: Package): Promise<void> {
   const inst = installerFor(ctx, pkg.source);
-  if (!inst.upstream) { ctx.log(`  ? package ${pkg.id}  (${inst.name}: 갱신 여부는 미리 알 수 없음 — update 가 확인)`); return; }
+  if (!inst.upstream) { ctx.log(`  ? package ${pkg.id}  (${inst.name}: cannot tell ahead of time; update will check)`); return; }
   let up: { current: string; latest: string } | undefined;
   try { up = await inst.upstream(ctx, pkg); }
-  catch (e) { ctx.log(`  ? package ${pkg.id}  (업스트림 조회 실패: ${(e as Error).message.split("\n")[0]})`); return; }
-  if (!up) ctx.log(`  ? package ${pkg.id}  (${inst.name}: 갱신 여부는 미리 알 수 없음 — update 가 확인)`);
-  else if (up.current === up.latest) ctx.log(`  = package ${pkg.id}  ${short(up.current)} (최신)`);
+  catch (e) { ctx.log(`  ? package ${pkg.id}  (upstream lookup failed: ${(e as Error).message.split("\n")[0]})`); return; }
+  if (!up) ctx.log(`  ? package ${pkg.id}  (${inst.name}: cannot tell ahead of time; update will check)`);
+  else if (up.current === up.latest) ctx.log(`  = package ${pkg.id}  ${short(up.current)} (latest)`);
   else ctx.log(`  ~ package ${pkg.id}  ${short(up.current)} → ${short(up.latest)}`);
 }
 
@@ -144,17 +145,17 @@ export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
   for (const pkg of ordered(ctx, pkgs)) {
     const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);
-    if (!st.present) { ctx.log(`  ! package ${pkg.id}: 설치되어 있지 않음. 먼저 restore 하세요`); continue; }
+    if (!st.present) { ctx.log(`  ! package ${pkg.id}: not installed. Run restore first`); continue; }
     if (opts.dryRun) { await previewUpdate(ctx, pkg); continue; }
     const now = await inst.update(ctx, pkg, opts);
     const before = lock.packages[pkg.id]?.rev;
     if (now !== before) {
       lock.packages[pkg.id] = { source: pkg.source, rev: now };
       res.lockChanged = true;
-      ctx.log(`  ↑ package ${pkg.id}  ${before ? short(before) : "(없음)"} → ${short(now)}`);
+      ctx.log(`  ↑ package ${pkg.id}  ${before ? short(before) : "(none)"} → ${short(now)}`);
       await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
     } else {
-      ctx.log(`  = package ${pkg.id}  ${short(now)} (최신)`);
+      ctx.log(`  = package ${pkg.id}  ${short(now)} (latest)`);
     }
   }
   if (res.lockChanged) await writeLock(ctx.shed, lock);

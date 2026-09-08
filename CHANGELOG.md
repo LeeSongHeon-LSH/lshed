@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Every message lshed prints is now English. Nothing else changed in behaviour.
+
+- `lshed status` keeps one shape: `profile`, `shed`, `applied`, `managed`, `placement`, then a blank line, then `drift`, `packages`, `env`, `outside`. A row with nothing to report says `none` (or `all set`) instead of disappearing, so the eye always lands on the same place. `placement` now shows `copies` too, not only `links`.
+- Packages that match the lock are named on one comma-separated line (`9 in sync: gstack, exa, …`) instead of one line each. Only the odd ones get their own line, indented under the row and marked `!`, each ending with the command that fixes it: `! gstack  253d1df ≠ lock 0d1bd56  → lshed update`, `! exa  not installed  → lshed restore`. Missing environment variables use the same shape under `env`.
+- All other commands (`init`, `restore`, `add`, `save`, `sync`, `update`, `list`, `remove`, `prune`, `diff`, the `--pick` prompts) and every error message follow suit, with one vocabulary: shed, part, package, placed, removed, backed up, generated, drift, lock. Counts read `4 parts, 3 packages`; single items are singular (`installed 1 package`). Marker prefixes (`+ - = ~ ! · ≡ ? ↑ ↓ ✓`) are unchanged.
+- The one comment `init` writes into `lshed.yaml` for a git package (`# install: ./setup …`) is English as well. Code comments stay as they were.
+- `scripts/smoke.mjs`, the unit tests and both READMEs' sample output follow the new strings.
+
 ## 0.14.2 — 2026-09-08
 
 `lshed update --dry-run` now asks upstream instead of guessing.

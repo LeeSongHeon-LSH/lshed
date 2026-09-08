@@ -37,14 +37,14 @@ export class TomlEntries implements EntryCategory {
   private async text(): Promise<string> {
     try { return await fs.readFile(await this.file(), "utf8"); } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") return "";
-      throw new Error(`${await this.file()} 을 읽을 수 없습니다: ${(e as Error).message}`);
+      throw new Error(`cannot read ${await this.file()}: ${(e as Error).message}`);
     }
   }
 
   async read(): Promise<Record<string, unknown>> {
     const t = await this.text();
     let all: Record<string, unknown>;
-    try { all = parse(t) as Record<string, unknown>; } catch (e) { throw new Error(`${await this.file()}: TOML 을 읽을 수 없습니다: ${(e as Error).message}`); }
+    try { all = parse(t) as Record<string, unknown>; } catch (e) { throw new Error(`${await this.file()}: cannot parse TOML: ${(e as Error).message}`); }
     const sect = all[this.spec.under];
     if (!sect || typeof sect !== "object" || Array.isArray(sect)) return {};
     const out: Record<string, unknown> = {};

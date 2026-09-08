@@ -37,19 +37,19 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   const backup = opts.backup ?? true;
   const state = await readState(ctx.adapter);
   const profile = profileArg ?? state?.profile;
-  if (!profile) throw new Error("프로필을 지정하세요: lshed restore <profile>  (이전에 적용한 프로필이 없습니다)");
+  if (!profile) throw new Error("Name a profile: lshed restore <profile>  (none was applied before)");
   const link = opts.link ?? state?.link ?? false;
 
   const m = opts.manifest ?? await loadManifest(ctx);
   const plan = planProfile(ctx, m, profile);
   for (const it of plan) {
-    if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: 창고에 파일이 없습니다: ${it.src}`);
+    if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: missing in the shed: ${it.src}`);
   }
   // 창고 하나를 여러 에이전트가 쓴다 (§4.6). 이 에이전트가 모르는 카테고리·설치기 없는 패키지는 조용히가 아니라 알리고 건너뛴다.
   const skippedCats = unsupportedCategories(ctx, m, profile);
-  if (skippedCats.length) ctx.log(`  · ${ctx.adapter.name} 은 ${skippedCats.join(", ")} 를 다루지 않아 건너뜁니다`);
+  if (skippedCats.length) ctx.log(`  · ${ctx.adapter.name} does not handle ${skippedCats.join(", ")}, skipped`);
   const pk = installablePackages(ctx, m, profile);
-  for (const p of pk.skipped) ctx.log(`  · package ${p.id}  (${schemeOf(p.source)}: 는 ${ctx.adapter.name} 로 설치할 수 없어 건너뜀)`);
+  for (const p of pk.skipped) ctx.log(`  · package ${p.id}  (${schemeOf(p.source)}: cannot be installed by ${ctx.adapter.name}, skipped)`);
 
   // 0) 패키지 먼저. 생성물이 있어야 하는 부품이 있을 수 있다. 관리 집합에는 넣지 않는다.
   const pkgRes = await ensurePackages(ctx, pk.packages, { dryRun: opts.dryRun, yes: opts.yes });
@@ -65,8 +65,8 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   // 관리 집합은 "이 창고가 놓은 것" 이다. 창고가 바뀌면 그 목록은 다른 창고의 것이라 제거 근거가 약하다.
   // 다른 창고로 갈아타는 흔한 경로가 "탐색용 init 뒤 진짜 창고 restore" 이고, 그때 이 기기의 부품이 제거 대상이 된다.
   if (state && state.shed !== ctx.shed && toRemove.length) {
-    ctx.log(`! 마지막으로 적용한 창고가 다릅니다: ${state.shed}`);
-    ctx.log(`  아래 ${toRemove.length}개는 그 창고의 관리 목록에 있어 제거 대상입니다 (백업됨). 이 기기의 것을 지키려면 먼저 'lshed add' 로 창고에 넣으세요.`);
+    ctx.log(`! The last restore came from a different shed: ${state.shed}`);
+    ctx.log(`  ${toRemove.length} below are in that shed's managed set and will be removed (backed up). To keep this machine's parts, put them in the shed first with 'lshed add'.`);
   }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -132,7 +132,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     const isLinked = await isLinkTo(target, it.src);
     // 링크 모드면 창고를 가리키는 링크여야 같은 것이고, 복사 모드면 링크가 아니면서 내용이 같아야 같은 것이다.
     const same = link ? isLinked : sameContent && !(await isLink(target));
-    const note = link ? "  (link)" : (await isLink(target)) ? "  (link → 복사)" : "";
+    const note = link ? "  (link)" : (await isLink(target)) ? "  (link → copy)" : "";
     const mark = same ? "=" : there ? "~" : "+";
     ctx.log(`  ${mark} ${it.rel}${same ? "" : note}`);
     if (same) { placed.push(it.rel); continue; }
@@ -140,7 +140,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     if (!opts.dryRun) {
       if (!link) await copyTree(it.src, target, ignoreOf(ctx));
       else if ((await linkTree(it.src, target, ignoreOf(ctx))) === "copy") {
-        ctx.log(`    ! 링크를 만들 수 없어 복사했습니다. 편집은 lshed save 로 반영하세요${process.platform === "win32" ? " (Windows 파일 링크는 개발자 모드가 필요합니다)" : ""}`);
+        ctx.log(`    ! could not link, copied instead. Bring edits back with lshed save${process.platform === "win32" ? " (file links on Windows need Developer Mode)" : ""}`);
       }
     }
     placed.push(it.rel);
@@ -155,7 +155,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     const existing = (await exists(instrPath)) ? await fs.readFile(instrPath, "utf8") : null;
     if (existing !== rendered) {
       const mark = existing === null ? "+" : "~";
-      ctx.log(`  ${mark} ${instrRel}${existing !== null && !isGenerated(existing) ? "  (기존 파일은 lshed 생성물이 아님 → 백업)" : ""}`);
+      ctx.log(`  ${mark} ${instrRel}${existing !== null && !isGenerated(existing) ? "  (existing file was not written by lshed → backed up)" : ""}`);
       if (existing !== null) await backUp(instrRel);
       if (!opts.dryRun) await fs.writeFile(instrPath, rendered);
     } else {
@@ -165,7 +165,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   }
 
   if (opts.dryRun) {
-    ctx.log(`\n(dry-run) 변경 없음. 배치 ${placed.length}, 제거 ${toRemove.length}, 백업 예정 ${backedUp.length}`);
+    ctx.log(`\n(dry-run) nothing changed. Would place ${placed.length}, remove ${toRemove.length}, back up ${backedUp.length}`);
     reportPending(ctx, pkgRes);
     reportMissingEnv(ctx, missingEnv);
     return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv };
@@ -173,7 +173,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
 
   await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString(), ...(link ? { link } : {}) });
   const bdir = backup && backedUp.length ? backupDir : null;
-  ctx.log(`\n프로필 "${profile}" 적용${link ? " (link)" : ""}: 배치 ${placed.length}, 제거 ${toRemove.length}${pkgRes.installed.length ? `, 패키지 설치 ${pkgRes.installed.length}` : ""}${bdir ? `, 백업 ${backedUp.length} → ${bdir}` : ""}`);
+  ctx.log(`\nProfile "${profile}" applied${link ? " (link)" : ""}: placed ${placed.length}, removed ${toRemove.length}${pkgRes.installed.length ? `, installed ${pkgRes.installed.length} ${pkgRes.installed.length === 1 ? "package" : "packages"}` : ""}${bdir ? `, backed up ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
   reportMissingEnv(ctx, missingEnv);
   return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv };
@@ -181,6 +181,6 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
 
 export function reportMissingEnv(ctx: Ctx, missing: { rel: string; vars: string[] }[]): void {
   if (!missing.length) return;
-  ctx.log(`\n환경변수가 없는 항목이 있습니다. 시크릿 값은 창고에 담지 않으므로 이 기기의 셸 환경에 넣으세요 (예: ~/.zshrc 의 export):`);
+  ctx.log(`\nSome entries need environment variables that are not set. Secrets never go in the shed, so export them in this machine's shell (e.g. in ~/.zshrc):`);
   for (const m of missing) ctx.log(`  ${m.rel}: ${m.vars.join(", ")}`);
 }

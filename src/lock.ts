@@ -20,7 +20,7 @@ export async function readLock(shed: string): Promise<Lock> {
     return LockSchema.parse(YAML.parse(await fs.readFile(path.join(shed, LOCK_FILE), "utf8")));
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, packages: {} };
-    throw new Error(`${LOCK_FILE} 을 읽을 수 없습니다: ${(e as Error).message}`);
+    throw new Error(`cannot read ${LOCK_FILE}: ${(e as Error).message}`);
   }
 }
 

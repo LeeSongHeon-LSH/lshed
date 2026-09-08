@@ -27,7 +27,7 @@ export function spawnExec(cmd: string, args: string[], cwd?: string): Promise<vo
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, args, { cwd, stdio: "inherit", shell: process.platform === "win32" });
     p.on("error", reject);
-    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} 가 ${code} 로 끝났습니다`))));
+    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} exited with ${code}`))));
   });
 }
 
@@ -39,7 +39,7 @@ export function installerFor(ctx: Ctx, source: string): Installer {
   const s = parseSource(source);
   const scheme = s.scheme === "other" ? s.name : s.scheme;
   const inst = installersFor(ctx).find((i) => i.schemes.includes(scheme));
-  if (!inst) throw new Error(`"${source}": 스킴 ${scheme} 을 다룰 설치기가 없습니다`);
+  if (!inst) throw new Error(`"${source}": no installer handles scheme ${scheme}`);
   return inst;
 }
 
@@ -74,12 +74,12 @@ export async function loadManifest(ctx: Ctx): Promise<Manifest> {
   try {
     text = await fs.readFile(manifestPath(ctx), "utf8");
   } catch {
-    throw new Error(`창고에 ${MANIFEST_FILE} 이 없습니다: ${ctx.shed}\n  먼저 'lshed init --shed ${ctx.shed}' 를 실행하세요.`);
+    throw new Error(`No ${MANIFEST_FILE} in the shed: ${ctx.shed}\n  Run 'lshed init --shed ${ctx.shed}' first.`);
   }
   const agent = manifestAgent(text) ?? ctx.adapter.name;
   let origin: AgentAdapter = ctx.adapter;
   if (agent !== ctx.adapter.name) {
-    if (!adapterNames().includes(agent)) throw new Error(`lshed.yaml 의 agent "${agent}" 를 모릅니다. 지원: ${adapterNames().join(", ")}`);
+    if (!adapterNames().includes(agent)) throw new Error(`Unknown agent "${agent}" in lshed.yaml. Supported: ${adapterNames().join(", ")}`);
     origin = createAdapter(agent, ctx.adapter.root);
   }
   const schemes = [gitInstaller, ...origin.installers()].flatMap((i) => [...i.schemes]);
@@ -146,7 +146,7 @@ export function sourcePath(ctx: Ctx, category: string, c: Component): string {
 
 export function findComponent(m: Manifest, category: string, id: string): Component {
   const c = (m.components[category] ?? []).find((x) => x.id === id);
-  if (!c) throw new Error(`${category}/${id} 는 components 에 없습니다`);
+  if (!c) throw new Error(`${category}/${id} is not in components`);
   return c;
 }
 

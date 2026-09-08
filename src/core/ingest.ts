@@ -33,13 +33,13 @@ export async function ingest(ctx: Ctx, doc: Document, profile: string, items: Fo
       const p = f.pkg;
       const node = doc.createNode(p.into ? { id: p.id, source: p.source, into: p.into } : { id: p.id, source: p.source }) as YAML.YAMLMap;
       // 설치 명령은 자동으로 알 수 없다. git 패키지에는 사용자가 채울 자리를 남긴다.
-      if (p.into) node.comment = " install: ./setup    # ← 복원 후 실행할 명령이 있으면 채우세요 (--yes 로 실행)";
+      if (p.into) node.comment = " install: ./setup    # ← fill in if something must run after restore (run with --yes)";
       const seq = seqAt(doc, [PACKAGES]);
       if (!seq.items.some((it) => isMap(it) && it.get("id") === p.id)) seq.add(node);
       pushUnique(seqAt(doc, ["profiles", profile, PACKAGES]), p.id);
       lock.packages[p.id] = { source: p.source, rev: p.rev };
       out.packages.push(p.id);
-      ctx.log(`  ≡ package ${p.id}  ${p.source} @${shortRev(p.rev)}  (참조만 기록)`);
+      ctx.log(`  ≡ package ${p.id}  ${p.source} @${shortRev(p.rev)} (reference only)`);
       continue;
     }
     if (f.kind === "component") {
@@ -50,8 +50,8 @@ export async function ingest(ctx: Ctx, doc: Document, profile: string, items: Fo
       const masked = mask(f.id, f.value, f.cat);
       await writeEntryFile(path.join(ctx.shed, f.category, `${f.id}.json`), masked);
       const vars = placeholdersIn(masked).filter((v) => v !== "HOME");
-      ctx.log(`  + ${f.category}/${f.id}${vars.length ? `  (시크릿 → ${vars.map((v) => "${" + v + "}").join(", ")})` : ""}`);
-      for (const where of suspiciousStrings(masked)) ctx.log(`    ! ${where} 가 시크릿처럼 보입니다. 창고의 ${f.category}/${f.id}.json 에서 \${VAR} 로 바꾸세요`);
+      ctx.log(`  + ${f.category}/${f.id}${vars.length ? `  (secrets → ${vars.map((v) => "${" + v + "}").join(", ")})` : ""}`);
+      for (const where of suspiciousStrings(masked)) ctx.log(`    ! ${where} looks like a secret. Replace it with \${VAR} in ${f.category}/${f.id}.json in the shed`);
       if (f.warn) ctx.log(`    ! ${f.warn}`);
     }
     const comps = seqAt(doc, ["components", f.category]);

@@ -84,7 +84,7 @@ describe("init: MCP 를 mcp/<id>.json 으로 담는다", () => {
     for (const f of ["mcp/exa.json", "mcp/notion.json", "lshed.yaml"]) expect(await fs.readFile(path.join(shed, f), "utf8")).not.toMatch(/sk-exa|ntn_abc/);
     expect((await readState(ctx.adapter))?.managed).toEqual(expect.arrayContaining(["mcp:exa", "mcp:notion", "mcp:plain", "skills/mine"]));
     expect(await rj(`${rootA}.json`)).toEqual({ machineID: "A", numStartups: 7, mcpServers: { exa, notion, plain } });
-    expect(logs.join("\n")).toContain("mcp/exa  (시크릿 → ${EXA_API_KEY})");
+    expect(logs.join("\n")).toContain("mcp/exa  (secrets → ${EXA_API_KEY})");
     expect(await status(ctx)).toMatchObject({ drifted: [] });
   });
   it("--exclude mcp/notion", async () => {
@@ -95,7 +95,7 @@ describe("init: MCP 를 mcp/<id>.json 으로 담는다", () => {
   it("args 에 시크릿처럼 보이는 값이 있으면 경고", async () => {
     await w(`${rootA}.json`, J({ mcpServers: { x: { type: "stdio", command: "srv", args: ["--key", "sk-abcdefghijklmnop"] } } }));
     await init(ctxFor(rootA));
-    expect(logs.join("\n")).toContain("args.1 가 시크릿처럼 보입니다");
+    expect(logs.join("\n")).toContain("args.1 looks like a secret");
   });
 });
 

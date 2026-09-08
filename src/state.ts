@@ -27,7 +27,7 @@ export async function readState(adapter: AgentAdapter): Promise<State | null> {
     return StateSchema.parse(raw);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw new Error(`state.json 을 읽을 수 없습니다 (${statePath(adapter)}): ${(e as Error).message}`);
+    throw new Error(`cannot read state.json (${statePath(adapter)}): ${(e as Error).message}`);
   }
 }
 

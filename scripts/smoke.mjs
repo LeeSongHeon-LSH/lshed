@@ -34,14 +34,14 @@ await w(path.join(A, "settings.json"), J({ model: "opus", hooks: { Stop: [{ hook
 
 let r = run(A, ["init"]);
 check("init exit 0", r.code === 0);
-check("init: mcp 시크릿 마스킹", r.out.includes("mcp/exa  (시크릿 → ${EXA_API_KEY})"));
+check("init: mcp 시크릿 마스킹", r.out.includes("mcp/exa  (secrets → ${EXA_API_KEY})"));
 check("init: settings 훅 담김", r.out.includes("+ settings/hooks"));
 check("shed 에 시크릿 값 없음", !(await fs.readFile(path.join(shed, "mcp/exa.json"), "utf8")).includes("sk-secret"));
 check("shed 훅 경로가 ${HOME}", (await fs.readFile(path.join(shed, "settings/hooks.json"), "utf8")).includes("${HOME}"));
 check("enabledPlugins 안 담김", !(await fs.readdir(path.join(shed, "settings"))).includes("enabledPlugins.json"));
 
 r = run(A, ["status"]);
-check("status: 드리프트 없음", r.out.includes("드리프트 없음"));
+check("status: drift none", r.out.includes("drift      none"));
 
 // 기기 B: 이미 Claude Code 를 쓰던 기기. 이름이 겹치는 스킬, 자기만의 스킬, 자기 설정.
 await w(`${B}.json`, J({ machineID: "B", mcpServers: { theirs: { type: "stdio", command: "x" } } }));
@@ -60,7 +60,7 @@ check("CLAUDE.md 생성", (await fs.readFile(path.join(B, "CLAUDE.md"), "utf8"))
 check("겹치는 스킬은 창고 것으로 덮임", (await fs.readFile(path.join(B, "skills/alpha/SKILL.md"), "utf8")) === "alpha");
 check("이 기기만의 스킬은 그대로", (await fs.readFile(path.join(B, "skills/b-only/SKILL.md"), "utf8")) === "b only");
 check("덮인 것은 백업됨", (await fs.readdir(path.join(B, "lshed/backups"))).length === 1);
-check("아무것도 제거되지 않음", r.out.includes("제거 0"));
+check("아무것도 제거되지 않음", r.out.includes("removed 0"));
 
 r = run(B, ["restore"]);
 check("재적용은 전부 =", r.code === 0 && !/^\s+[+~] /m.test(r.out));
@@ -73,7 +73,7 @@ check("agents/rev.md 는 링크 또는 복사본", (await fs.readFile(path.join(
 await w(path.join(B, "skills/alpha/SKILL.md"), "alpha via link");
 check("링크 편집이 창고에 바로 반영", (await fs.readFile(path.join(shed, "skills/alpha/SKILL.md"), "utf8")) === "alpha via link");
 r = run(B, ["status"]);
-check("status: 배치 link, 드리프트 없음", r.out.includes("배치     link") && r.out.includes("드리프트 없음"));
+check("status: placement links, drift none", r.out.includes("placement  links") && r.out.includes("drift      none"));
 r = run(B, ["restore", "--no-link"]);
 check("--no-link: 복사로 복귀", r.code === 0 && !(await fs.lstat(path.join(B, "skills/alpha"))).isSymbolicLink() && (await fs.readFile(path.join(B, "skills/alpha/SKILL.md"), "utf8")) === "alpha via link");
 
@@ -81,7 +81,7 @@ check("--no-link: 복사로 복귀", r.code === 0 && !(await fs.lstat(path.join(
 await w(path.join(B, "skills/gamma/SKILL.md"), "gamma");
 await w(path.join(B, "skills/alpha/SKILL.md"), "alpha edited");
 r = run(B, ["status"]);
-check("status: 드리프트 1 + 창고 밖 3 (이 기기만의 것들)", r.out.includes("드리프트 1개: skills/alpha") && r.out.includes("창고 밖  3개: skills/b-only, skills/gamma, mcp/theirs"));
+check("status: 드리프트 1 + 창고 밖 3 (이 기기만의 것들)", r.out.includes("drift      1: skills/alpha") && r.out.includes("outside    3: skills/b-only, skills/gamma, mcp/theirs"));
 r = run(B, ["add", "gamma", "b-only"]);
 check("add: 이 기기만의 것을 창고로", r.code === 0 && (await fs.readFile(path.join(shed, "skills/b-only/SKILL.md"), "utf8")) === "b only");
 r = run(B, ["diff"]);
@@ -96,7 +96,7 @@ check("전환 exit 0", r.code === 0);
 const bj2 = JSON.parse(await fs.readFile(`${B}.json`, "utf8"));
 check("전환: exa 제거, theirs 유지", !bj2.mcpServers.exa && bj2.mcpServers.theirs);
 check("전환: beta 제거", await fs.access(path.join(B, "skills/beta")).then(() => false, () => true));
-check("백업 생성", r.out.includes("백업"));
+check("백업 생성", r.out.includes("backed up"));
 
 r = run(B, ["list"]);
 check("list exit 0", r.code === 0);
@@ -105,13 +105,13 @@ check("list exit 0", r.code === 0);
 const C = path.join(tmp, "C"), D = path.join(tmp, "D");
 const there = (p) => fs.access(p).then(() => true, () => false);
 r = run(C, ["--agent", "agents", "restore", "default"]);
-check("agents: skills 만 배치, 나머지는 알리고 건너뜀", r.code === 0 && (await there(path.join(C, "skills/alpha/SKILL.md"))) && r.out.includes("다루지 않아 건너뜁니다") && !(await there(path.join(C, "agents"))) && !(await there(`${C}.json`)));
+check("agents: skills 만 배치, 나머지는 알리고 건너뜀", r.code === 0 && (await there(path.join(C, "skills/alpha/SKILL.md"))) && r.out.includes("does not handle") && !(await there(path.join(C, "agents"))) && !(await there(`${C}.json`)));
 r = run(D, ["--agent", "codex", "restore", "default"]);
 check("codex: AGENTS.md 에 지침을 이어붙임", r.code === 0 && (await fs.readFile(path.join(D, "AGENTS.md"), "utf8")).includes("# rules"));
 const toml = await fs.readFile(path.join(D, "config.toml"), "utf8");
 check("codex: config.toml 에 MCP 를 변수 이름으로, 값은 없음", toml.includes("[mcp_servers.exa]") && toml.includes('env_vars = [ "EXA_API_KEY" ]') && !toml.includes("sk-secret") && !toml.includes("on-B"));
 r = run(D, ["--agent", "codex", "status"]);
-check("codex: 자기 state", r.out.includes("codex:") && r.out.includes("드리프트 없음"));
+check("codex: 자기 state", r.out.includes("codex:") && r.out.includes("drift      none"));
 check("B 의 state 는 그대로", JSON.parse(await fs.readFile(path.join(B, "lshed/state.json"), "utf8")).profile === "minimal");
 
 // sync (원격 없음): 커밋만
@@ -120,7 +120,7 @@ spawnSync("git", ["config", "user.name", "smoke"], { cwd: shed });
 spawnSync("git", ["config", "user.email", "smoke@example.com"], { cwd: shed });
 spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "seed"], { cwd: shed });
 r = run(B, ["sync"]);
-check("sync exit 0 (origin 없음)", r.code === 0 && r.out.includes("origin 이 없어"));
+check("sync exit 0 (origin 없음)", r.code === 0 && r.out.includes("no origin, pull/push skipped"));
 
 await fs.rm(tmp, { recursive: true, force: true });
 console.log(`\n${failed ? `✘ ${failed}개 실패` : "✔ 스모크 통과"}  (${process.platform} ${os.release()}, ${bin ? `binary ${path.basename(bin)}` : `node ${process.version}`})`);

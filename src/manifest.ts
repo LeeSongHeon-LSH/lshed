@@ -16,7 +16,7 @@ export function parseKey(raw: string): { category?: string; id: string } {
 
 /** 부품 하나. source 생략 시 file:./<category>/<id> (§3.2 관례). */
 const ComponentSchema = z.object({
-  id: z.string().regex(ID_RE, "id는 영문·숫자·._- 와 구간 사이의 / 만 허용"),
+  id: z.string().regex(ID_RE, "id may contain only letters, digits, ._- and / between segments"),
   source: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -27,10 +27,10 @@ export type Component = z.infer<typeof ComponentSchema>;
  * into 는 어댑터 루트 기준 상대 경로. 패키지는 관리 집합에 들어가지 않는다.
  */
 const PackageSchema = z.object({
-  id: z.string().regex(/^[\w.@-]+$/, "id는 영문·숫자·._@- 만 허용"),   // 패키지 id 는 경로가 아니다. 플러그인은 "이름@마켓플레이스" 로 구분될 수 있다
+  id: z.string().regex(/^[\w.@-]+$/, "id may contain only letters, digits and ._@-"),   // 패키지 id 는 경로가 아니다. 플러그인은 "이름@마켓플레이스" 로 구분될 수 있다
   source: z.string(),
   /** git 계열 패키지의 위치 (어댑터 루트 기준). 어댑터 설치기 스킴은 필요 없다 */
-  into: z.string().regex(/^[^/\\][^\\]*$/, "into 는 루트 기준 상대 경로 (POSIX)").optional(),
+  into: z.string().regex(/^[^/\\][^\\]*$/, "into must be a relative POSIX path under the root").optional(),
   /** 설치 후 실행할 셸 명령. --yes 일 때만 실행 */
   install: z.string().optional(),
 });
@@ -73,21 +73,21 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
   const result = ManifestSchema.safeParse(raw);
   if (!result.success) {
     const lines = result.error.issues.map((i) => `  ${i.path.join(".") || "(root)"}: ${i.message}`);
-    throw new ManifestError(`lshed.yaml 형식 오류:\n${lines.join("\n")}`);
+    throw new ManifestError(`lshed.yaml is malformed:\n${lines.join("\n")}`);
   }
   const m = result.data;
   const problems: string[] = [];
 
   for (const [cat, comps] of Object.entries(m.components)) {
     if (knownCategories && !knownCategories.includes(cat)) {
-      problems.push(`알 수 없는 카테고리 "${cat}" (어댑터 ${m.agent}: ${knownCategories.join(", ")})`);
+      problems.push(`unknown category "${cat}" (agent ${m.agent} knows: ${knownCategories.join(", ")})`);
     }
     const seen = new Set<string>();
     for (const c of comps) {
-      if (seen.has(c.id)) problems.push(`${cat}: id "${c.id}" 중복`);
+      if (seen.has(c.id)) problems.push(`${cat}: duplicate id "${c.id}"`);
       seen.add(c.id);
       try {
-        if (!isComponentSource(parseSource(effectiveSource(cat, c)))) problems.push(`${cat}/${c.id}: 부품 출처는 file:/github:/git: 이어야 합니다`);
+        if (!isComponentSource(parseSource(effectiveSource(cat, c)))) problems.push(`${cat}/${c.id}: a part's source must be file:, github: or git:`);
       } catch (e) {
         problems.push(`${cat}/${c.id}: ${(e as Error).message}`);
       }
@@ -96,14 +96,14 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
 
   const pkgIds = new Set<string>();
   for (const p of m.packages) {
-    if (pkgIds.has(p.id)) problems.push(`packages: id "${p.id}" 중복`);
+    if (pkgIds.has(p.id)) problems.push(`packages: duplicate id "${p.id}"`);
     pkgIds.add(p.id);
     try {
       const src = parseSource(p.source);
       const scheme = src.scheme === "other" ? src.name : src.scheme;
-      if (scheme === "file") problems.push(`packages/${p.id}: 패키지 출처는 file: 일 수 없습니다`);
-      else if (knownSchemes && !knownSchemes.includes(scheme)) problems.push(`packages/${p.id}: 스킴 "${scheme}" 을 다룰 설치기가 없습니다 (${knownSchemes.join(", ")})`);
-      if ((scheme === "github" || scheme === "git") && !p.into) problems.push(`packages/${p.id}: ${scheme}: 패키지는 into 가 필요합니다`);
+      if (scheme === "file") problems.push(`packages/${p.id}: a package source cannot be file:`);
+      else if (knownSchemes && !knownSchemes.includes(scheme)) problems.push(`packages/${p.id}: no installer handles scheme "${scheme}" (known: ${knownSchemes.join(", ")})`);
+      if ((scheme === "github" || scheme === "git") && !p.into) problems.push(`packages/${p.id}: a ${scheme}: package needs into`);
     } catch (e) {
       problems.push(`packages/${p.id}: ${(e as Error).message}`);
     }
@@ -111,26 +111,26 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
 
   for (const [profile, cats] of Object.entries(m.profiles)) {
     for (const parent of cats[EXTENDS] ?? []) {
-      if (!(parent in m.profiles)) problems.push(`profiles.${profile}.extends: 프로필 "${parent}" 이 없음`);
+      if (!(parent in m.profiles)) problems.push(`profiles.${profile}.extends: no profile "${parent}"`);
     }
     if (cats[EXTENDS]?.length) {
       const cycle = findCycle(m, profile);
-      if (cycle) problems.push(`profiles.${profile}.extends: 순환 상속 (${cycle.join(" → ")})`);
+      if (cycle) problems.push(`profiles.${profile}.extends: inheritance cycle (${cycle.join(" → ")})`);
     }
     for (const [cat, ids] of Object.entries(cats)) {
       if (cat === EXTENDS) continue;
       if (cat === PACKAGES) {
-        for (const id of ids) if (!pkgIds.has(id)) problems.push(`profiles.${profile}.packages: "${id}" 는 packages 에 없음`);
+        for (const id of ids) if (!pkgIds.has(id)) problems.push(`profiles.${profile}.packages: "${id}" is not in packages`);
         continue;
       }
       const available = new Set((m.components[cat] ?? []).map((c) => c.id));
       for (const id of ids) {
-        if (!available.has(id)) problems.push(`profiles.${profile}.${cat}: "${id}" 는 components에 없음`);
+        if (!available.has(id)) problems.push(`profiles.${profile}.${cat}: "${id}" is not in components`);
       }
     }
   }
 
-  if (problems.length) throw new ManifestError(`lshed.yaml 참조 오류:\n${problems.map((p) => "  " + p).join("\n")}`);
+  if (problems.length) throw new ManifestError(`lshed.yaml has broken references:\n${problems.map((p) => "  " + p).join("\n")}`);
   return m;
 }
 
@@ -168,9 +168,9 @@ export function resolveProfile(m: Manifest, profile: string, seen: string[] = []
   const p = m.profiles[profile];
   if (!p) {
     const names = Object.keys(m.profiles);
-    throw new Error(`프로필 "${profile}" 이 없습니다. 있는 프로필: ${names.length ? names.join(", ") : "(없음)"}`);
+    throw new Error(`no profile "${profile}". Profiles: ${names.length ? names.join(", ") : "(none)"}`);
   }
-  if (seen.includes(profile)) throw new ManifestError(`profiles.${profile}.extends: 순환 상속 (${[...seen, profile].join(" → ")})`);
+  if (seen.includes(profile)) throw new ManifestError(`profiles.${profile}.extends: inheritance cycle (${[...seen, profile].join(" → ")})`);
   const out: Record<string, string[]> = {};
   const push = (cat: string, ids: string[]) => {
     const list = (out[cat] ??= []);

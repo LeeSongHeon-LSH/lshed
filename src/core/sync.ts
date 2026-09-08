@@ -24,41 +24,41 @@ export async function sync(ctx: Ctx, opts: SyncOptions = {}): Promise<SyncResult
   const shed = ctx.shed;
   const push = opts.push ?? true;
   if (!(await isRepo(shed))) {
-    throw new Error(`창고가 git 저장소가 아닙니다: ${shed}\n  cd ${shed} && git init && git add -A && git commit -m "my harness"\n  원격에 두려면: git remote add origin <url> && git push -u origin HEAD`);
+    throw new Error(`The shed is not a git repository: ${shed}\n  cd ${shed} && git init && git add -A && git commit -m "my harness"\n  To put it on a remote: git remote add origin <url> && git push -u origin HEAD`);
   }
   const res: SyncResult = { committed: [], pulled: 0, pushed: false, unsaved: [] };
 
   // 0) 로컬 편집이 창고에 안 들어간 채 sync 하면 헛일이다. 알려만 준다.
   if (await readState(ctx.adapter)) {
     try { res.unsaved = (await diff(ctx)).map((d) => `${d.item.category}/${d.item.id}`); } catch { /* 창고가 깨졌으면 아래 git 이 알린다 */ }
-    if (res.unsaved.length) ctx.log(`  ! 로컬 편집 ${res.unsaved.length}개가 창고에 없습니다: ${res.unsaved.join(", ")}  → lshed save 후 다시 sync`);
+    if (res.unsaved.length) ctx.log(`  ! ${res.unsaved.length} local edits are not in the shed: ${res.unsaved.join(", ")}  → lshed save, then sync again`);
   }
 
   // 1) 커밋
   const dirty = (await git(["status", "--porcelain", "--untracked-files=all"], shed)).split("\n").filter(Boolean).map((l) => l.slice(3).trim());
   if (dirty.length) {
     const msg = opts.message ?? defaultMessage(dirty, (await readState(ctx.adapter))?.profile);
-    ctx.log(`  ${opts.dryRun ? "(dry-run) " : ""}commit ${dirty.length}개: ${dirty.slice(0, 5).join(", ")}${dirty.length > 5 ? ` 외 ${dirty.length - 5}` : ""}`);
+    ctx.log(`  ${opts.dryRun ? "(dry-run) " : ""}commit ${dirty.length}: ${dirty.slice(0, 5).join(", ")}${dirty.length > 5 ? ` and ${dirty.length - 5} more` : ""}`);
     if (!opts.dryRun) {
       await git(["add", "-A"], shed);
       try {
         await git(["commit", "--quiet", "-m", msg], shed);
       } catch (e) {
         if (/Author identity unknown|Please tell me who you are/.test((e as Error).message)) {
-          throw new Error(`git 사용자 정보가 없어 커밋할 수 없습니다. 한 번만 설정하세요:\n  git config --global user.name "이름"\n  git config --global user.email "메일"`);
+          throw new Error(`Cannot commit without a git identity. Set it once:\n  git config --global user.name "Your Name"\n  git config --global user.email "you@example.com"`);
         }
         throw e;
       }
     }
     res.committed = dirty;
   } else {
-    ctx.log("  = 창고에 커밋할 변경 없음");
+    ctx.log("  = nothing to commit in the shed");
   }
 
   // 2) 원격
   const remote = await git(["remote", "get-url", "origin"], shed).catch(() => null);
   if (!remote) {
-    ctx.log("  · origin 이 없어 pull/push 는 건너뜀 (git remote add origin <url>)");
+    ctx.log("  · no origin, pull/push skipped (git remote add origin <url>)");
     return res;
   }
   if (opts.dryRun) { ctx.log(`  (dry-run) pull --rebase, push → ${remote}`); return res; }
@@ -71,17 +71,17 @@ export async function sync(ctx: Ctx, opts: SyncOptions = {}): Promise<SyncResult
       await git(["pull", "--rebase", "--quiet"], shed);
     } catch (e) {
       await git(["rebase", "--abort"], shed).catch(() => {});
-      throw new Error(`pull 중 충돌이 나서 되돌렸습니다. 창고에서 직접 해결하세요:\n  cd ${shed} && git pull --rebase\n  (${firstLine((e as Error).message)})`);
+      throw new Error(`pull hit a conflict and was rolled back. Resolve it in the shed:\n  cd ${shed} && git pull --rebase\n  (${firstLine((e as Error).message)})`);
     }
     const after = await git(["rev-parse", "HEAD"], shed);
     if (after !== before) {
       const n = Number(await git(["rev-list", "--count", `${before}..${after}`], shed).catch(() => "0"));
       // rebase 하면 내 커밋도 다시 쓰여 세어지므로, 내 커밋 수를 뺀다
       res.pulled = Math.max(0, n - (res.committed.length ? 1 : 0));
-      if (res.pulled) ctx.log(`  ↓ 원격 커밋 ${res.pulled}개 받음`);
+      if (res.pulled) ctx.log(`  ↓ pulled ${res.pulled} commits`);
     }
   } else {
-    ctx.log(`  · 브랜치 ${branch} 에 upstream 이 없어 pull 은 건너뜀`);
+    ctx.log(`  · branch ${branch} has no upstream, pull skipped`);
   }
 
   // 3) push
@@ -90,13 +90,13 @@ export async function sync(ctx: Ctx, opts: SyncOptions = {}): Promise<SyncResult
     if (ahead > 0) {
       await git(hasUpstream ? ["push", "--quiet"] : ["push", "--quiet", "-u", "origin", branch], shed);
       res.pushed = true;
-      ctx.log(`  ↑ push ${hasUpstream ? `${ahead}개 커밋` : `(upstream 설정: origin/${branch})`}`);
+      ctx.log(`  ↑ push ${hasUpstream ? `${ahead} commits` : `(setting upstream: origin/${branch})`}`);
     } else {
-      ctx.log("  = 원격과 같음");
+      ctx.log("  = same as remote");
     }
   }
 
-  if (res.pulled) ctx.log(`\n창고가 바뀌었습니다. 이 기기에 적용하려면: lshed restore`);
+  if (res.pulled) ctx.log(`\nThe shed changed. To apply it on this machine: lshed restore`);
   return res;
 }
 

@@ -57,7 +57,7 @@ async function ctxFor(cmd: "init" | "other"): Promise<Ctx> {
   let shed = flag ?? process.env.LSHED_HOME;
   if (!shed && cmd === "other") shed = (await readState(adapter))?.shed;
   if (!shed && cmd === "init") shed = path.join(os.homedir(), "lshed");
-  if (!shed) throw new Error("창고 위치를 모릅니다. --shed <dir> 또는 LSHED_HOME 을 지정하세요.");
+  if (!shed) throw new Error("Shed location unknown. Pass --shed <dir> or set LSHED_HOME.");
   return { adapter, shed: path.resolve(shed), log: (l) => console.log(l), exec: spawnExec };
 }
 
@@ -65,7 +65,7 @@ async function run(fn: () => Promise<unknown>): Promise<void> {
   try {
     await fn();
   } catch (e) {
-    console.error(`오류: ${(e as Error).message}`);
+    console.error(`error: ${(e as Error).message}`);
     process.exitCode = 1;
   }
 }
@@ -77,9 +77,9 @@ program
   .option("--exclude <id...>", "components to leave out (id or category/id)")
   .action((o: { profile: string; exclude?: string[] }) => run(async () => {
     const ctx = await ctxFor("init");
-    console.log(`스캔: ${ctx.adapter.root}  →  창고: ${ctx.shed}`);
+    console.log(`scan: ${ctx.adapter.root}  →  shed: ${ctx.shed}`);
     await init(ctx, { profile: o.profile, exclude: o.exclude });
-    console.log(`\n다음: 창고를 git 으로 관리하세요.  cd ${ctx.shed} && git init`);
+    console.log(`\nNext: put the shed under git.  cd ${ctx.shed} && git init`);
   }));
 
 /** 터미널 프롬프트. 취소(Ctrl+C)는 undefined 로 돌려서 pick 이 조용히 물러나게 한다. */
@@ -88,7 +88,7 @@ function terminalPrompter(): Prompter {
   return {
     async multiselect(g) {
       return un(await clack.multiselect<string>({
-        message: `${g.title}  — 이 기기에 둘 것을 고르세요 (space 선택, a 전체, enter 다음)`,
+        message: `${g.title}  — pick what this machine gets (space to toggle, a for all, enter for next)`,
         options: g.options.map((o) => ({ value: o.id, label: o.id, hint: o.hint })),
         initialValues: g.options.filter((o) => o.checked).map((o) => o.id),
         required: false,
@@ -117,8 +117,8 @@ program
     const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
     const firstTime = !profile && !(await readState(ctx.adapter));
     if (o.pick || (firstTime && tty)) {
-      if (!tty) throw new Error("--pick 은 대화형 터미널이 필요합니다. 프로필 이름을 직접 지정하세요: lshed restore <profile>");
-      if (firstTime && !o.pick) console.log("적용한 프로필이 없어 고르는 화면을 엽니다. 프로필을 바로 적용하려면: lshed restore <profile>\n");
+      if (!tty) throw new Error("--pick needs an interactive terminal. Name the profile instead: lshed restore <profile>");
+      if (firstTime && !o.pick) console.log("No profile applied yet, so opening the picker. To apply one directly: lshed restore <profile>\n");
       await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
       return;
     }
@@ -133,19 +133,19 @@ program
   .action((ids: string[], o: { dryRun?: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     const state = await readState(ctx.adapter);
-    if (!state) throw new Error("적용된 프로필이 없습니다. 먼저 'lshed restore <profile>' 을 실행하세요.");
+    if (!state) throw new Error("No profile applied. Run 'lshed restore <profile>' first.");
     const m = await loadManifest(ctx);
     const pk = installablePackages(ctx, m, state.profile);
-    for (const p of pk.skipped) console.log(`  · package ${p.id}  (${schemeOf(p.source)}: 는 ${ctx.adapter.name} 로 다룰 수 없어 건너뜀)`);
+    for (const p of pk.skipped) console.log(`  · package ${p.id}  (${schemeOf(p.source)}: cannot be handled by ${ctx.adapter.name}, skipped)`);
     let pkgs = pk.packages;
     if (ids.length) {
       pkgs = ids.map((id) => {
         const p = m.packages.find((x) => x.id === id);
-        if (!p) throw new Error(`패키지 "${id}" 가 없습니다`);
+        if (!p) throw new Error(`no package "${id}"`);
         return p;
       });
     }
-    if (!pkgs.length) { console.log("갱신할 패키지가 없습니다."); return; }
+    if (!pkgs.length) { console.log("No packages to update."); return; }
     const res = await updatePackages(ctx, pkgs, { dryRun: o.dryRun, yes: o.yes });
     reportPending(ctx, res);
   }));
@@ -205,7 +205,7 @@ program
     const ctx = await ctxFor("other");
     const m = await loadManifest(ctx);
     const rows = listRows(m).filter((r) => !o.unused || !r.usedBy.length);
-    console.log(o.unused && !rows.length ? "미사용 항목이 없습니다." : formatRows(rows, m));
+    console.log(o.unused && !rows.length ? "Nothing unused." : formatRows(rows, m));
   }));
 
 program
@@ -234,7 +234,7 @@ program
     for (const c of found) console.log(`${c.category}/${c.id}\t${c.path}`);
     let n = found.length;
     for (const e of adapter.entries()) for (const id of Object.keys(await e.read())) { console.log(`${e.name}/${id}\t(entry)`); n++; }
-    console.error(`${n}개 발견 (root: ${adapter.root})`);
+    console.error(`${n} found (root: ${adapter.root})`);
   }));
 
 program.parseAsync();

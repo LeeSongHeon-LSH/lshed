@@ -106,7 +106,7 @@ describe("restore: 새 기기", () => {
     expect(res.placed).toEqual(["skills/mine"]);
     const lock = await readLock(shed);
     expect(lock.packages.exa.rev).toBe("9.9.9");          // 고정 불가 → 실제 설치 버전으로
-    expect(logs.join("\n")).toMatch(/락은 3.4.1 이지만 9.9.9/);
+    expect(logs.join("\n")).toMatch(/lock says 3.4.1 but 9.9.9/);
     const s = await status(ctx);
     expect(s.packages.map((p) => `${p.pkg.id}:${p.present}:${p.rev}`).sort()).toEqual(["claude-plugins-official:true:anthropics/claude-plugins-official", "exa:true:9.9.9", "notion:true:9.9.9"]);
   });
@@ -129,7 +129,7 @@ describe("restore: 새 기기", () => {
   it("claude CLI 가 없으면 분명한 오류", async () => {
     const ctx = ctxFor(rootB);
     ctx.exec = async () => { const e = new Error("spawn claude ENOENT") as NodeJS.ErrnoException; e.code = "ENOENT"; throw e; };
-    await expect(restore(ctx, "default")).rejects.toThrow(/claude CLI 를 찾을 수 없습니다/);
+    await expect(restore(ctx, "default")).rejects.toThrow(/claude CLI not found/);
   });
 });
 
@@ -155,9 +155,9 @@ describe("update", () => {
     expect(res.lockChanged).toBe(false);
     expect(calls).toEqual([]);
     expect(logs).toEqual([
-      `  = package claude-plugins-official  ${v1.slice(0, 7)} (최신)`,
-      "  ? package exa  (claude-plugin: 갱신 여부는 미리 알 수 없음 — update 가 확인)",
-      "  ? package notion  (claude-plugin: 갱신 여부는 미리 알 수 없음 — update 가 확인)",
+      `  = package claude-plugins-official  ${v1.slice(0, 7)} (latest)`,
+      "  ? package exa  (claude-plugin: cannot tell ahead of time; update will check)",
+      "  ? package notion  (claude-plugin: cannot tell ahead of time; update will check)",
     ]);
 
     await w(path.join(up, ".claude-plugin/marketplace.json"), "{ \"v\": 2 }");
@@ -175,7 +175,7 @@ describe("update", () => {
     const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
     logs = [];
     await updatePackages(ctx, m.packages.filter((p) => p.id === "claude-plugins-official"), { dryRun: true });
-    expect(logs).toEqual(["  ? package claude-plugins-official  (claude-marketplace: 갱신 여부는 미리 알 수 없음 — update 가 확인)"]);
+    expect(logs).toEqual(["  ? package claude-plugins-official  (claude-marketplace: cannot tell ahead of time; update will check)"]);
     expect(calls).toEqual([]);
   });
 

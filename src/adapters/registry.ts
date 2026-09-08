@@ -12,6 +12,6 @@ export function adapterNames(): string[] {
 export function createAdapter(name: string, root?: string, home?: string): AgentAdapter {
   if (name === DEFAULT_AGENT) return new ClaudeCodeAdapter(root);
   const spec = SKILLS_DIR_AGENTS.find((s) => s.name === name);
-  if (!spec) throw new Error(`모르는 에이전트 "${name}". 지원: ${adapterNames().join(", ")}`);
+  if (!spec) throw new Error(`Unknown agent "${name}". Supported: ${adapterNames().join(", ")}`);
   return new SkillsDirAdapter(spec, root, home);
 }

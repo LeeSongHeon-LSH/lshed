@@ -83,7 +83,7 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     expect(await exists(path.join(dir, "SKILL.md"))).toBe(true);
     expect(await head(dir)).toBe((await readLock(shed)).packages.toolkit.rev);
     expect(await exists(path.join(dir, "installed"))).toBe(false);
-    expect(logs.join("\n")).toMatch(/설치 명령 1개를 실행하지 않았습니다/);
+    expect(logs.join("\n")).toMatch(/1 install command was not run/);
     expect(res.placed).toEqual(["skills/mine"]);           // 패키지는 관리 집합 밖
     expect(await exists(path.join(rootB, "skills/mine/SKILL.md"))).toBe(true);
   });
@@ -136,7 +136,7 @@ describe("update", () => {
     logs = [];
     let res = await updatePackages(ctx, m.packages, { dryRun: true });
     expect(res.lockChanged).toBe(false);
-    expect(logs).toEqual([`  = package toolkit  ${before.slice(0, 7)} (최신)`]);
+    expect(logs).toEqual([`  = package toolkit  ${before.slice(0, 7)} (latest)`]);
 
     const work = path.join(tmp, "upstream-work");
     await w(path.join(work, "SKILL.md"), "toolkit v2");
@@ -163,7 +163,7 @@ describe("update", () => {
     logs = [];
     await updatePackages(ctx, m.packages, { dryRun: true });
     expect(logs).toHaveLength(1);
-    expect(logs[0]).toMatch(/^ {2}\? package toolkit {2}\(업스트림 조회 실패: /);
+    expect(logs[0]).toMatch(/^ {2}\? package toolkit {2}\(upstream lookup failed: /);
   });
 
   it("원격 최신으로 올리고 락을 갱신하며, --yes 면 install 도 돌린다", async () => {
@@ -208,6 +208,6 @@ describe("lsRemote", () => {
     expect(await lsRemote(remote, "main")).toBe(main);
     expect(await lsRemote(remote, "v1")).toBe(main);                               // 주석 태그 → 커밋
     expect(await lsRemote(remote, "both")).toBe(onBranch);                         // 브랜치 우선
-    await expect(lsRemote(remote, "nope")).rejects.toThrow(/nope 가 없습니다/);
+    await expect(lsRemote(remote, "nope")).rejects.toThrow(/has no nope/);
   });
 });

@@ -8,7 +8,7 @@ export interface ComponentDiff { item: PlanItem; changes: FileChange[] }
 /** 현재 프로필의 각 부품에 대해 로컬 vs 창고 파일 단위 차이 (§5). */
 export async function diff(ctx: Ctx): Promise<ComponentDiff[]> {
   const state = await readState(ctx.adapter);
-  if (!state) throw new Error("적용된 프로필이 없습니다. 먼저 'lshed restore <profile>' 을 실행하세요.");
+  if (!state) throw new Error("No profile applied. Run 'lshed restore <profile>' first.");
   const m = await loadManifest(ctx);
   const out: ComponentDiff[] = [];
   const localEntries = new Map<string, Record<string, unknown>>();
@@ -27,12 +27,12 @@ export async function diff(ctx: Ctx): Promise<ComponentDiff[]> {
 }
 
 export function formatDiff(diffs: ComponentDiff[]): string {
-  if (!diffs.length) return "로컬과 창고가 일치합니다.";
+  if (!diffs.length) return "Local and shed match.";
   const lines: string[] = [];
   for (const d of diffs) {
     lines.push(`${d.item.category}/${d.item.id}`);
     for (const c of d.changes) lines.push(`  ${c.status} ${c.file || "(file)"}`);
   }
-  lines.push("", "A: 로컬에만 있음  M: 내용 다름  D: 창고에만 있음", "로컬 편집을 창고에 반영하려면: lshed save");
+  lines.push("", "A: only local  M: differs  D: only in the shed", "To copy local edits into the shed: lshed save");
   return lines.join("\n");
 }

@@ -32,7 +32,7 @@ export async function lsRemote(url: string, ref?: string): Promise<string> {
   const want = ref ? [`refs/heads/${ref}`, `refs/tags/${ref}^{}`, `refs/tags/${ref}`] : ["HEAD"];
   const out = await git(["ls-remote", url, ...want]);
   const lines = out.split("\n").filter(Boolean).map((l) => { const [sha, name] = l.split("\t"); return { sha, name }; });
-  if (!lines.length) throw new Error(`${url} 에 ${ref ?? "HEAD"} 가 없습니다`);
+  if (!lines.length) throw new Error(`${url} has no ${ref ?? "HEAD"}`);
   for (const w of want) { const hit = lines.find((l) => l.name === w); if (hit) return hit.sha; }
   return lines[0].sha;
 }
@@ -42,6 +42,6 @@ export function runShell(cmd: string, cwd: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, { cwd, stdio: "inherit", shell: true });
     p.on("error", reject);
-    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`명령이 ${code} 로 끝났습니다: ${cmd}`))));
+    p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`command exited with ${code}: ${cmd}`))));
   });
 }

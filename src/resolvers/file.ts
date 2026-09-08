@@ -8,7 +8,7 @@ import { parseSource } from "../source.js";
 export function resolveSource(shed: string, raw: string): string {
   const s = parseSource(raw);
   if (s.scheme === "file") return path.resolve(shed, s.path);
-  throw new Error(`"${raw}": ${s.scheme}: 출처는 v0.2에서 지원됩니다. 지금은 file: 만 사용할 수 있습니다.`);
+  throw new Error(`"${raw}": ${s.scheme}: sources for parts come in a later version. Only file: works today.`);
 }
 
 export function isSaveable(raw: string): boolean {

@@ -16,14 +16,14 @@ export function listRows(m: Manifest): Row[] {
 }
 
 export function formatRows(rows: Row[], m: Manifest): string {
-  if (!rows.length) return "(비어 있음)";
+  if (!rows.length) return "(empty)";
   const w = Math.max(...rows.map((r) => `${r.category}/${r.id}`.length));
   const lines = rows.map((r) => {
     const key = `${r.category}/${r.id}`.padEnd(w);
-    const use = r.usedBy.length ? r.usedBy.join(", ") : "(미사용)";
+    const use = r.usedBy.length ? r.usedBy.join(", ") : "(unused)";
     return `${r.kind === "package" ? "≡" : " "} ${key}  ${use}`;
   });
   const unused = rows.filter((r) => !r.usedBy.length).length;
-  lines.push("", `${rows.length}개, 프로필 ${Object.keys(m.profiles).length}개${unused ? `, 미사용 ${unused}개 → lshed prune` : ""}`);
+  lines.push("", `${rows.length} items, ${Object.keys(m.profiles).length} profiles${unused ? `, ${unused} unused → lshed prune` : ""}`);
   return lines.join("\n");
 }

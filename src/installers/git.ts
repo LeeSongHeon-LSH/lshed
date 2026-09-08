@@ -9,7 +9,7 @@ import * as g from "../git.js";
 import { exists } from "../fsutil.js";
 
 function dirOf(ctx: Ctx, pkg: Package): string {
-  if (!pkg.into) throw new Error(`package ${pkg.id}: git 계열 패키지는 into 가 필요합니다`);
+  if (!pkg.into) throw new Error(`package ${pkg.id}: a git package needs into`);
   return path.join(ctx.adapter.root, ...pkg.into.split("/"));
 }
 
@@ -39,13 +39,13 @@ export const gitInstaller: Installer = {
 
   async install(ctx, pkg, locked, _opts: InstallOpts): Promise<string> {
     const dir = dirOf(ctx, pkg);
-    if (await exists(dir)) throw new Error(`package ${pkg.id}: ${dir} 가 있지만 git 저장소가 아닙니다. 치우거나 into 를 바꾸세요.`);
+    if (await exists(dir)) throw new Error(`package ${pkg.id}: ${dir} exists but is not a git repository. Move it away or change into.`);
     const { url, ref } = cloneTarget(parseSource(pkg.source));
     await fs.mkdir(path.dirname(dir), { recursive: true });
     await g.clone(url, dir, ref);
     if (locked) {
       await g.resetHard(dir, locked).catch(() => {
-        throw new Error(`package ${pkg.id}: 락의 커밋 ${locked.slice(0, 7)} 을 찾을 수 없습니다. 'lshed update ${pkg.id}' 로 락을 갱신하세요.`);
+        throw new Error(`package ${pkg.id}: the locked commit ${locked.slice(0, 7)} was not found. Refresh the lock with 'lshed update ${pkg.id}'.`);
       });
     }
     return g.head(dir);

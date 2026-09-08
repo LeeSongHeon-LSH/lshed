@@ -57,11 +57,11 @@ export async function discover(ctx: Ctx, exclude: readonly string[] = []): Promi
     const all = await cat.read();
     for (const id of Object.keys(all).sort()) {
       if (isExcluded(cat.name, id)) { excluded.push(`${cat.name}/${id}`); continue; }
-      if (!/^[\w.-]+$/.test(id)) { ctx.log(`  ! ${cat.name}/${id}: 이름에 쓸 수 없는 문자가 있어 건너뜀`); continue; }
+      if (!/^[\w.-]+$/.test(id)) { ctx.log(`  ! ${cat.name}/${id}: name has characters lshed cannot use, skipped`); continue; }
       // 값이 패키지 안을 가리키면 그 패키지의 설치가 써 넣은 것일 수 있다 (예: gstack 의 훅). 감지는 제안이다.
       // 문자열 포함이 아니라 경로로 견준다. JSON 안의 Windows 경로는 백슬래시가 이스케이프되어 있다.
       const owner = kept.find((p) => p.path && stringsIn(all[id]).some((s) => isInside(p.path!, s)));
-      const warn = owner ? `패키지 ${owner.id} 안을 가리킵니다. 그 설치가 만든 것이면 exclude 하세요: ${cat.name}/${id}` : undefined;
+      const warn = owner ? `points into package ${owner.id}. If that install created it, exclude it: ${cat.name}/${id}` : undefined;
       items.push({ kind: "entry", category: cat.name, id, value: all[id] as Json, cat, warn });
     }
   }

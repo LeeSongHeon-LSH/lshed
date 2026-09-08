@@ -47,7 +47,7 @@ export class JsonEntries implements EntryCategory {
       return (text.trim() ? JSON.parse(text) : {}) as Record<string, unknown>;   // 도구가 빈 파일로 만들어 두기도 한다 (Antigravity 의 mcp_config.json)
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
-      throw new Error(`${p} 을 읽을 수 없습니다: ${(e as Error).message}`);
+      throw new Error(`cannot read ${p}: ${(e as Error).message}`);
     }
   }
 

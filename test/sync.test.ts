@@ -47,8 +47,8 @@ describe("lshed sync", { timeout: SLOW }, () => {
     logs = [];
     const again = await sync(ctx);
     expect(again).toMatchObject({ committed: [], pulled: 0, pushed: false });
-    expect(logs.join("\n")).toContain("커밋할 변경 없음");
-    expect(logs.join("\n")).toContain("원격과 같음");
+    expect(logs.join("\n")).toContain("nothing to commit in the shed");
+    expect(logs.join("\n")).toContain("same as remote");
   });
 
   it("origin 이 없으면 커밋만 한다", async () => {
@@ -56,7 +56,7 @@ describe("lshed sync", { timeout: SLOW }, () => {
     const res = await sync(ctxFor(rootA, shedA), { message: "hello" });
     expect(res.pushed).toBe(false);
     expect(await git(["log", "-1", "--format=%s"], shedA)).toBe("hello");
-    expect(logs.join("\n")).toContain("origin 이 없어");
+    expect(logs.join("\n")).toContain("no origin, pull/push skipped");
   });
 
   it("다른 기기: clone 한 창고에서 sync 하면 원격 변경을 받고 restore 를 안내한다", async () => {
@@ -82,7 +82,7 @@ describe("lshed sync", { timeout: SLOW }, () => {
     await w(path.join(rootA, "skills/alpha/SKILL.md"), "edited locally");
     const res = await sync(ctxFor(rootA, shedA), { dryRun: true });
     expect(res.unsaved).toEqual(["skills/alpha"]);
-    expect(logs.join("\n")).toContain("lshed save 후 다시 sync");
+    expect(logs.join("\n")).toContain("lshed save, then sync again");
     expect(await git(["log", "--oneline"], shedA).catch(() => "")).toBe("");
   });
 
@@ -93,7 +93,7 @@ describe("lshed sync", { timeout: SLOW }, () => {
     await w(path.join(shedA, "skills/alpha/SKILL.md"), "from A");
     await sync(ctxFor(rootA, shedA));
     await w(path.join(shedB, "skills/alpha/SKILL.md"), "from B");
-    await expect(sync(ctxFor(rootB, shedB))).rejects.toThrow(/충돌/);
+    await expect(sync(ctxFor(rootB, shedB))).rejects.toThrow(/conflict/);
     expect(await git(["status", "--porcelain"], shedB)).toBe("");
     expect(await r(path.join(shedB, "skills/alpha/SKILL.md"))).toBe("from B"); // 내 커밋은 남아 있다
     expect(await fs.access(path.join(shedB, ".git/rebase-merge")).catch(() => "none")).toBe("none");

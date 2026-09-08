@@ -14,12 +14,12 @@ describe("parseSource", () => {
     expect(parseSource("github:a/b")).toMatchObject({ owner: "a", repo: "b", ref: undefined });
   });
   it("스킴 없으면 거부 (§6.2)", () => {
-    expect(() => parseSource("./skills/x")).toThrow(/스킴/);
+    expect(() => parseSource("./skills/x")).toThrow(/scheme/);
   });
   it("모르는 스킴은 other 로 통과시키고 설치기가 판단한다", () => {
     expect(parseSource("claude-plugin:exa@official")).toEqual({ scheme: "other", name: "claude-plugin", rest: "exa@official" });
     expect(formatSource(parseSource("claude-plugin:exa@official"))).toBe("claude-plugin:exa@official");
-    expect(() => parseSource("Bad Scheme:x")).toThrow(/알 수 없는 스킴/);
+    expect(() => parseSource("Bad Scheme:x")).toThrow(/unknown scheme/);
   });
   it("round-trip", () => {
     for (const s of ["file:./a", "github:a/b", "github:a/b@v1", "github:a/b@v1#c/d"]) {

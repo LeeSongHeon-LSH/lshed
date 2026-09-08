@@ -161,7 +161,7 @@ export function diffEntry(shed: Json, local: Json | undefined): { status: "A" | 
 export async function readEntryFile(p: string): Promise<Json | null> {
   try { return JSON.parse(await fs.readFile(p, "utf8")) as Json; } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw new Error(`${p}: JSON 을 읽을 수 없습니다: ${(e as Error).message}`);
+    throw new Error(`${p}: cannot parse JSON: ${(e as Error).message}`);
   }
 }
 

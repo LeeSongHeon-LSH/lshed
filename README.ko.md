@@ -542,7 +542,7 @@ lshed scan                                      루트를 읽기만 하고 나�
 
 ## 문제 해결
 
-- **"창고 위치를 모릅니다"** — `--shed <dir>`를 주거나 `LSHED_HOME`을 설정하세요. `restore`가 한 번 성공하면 기억합니다.
+- **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** (창고 위치를 모름) — `--shed <dir>`를 주거나 `LSHED_HOME`을 설정하세요. `restore`가 한 번 성공하면 기억합니다.
 - **restore가 내 `CLAUDE.md`를 바꿨다** — `~/.claude/lshed/backups/<시각>/CLAUDE.md`에 있습니다. 내용을 창고의 조각으로 옮기고 그 조각을 프로필에 넣으세요.
 - **로컬에서 고친 스킬을 지키고 싶다** — `lshed diff`로 보고, `lshed save <id>`로 창고에 넣고, `lshed sync`.
 - **`status`가 패키지가 lock과 다르다고 한다** — 무언가가 lshed 몰래 clone이나 플러그인을 갱신했습니다(Claude Code는 플러그인을 자동 갱신합니다). `lshed update`가 새 버전을 기록합니다.

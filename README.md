@@ -11,8 +11,6 @@ lshed restore research             # apply a profile anywhere
 
 The shed is a plain directory. Put it in a git repo, Dropbox, whatever. `lshed sync` wraps the git part if you want it to. Works with Claude Code, and places the same shed into Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity and the shared `~/.agents/skills`.
 
-> lshed's own output is in Korean; the terminal captures below are shown as they appear.
-
 ## Why
 
 Every new laptop, server, container or WSL box means setting up `~/.claude` again. The obvious fix is to put `~/.claude` itself in git, and for many people that is the right answer.
@@ -544,7 +542,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 ## Troubleshooting
 
-- **"창고 위치를 모릅니다"** (shed location unknown) — pass `--shed <dir>` or set `LSHED_HOME`. After one successful `restore`, lshed remembers it.
+- **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** — do one of those. After one successful `restore`, lshed remembers it.
 - **restore replaced my `CLAUDE.md`** — it is in `~/.claude/lshed/backups/<timestamp>/CLAUDE.md`. Move its content into a fragment in the shed and add that fragment to your profile.
 - **I edited a skill locally and want to keep it** — `lshed diff` to see, `lshed save <id>` to push it into the shed, then `lshed sync`.
 - **`status` says a package differs from the lock** — something updated the clone or plugin behind lshed's back (Claude Code auto-updates plugins). `lshed update` records the new version.

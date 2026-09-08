@@ -1,10 +1,10 @@
 # lshed — 하네스 휴대 도구 설계 문서 (v0.1)
 
-> **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13) · 2026-09-05 (0.14.1 기준으로 상태 갱신)
+> **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13) · 2026-09-05 (0.14.1 기준으로 상태 갱신) · 2026-09-08 (전수 테스트 결과와 알려진 문제 둘, §10.3)
 > **프로젝트명**: `lshed` (읽기: 엘셰드 / *el-shed*)
 > **성격**: 오픈소스 CLI 도구 / 개인 취미 프로젝트로 시작
-> **상태 (2026-09-05)**: 0.14.1. 개발 항목은 §12 기준으로 모두 닫혔다 — 부품·프로필·관리 집합, 패키지(git·Claude 플러그인)·락, MCP·settings 항목형, add/sync, `--pick`, `extends`, `--link`, 다른 에이전트(`--agent codex|gemini|copilot|cursor|agy|agents`)와 MCP 형식 변환, 단독 실행파일 5종, 3 OS CI. 남은 것은 검증 둘: Gemini CLI·Copilot CLI·Cursor 의 VM probe(§10.2, 런북은 `scripts/vm/README.md`)와 사용자 실제 Windows 기기(§10.1). 이 기기는 Claude Code·Codex·Antigravity 가 모두 실제 창고 `~/harness` 를 링크로 쓴다.
-> **배포**: GitHub `LeeSongHeon-LSH/lshed`(public), npm `lshed`(latest 0.14.0, 0.14.1 은 로컬 태그), 릴리스마다 실행파일 5종 + SHA256SUMS
+> **상태 (2026-09-08)**: 0.14.1 이 push·publish 되어 있고, 개발 항목은 §12 기준으로 모두 닫혔다 — 부품·프로필·관리 집합, 패키지(git·Claude 플러그인)·락, MCP·settings 항목형, add/sync, `--pick`, `extends`, `--link`, 다른 에이전트(`--agent codex|gemini|copilot|cursor|agy|agents`)와 MCP 형식 변환, 단독 실행파일 5종, 3 OS CI. 2026-09-08 에 이 기기에서 할 수 있는 검사를 전부 다시 돌렸다(§10.3): 단위 147·스모크·바이너리·`--pick`·실환경 dry-run·Codex/agy probe 전부 통과. **알려진 문제 둘(미수정, §11)**: CI Windows 잡의 sync 테스트가 5초 타임아웃에 이따금 걸린다, `update --dry-run` 이 업스트림을 보지 않고 모든 패키지를 갱신 대상으로 찍는다. 남은 검증 둘: Gemini CLI·Copilot CLI·Cursor 의 VM probe(§10.2, 런북은 `scripts/vm/README.md`)와 사용자 실제 Windows 기기(§10.1). 이 기기는 Claude Code·Codex·Antigravity 가 모두 실제 창고 `~/harness` 를 링크로 쓴다.
+> **배포**: GitHub `LeeSongHeon-LSH/lshed`(public), npm `lshed`(latest 0.14.1), 릴리스마다 실행파일 5종 + SHA256SUMS (v0.14.1 까지 게시됨)
 > **배경 기록**(비용·수익·연구 연결·폐기 대안): `notes/background.md`
 
 ---
@@ -511,6 +511,10 @@ v0.4  다른 도구
    ✓ Codex 스킬을 ~/.agents/skills 로                                    ← 0.14.0
    ✓ 도그푸딩이 잡은 셋 (마켓플레이스/플러그인 id, extraKnownMarketplaces, 빈 JSON) ← 0.14.1
 
+알려진 문제 (2026-09-08, §11)
+   - CI Windows 잡의 sync 테스트 5초 타임아웃 플레이크
+   - update --dry-run 이 업스트림을 안 봄
+
 검증 (사용자 기기·키 필요)
    - Gemini CLI · Copilot CLI · Cursor 를 VM probe 로 (§10.2, scripts/vm/README.md 런북)
    - 실제 Windows 기기에서 §10.1 3층
@@ -589,7 +593,7 @@ Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%U
 경로 비교는 `fsutil.ts` 의 `normalizePath`/`isInside`/`realpathish` 한 곳으로 모았고,
 링크된 디렉터리를 만들어 리눅스에서도 이 부류를 재현하는 회귀 테스트를 두었다.
 
-### 10.2 다른 에이전트 검증: VM probe (2026-09-05)
+### 10.2 다른 에이전트 검증: VM probe (2026-09-05, 재실행 2026-09-08)
 
 > 실행 절차(런북)는 `scripts/vm/README.md` 의 "Runbook" 절에 있다. 사용자가 OpenStack 과 OS 이미지를 준비하면 그 절차대로 바로 돌린다.
 
@@ -612,8 +616,26 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - 최종: Codex 대상 probe 17개 검사 전부 통과, `agents` 대상(~/.agents/skills 를 Codex 가 읽음, 링크 포함) 통과.
 - **agy(0.13.0)**: 사용자에게 Antigravity CLI(agy 1.1.26)가 있어 어댑터를 추가하고 같은 probe 로 확인했다. agy 의 `/skills` 가 보여 준 전역 스킬 위치는 `~/.gemini/config/skills`(IDE·CLI 공용), `~/.gemini/skills`, `~/.gemini/antigravity-cli/skills` 이고 `~/.agents/skills` 는 아니다. 전역 규칙은 `~/.gemini/AGENTS.md` 와 `GEMINI.md` 둘 다 읽는다(각각 다른 코드워드로 확인). 그래서 루트는 `~/.gemini/config`, 지침은 `../AGENTS.md`(Gemini CLI 와 GEMINI.md 를 다투지 않도록), MCP 는 `config/mcp_config.json`(type 없음, http 는 serverUrl, `disabled` 는 도구 상태). 루트 위의 부품은 백업 경로에서 `..` 을 `__` 로 바꿔 백업 디렉터리 안에 둔다. 격리 HOME + 복사한 OAuth 토큰으로 probe 전부 1회 시도에 통과. VM 에선 `modelProvider: "gemini"` + GEMINI_API_KEY 로 헤드리스 로그인.
 - probe 를 `claude-code` 대상으로 격리된 `CLAUDE_CONFIG_DIR` 에 돌리다 **lshed 버그 하나를 잡았다(0.12.1)**: Claude Code 를 아직 한 번도 안 돌린 기기에서 `CLAUDE_CONFIG_DIR` 가 있으면 어댑터가 안쪽 `.claude.json` 이 없다는 이유로 형제 `<dir>.json` 에 MCP 를 썼고, `claude mcp list` 는 그것을 읽지 않았다. 환경변수로 루트가 정해졌으면 언제나 안쪽 파일을 쓰도록 고침. 기본 `~/.claude` 에서는 변화 없음.
+- **재실행(2026-09-08, 0.14.1)**: Codex 0.153.2 는 17개, agy 1.1.27 은 16개 검사 전부 통과, 질문마다 1회 시도로 회수. gemini/copilot/cursor/agents/claude-code 는 `LSHED_PROBE_ASK=0` 으로 빈 HOME 에 배치·형식·정리만 확인해 전부 통과. 이 기기에서 probe 를 돌리는 법: 실제 루트를 건드리지 않도록 스크래치 `HOME` 을 만들고 로그인 파일만 복사한다 — Codex 는 `~/.codex/auth.json`(+ `config.toml`, `installation_id`), agy 는 `~/.gemini/antigravity-cli/antigravity-oauth-token`(+ `settings.json`, `installation_id`). 끝나면 복사본을 지운다. Codex 0.153.2 의 스킬 루트는 `~/.agents/skills` 와 `~/.codex/skills/.system`(내장) 둘이며 실제 창고의 스킬 7개 중 `disable-model-invocation: true` 인 둘(grill-me, grill-with-docs)을 뺀 5개가 프롬프트에 실린다 — 정상.
+
+### 10.3 전수 테스트 (2026-09-08, 0.14.1)
+
+코드를 바꾸지 않은 상태에서 이 기기에서 할 수 있는 검사를 전부 돌린 기록. 층은 §10.1 의 셋에 probe 를 더한 넷이다.
+
+| 층 | 검사 | 결과 |
+|---|---|---|
+| 1 | `npm run typecheck`, `npm test` (147) | 통과 |
+| 2 | `npm run build` → `npm run smoke`, `npm run binaries`(5종) → `LSHED_CLI=build/lshed-linux-x64 npm run smoke` | 통과 |
+| 3 | 실제 창고 `~/harness` 에 대해 claude-code·codex·agy 셋 다 `status`(드리프트 없음)·`diff`(일치)·`restore --dry-run`(변경 0)·`scan`·`add`(후보 없음)·`sync --dry-run`(커밋할 것 없음) | 통과 |
+| 3 | `restore --pick` 을 실제 pty 로 구동(스크래치 창고): 스킬 2개 선택 → 프로필 `pickbox` 저장 → 배치 2 | 통과 |
+| 4 | §10.2 probe: Codex·agy 전체, 나머지는 배치만 | 통과 |
+
+여기서 나온 **문제 둘**은 §11 에 미결로 적었다: (1) CI 의 마지막 main 런(6b7b77e, 문서만 바꾼 커밋)에서 windows-22 잡이 `test/sync.test.ts` 두 테스트의 5초 타임아웃으로 실패 — 같은 런의 windows-20 과 직전 런의 windows 잡 둘은 통과했으므로 러너에서 git 자식 프로세스 spawn 이 느린 날 터지는 플레이크이고, 뒤따른 `EBUSY rmdir` 는 타임아웃 뒤 afterEach 가 아직 도는 git 밑을 지우려다 난 연쇄다; (2) `lshed update --dry-run` 이 실환경에서 9개 패키지 전부에 `~ (update)` 를 찍는데 `status` 는 전부 `= lock` 이라 모순처럼 보인다.
 
 ## 11. 미결 질문
+
+- **CI Windows 잡의 sync 테스트 타임아웃 (2026-09-08 발견, 미수정).** `test/sync.test.ts` 는 테스트마다 git 을 10회 안팎 띄우는데 Windows 러너에선 한 번에 수백 ms 라 vitest 기본 5초가 빠듯하다. 코드 결함이 아니라 플레이크. 제안: 이 파일의 `describe` 에 `{ timeout: 30_000 }`, afterEach 의 `fs.rm` 에 `maxRetries: 3, retryDelay: 200`(EBUSY 흡수). 두 줄 변경.
+- **`update --dry-run` 이 업스트림을 확인하지 않는다 (2026-09-08 발견, 미수정).** `src/core/packages.ts` 의 `updatePackages` 가 dryRun 이면 조회 없이 `~ package X (… update)` 만 찍는다. "무엇이 갱신될지 보여준다"는 옵션 설명과 어긋난다. 제안: 설치기 인터페이스에 읽기 전용 `latest()`(git 은 `ls-remote`, 마켓플레이스 플러그인은 마켓 버전)를 두고 dry-run 이 lock 과 비교해 `=` / `~ 이전 → 최신` 으로 찍는다. 1번보다 손이 간다.
 
 - ~~**다른 에이전트 어댑터**~~ — **해결 (2026-09-04, 0.11.0).** Codex·Gemini CLI·Copilot CLI·Cursor 가 전부 Agent Skills 표준(`<root>/skills/<name>/SKILL.md`)을 쓰고 공용 `~/.agents/skills/` 도 읽으므로, 도구별 어댑터 대신 `SkillsDirAdapter` 하나에 루트·지침 파일만 다른 스펙 5개(codex/gemini/copilot/cursor/agents)를 넣었다. 창고는 하나이고 `--agent` 로 배치 대상을 고른다(`$LSHED_AGENT`, 창고의 `agent:` 는 기본값). 매니페스트 검증은 현재 어댑터가 아니라 **창고를 만든 에이전트** 기준이라 다른 에이전트로 열어도 오류가 아니며, 모르는 카테고리(mcp, settings, agents, instructions 없음)와 설치기 없는 패키지(claude-plugin:)는 알리고 건너뛴다. state 는 에이전트 루트마다 따로. 지침은 Codex/Gemini/Copilot 모두 이어붙임(Codex 는 import 문법이 없고, Gemini 는 @import 의 허용 디렉터리가 문서에 불명확, Copilot 은 저장소 안에서만). Cursor·~/.agents 는 사용자 지침 파일이 없어 `instructionsFileName()` 이 null. 실환경: 사용자의 `~/.agents/skills` 에 `skills` CLI 로 설치한 5개가 이미 있고 창고와 내용이 같아 dry-run 이 `=` 5, `+` 1(add-drivers) 로 나왔다. MCP 는 0.12.0 에서 추가: 창고 형식은 Claude Code 것 그대로 두고 `adapters/mcp-forms.ts` 가 도구별로 바꾼다(gemini: type 없음·httpUrl, copilot: type local·tools, cursor: `${env:VAR}`·`${userHome}`, codex: env_vars·bearer_token_env_var·env_http_headers 로 변수 *이름*을 적음). 변환은 어댑터의 read/write 안에서만 일어나 core 는 모른다. Codex 의 config.toml 은 `TomlEntries` 가 `[mcp_servers.<id>]` 표 블록만 잘라 붙여 주석·다른 표를 보존(smol-toml 은 읽기와 블록 생성에만). expandsEnv 는 codex·cursor true(이름으로 표현), gemini·copilot false(restore 가 채움). 이름이 다른 자리표시자(env.K = "${OTHER}")는 Codex 로 표현할 수 없어 문자열 그대로 남는다.
 - ~~**프로필 상속** (`extends: base`)~~ — **해결 (2026-09-04, 0.9.0).** `extends: base` 또는 `extends: [a, b]`. 부모를 먼저 풀고 자기 것을 뒤에 붙이며 중복은 한 번, 빼기는 없다(덜 원하면 상속하지 말고 나열). 지침은 순서가 의미라 부모 조각이 먼저 import 된다. 없는 부모·순환은 lshed.yaml 참조 오류. 프로필을 읽는 곳(restore 계획, 패키지, list 의 사용처, add 힌트, `--pick` 기준 체크)은 전부 해석된 프로필을 쓴다. `--pick` 이 기기별 프로필을 만들기 시작하면서 "공통 + 기기 차이" 표현이 필요해져 도입.
@@ -658,7 +680,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 0.2.1 list / remove / prune — 2026-09-02
 - [x] 0.3.0 플러그인 설치기 — 2026-09-02
 - [x] 0.4.0 MCP 항목형 부품 + ${VAR} 마스킹 — 2026-09-03 (실제 Claude Code 가 사용자 범위에서 확장하는지 프로브로 검증)
-- [x] npm 발행 — 0.4.0 은 2026-09-03, 이후 0.6.0·0.7.0·0.7.2·0.7.4·0.8.0·0.10.0·0.12.0·0.13.0 (0.1.1~0.3.0 중 0.2.1·0.3.0 발행, 나머지는 건너뜀)
+- [x] npm 발행 — 0.4.0 은 2026-09-03, 이후 0.6.0·0.7.0·0.7.2·0.7.4·0.8.0·0.10.0·0.12.0·0.13.0·0.14.0·0.14.1 (0.1.1~0.3.0 중 0.2.1·0.3.0 발행, 나머지는 건너뜀); GitHub 릴리스는 v0.14.1 까지 실행파일 5종 게시
 - [x] 0.5.0 `lshed add` — init 의 분류(discover)·수집(ingest)을 공용화해 증분으로. `exclude:` 를 매니페스트에 기록 — 2026-09-03
 - [x] 0.6.0 `lshed sync` + README 사용 안내 개정 — 2026-09-03
 - [x] 0.7.0 settings 항목형 + ${HOME} + 시크릿 단어 단위 — 2026-09-03
@@ -671,6 +693,9 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 0.12.0 타 도구 MCP 형식 변환 (Codex config.toml 표 편집) — 2026-09-04
 - [x] 0.12.1 VM probe (`scripts/vm/`) + CLAUDE_CONFIG_DIR 아래 `.claude.json` 위치 수정 — 2026-09-05
 - [x] 0.13.0 `--agent agy` (Antigravity) — 2026-09-05, README 영어/한국어 병기
+- [x] 2026-09-08 전수 테스트 (§10.3): 단위·스모크·바이너리·`--pick` pty·실환경 dry-run·Codex/agy probe 전부 통과, 코드 변경 없음
+- [ ] CI Windows 잡의 sync 테스트 타임아웃 여유 (§11) — 테스트만 고치면 됨
+- [ ] `update --dry-run` 이 업스트림을 확인하도록 (§11)
 - [ ] Gemini CLI·Copilot CLI·Cursor 를 VM 에서 probe (§10.2) — 사용자: 이미지 굽고 cloud-init 으로 부팅
 - [ ] 사용자 실제 Windows 노트북에서 §10.1 3층 (실행파일로 restore --dry-run, --link 의 junction·복사 폴백)
 - [x] 실제 창고 ~/harness 를 `--agent agy`·`--agent codex` 로 이 기기에 적용 (도그푸딩, `tools` 프로필 + --link) — 2026-09-05. 잡은 것: 한 플러그인짜리 마켓플레이스의 id 충돌, `extraKnownMarketplaces` 를 후보로 잡던 것, Antigravity 의 빈 mcp_config.json 을 못 읽던 것 (0.14.1)

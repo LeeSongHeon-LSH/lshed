@@ -656,8 +656,17 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 - Tests, a CLI smoke run and the standalone binaries run on every push on **Ubuntu, macOS and Windows** (Node 20 and 22). Windows uses junctions for `--link` and `claude.cmd` for plugin installs.
   테스트, CLI 스모크, 단독 실행파일이 push마다 **Ubuntu, macOS, Windows**(Node 20, 22)에서 돕니다. Windows는 `--link`에 junction을, 플러그인 설치에 `claude.cmd`를 씁니다.
-- The other agents are checked against the tools themselves, not just their docs. `scripts/vm/probe.sh` restores a throwaway shed into a tool's real root and asks the tool, non-interactively, for a passphrase kept in a skill, a codeword kept in the instructions file, and the same skill again through a `--link` symlink. Codex 0.153.2 and Antigravity CLI 1.1.26 pass every check; Gemini CLI, Copilot CLI and Cursor are verified for file placement and format so far. `scripts/vm/README.md` has the details and a cloud-init file for running the whole thing on a fresh VM.
-  다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.2와 Antigravity CLI 1.1.26은 모든 검사를 통과했고, Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
+- The other agents are checked against the tools themselves, not just their docs. `scripts/vm/probe.sh` restores a throwaway shed into a tool's real root and asks the tool, non-interactively, for a passphrase kept in a skill, a codeword kept in the instructions file, and the same skill again through a `--link` symlink. Codex 0.153.2 and Antigravity CLI 1.1.27 pass every check (last run 2026-09-08 with lshed 0.14.1); Gemini CLI, Copilot CLI and Cursor are verified for file placement and format so far. `scripts/vm/README.md` has the details and a cloud-init file for running the whole thing on a fresh VM.
+  다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.2와 Antigravity CLI 1.1.27은 모든 검사를 통과했고(마지막 실행 2026-09-08, lshed 0.14.1), Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
+- One real shed is in daily use on the machine this is developed on: Claude Code, Codex and Antigravity all read it through `--link`, and `status` reports no drift for any of the three.
+  개발하는 기기에서는 실제 창고 하나를 매일 씁니다. Claude Code, Codex, Antigravity가 모두 `--link`로 그 창고를 읽고, 셋 다 `status`에 드리프트가 없습니다.
+
+## Known issues · 알려진 문제
+
+- `lshed update --dry-run` lists every installed package as `~ (update)` without asking upstream whether anything changed. Use `lshed status`, which compares the clone with `lshed.lock`, to see what actually moved. A fix is planned.
+  `lshed update --dry-run`은 업스트림에 변경이 있는지 묻지 않고 설치된 패키지를 전부 `~ (update)`로 표시합니다. 실제로 무엇이 움직였는지는 clone과 `lshed.lock`을 비교하는 `lshed status`로 보세요. 수정 예정입니다.
+- The Windows CI job occasionally fails on `test/sync.test.ts` with a 5-second timeout: the git subprocesses are slower on that runner, not a bug in `sync`. The same suite passed on the Node 20 Windows job of the same run and on the run before it. The timeout will be raised for that file.
+  Windows CI 잡이 이따금 `test/sync.test.ts`의 5초 타임아웃으로 실패합니다. 그 러너에서 git 자식 프로세스가 느린 것이지 `sync`의 버그가 아닙니다. 같은 런의 Node 20 Windows 잡과 직전 런에서는 같은 테스트가 통과했습니다. 그 파일의 타임아웃을 늘릴 예정입니다.
 
 ## Not in scope (yet) · 아직 범위 밖
 

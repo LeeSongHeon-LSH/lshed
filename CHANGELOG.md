@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+No code changes. Verification and documentation only (2026-09-08):
+
+- Re-ran everything that runs on the development machine against 0.14.1: unit tests (147), the CLI smoke suite with `dist/cli.js` and with the compiled Linux binary, all five `bun` binaries, `restore --pick` through a real pseudo-terminal, and `status`/`diff`/`restore --dry-run`/`update --dry-run`/`sync --dry-run` against the real shed for `claude-code`, `codex` and `agy`. The VM probe passes in full for Codex 0.153.2 and Antigravity CLI 1.1.27; Gemini, Copilot, Cursor, `agents` and `claude-code` pass the placement-only run. `scripts/vm/README.md` now says how to run the model questions from a scratch `HOME` without touching the real config.
+- Known, not yet fixed: `update --dry-run` prints `~ (update)` for every package without checking upstream; the Windows CI job can time out in `test/sync.test.ts` (5 s default, slow git spawns on that runner). Both are listed in `README.md` under "Known issues" and in `overview.md` §11.
+
 ## 0.14.1 — 2026-09-05
 
 Two things `lshed status` got wrong on a real machine after a one-plugin marketplace was added.

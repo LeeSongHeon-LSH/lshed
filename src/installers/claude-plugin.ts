@@ -4,6 +4,7 @@ import type { Installer, DetectedPackage, InstallOpts, PkgStatus } from "./types
 import type { Ctx } from "../core/context.js";
 import type { Package } from "../manifest.js";
 import { parseSource } from "../source.js";
+import * as g from "../git.js";
 
 /**
  * Claude Code 플러그인 (§7.5).
@@ -14,7 +15,7 @@ import { parseSource } from "../source.js";
  */
 
 interface InstalledFile { version: number; plugins: Record<string, { scope: string; version: string; gitCommitSha?: string }[]> }
-interface MarketplacesFile { [name: string]: { source: { source: string; repo?: string; url?: string; path?: string } } }
+interface MarketplacesFile { [name: string]: { source: { source: string; repo?: string; url?: string; path?: string }; installLocation?: string } }
 
 async function readJson<T>(p: string, fallback: T): Promise<T> {
   try { return JSON.parse(await fs.readFile(p, "utf8")) as T; } catch { return fallback; }
@@ -68,6 +69,19 @@ export const marketplaceInstaller: Installer = {
   async update(ctx, pkg): Promise<string> {
     await claude(ctx, ["plugin", "marketplace", "update", pkg.id]);
     return rest(pkg);
+  },
+
+  /**
+   * Claude Code 가 마켓플레이스를 git 으로 받아 두었으면(installLocation 이 저장소) 그 origin 의 커밋과 견준다.
+   * 공식 마켓플레이스처럼 저장소가 아닌 배포(.gcs-sha)는 미리 알 수 없다.
+   */
+  async upstream(ctx, pkg) {
+    const m = await readJson<MarketplacesFile>(marketplacesPath(ctx), {});
+    const dir = m[pkg.id]?.installLocation;
+    if (!dir || !(await g.isRepo(dir))) return undefined;
+    const url = await g.remoteUrl(dir);
+    if (!url) return undefined;
+    return { current: await g.head(dir), latest: await g.lsRemote(url, await g.branch(dir)) };
   },
 
   describe(pkg) { return `claude plugin marketplace add ${rest(pkg)}`; },

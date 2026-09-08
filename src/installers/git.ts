@@ -57,6 +57,13 @@ export const gitInstaller: Installer = {
     return g.head(dir);
   },
 
+  /** clone 의 HEAD 와 출처 브랜치의 원격 커밋. pull --ff-only 가 옮길 거리 그대로 */
+  async upstream(ctx, pkg) {
+    const dir = dirOf(ctx, pkg);
+    const { url, ref } = cloneTarget(parseSource(pkg.source));
+    return { current: await g.head(dir), latest: await g.lsRemote(url, ref) };
+  },
+
   describe(pkg, locked) {
     const { url, ref } = cloneTarget(parseSource(pkg.source));
     return `clone ${url}${ref ? ` @${ref}` : ""}${locked ? ` → ${locked.slice(0, 7)}` : ""}`;

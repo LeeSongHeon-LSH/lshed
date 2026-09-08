@@ -395,6 +395,7 @@ $ lshed add paper-review mcp/linear
 
 ```
 lshed status                # shows "253d1df ≠ lock 0d1bd56 → lshed update" when a clone moved  ·  clone 이 움직였으면 알림
+lshed update --dry-run      # asks upstream what would move, touches nothing  ·  업스트림에 물어만 보고 아무것도 안 바꿈
 lshed update                # fast-forward every package in the profile, refresh lshed.lock  ·  프로필의 모든 패키지를 당기고 lock 갱신
 lshed update gstack --yes   # one package, and run its install: afterwards  ·  하나만, 그리고 install: 실행
 ```
@@ -402,6 +403,10 @@ lshed update gstack --yes   # one package, and run its install: afterwards  ·  
 Git packages are pinned by commit in `lshed.lock`; a new machine gets exactly that commit. Plugins cannot be pinned, so the lock records what got installed and `status` says when it differs from the machine you came from.
 
 git 패키지는 `lshed.lock`에 커밋으로 고정되어 새 기기도 정확히 그 커밋을 받습니다. 플러그인은 고정할 수 없으므로 lock에는 설치된 버전을 적고, 이전 기기와 다르면 `status`가 알려 줍니다.
+
+`update --dry-run` reads upstream without changing anything: `= (최신)` when the clone already sits on the remote tip, `~ 0d1bd56 → 0530392` when a pull would move it, `?` when that cannot be known in advance. Git packages and marketplaces Claude Code cloned with git can be checked; Claude plugins and the official marketplace (not a git clone) cannot, so they show `?` and only a real `update` tells.
+
+`update --dry-run`은 아무것도 바꾸지 않고 업스트림만 읽습니다. clone이 이미 원격 끝에 있으면 `= (최신)`, pull이 옮길 것이면 `~ 0d1bd56 → 0530392`, 미리 알 수 없으면 `?`입니다. git 패키지와 Claude Code가 git으로 받은 마켓플레이스는 확인할 수 있고, Claude 플러그인과 공식 마켓플레이스(git clone이 아님)는 알 수 없어 `?`로 표시되며 실제 `update`만이 답합니다.
 
 ### Housekeeping · 정리
 
@@ -574,7 +579,7 @@ lshed status                                    applied profile, drift, packages
 lshed diff                                      files (or JSON keys) that differ between local and shed  ·  로컬과 창고가 다른 파일(또는 JSON 키)
 lshed save [ids...]                             copy local edits back into the shed  ·  로컬 편집을 창고로
 lshed sync [-m <msg>] [--no-push] [--dry-run]   commit the shed, pull --rebase, push
-lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh lshed.lock  ·  패키지 당기고 lock 갱신
+lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh lshed.lock; --dry-run asks upstream only  ·  패키지 당기고 lock 갱신, --dry-run 은 업스트림에 묻기만
 lshed list [--unused]                           what is in the shed, and which profiles use it  ·  창고의 내용과 그것을 쓰는 프로필
 lshed remove <key>                              drop a component or package from the shed  ·  창고에서 삭제
 lshed prune [--yes]                             drop everything no profile uses  ·  안 쓰는 것 전부 삭제
@@ -660,11 +665,6 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
   다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.2와 Antigravity CLI 1.1.27은 모든 검사를 통과했고(마지막 실행 2026-09-08, lshed 0.14.1), Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
 - One real shed is in daily use on the machine this is developed on: Claude Code, Codex and Antigravity all read it through `--link`, and `status` reports no drift for any of the three.
   개발하는 기기에서는 실제 창고 하나를 매일 씁니다. Claude Code, Codex, Antigravity가 모두 `--link`로 그 창고를 읽고, 셋 다 `status`에 드리프트가 없습니다.
-
-## Known issues · 알려진 문제
-
-- `lshed update --dry-run` lists every installed package as `~ (update)` without asking upstream whether anything changed. Use `lshed status`, which compares the clone with `lshed.lock`, to see what actually moved. A fix is planned.
-  `lshed update --dry-run`은 업스트림에 변경이 있는지 묻지 않고 설치된 패키지를 전부 `~ (update)`로 표시합니다. 실제로 무엇이 움직였는지는 clone과 `lshed.lock`을 비교하는 `lshed status`로 보세요. 수정 예정입니다.
 
 ## Not in scope (yet) · 아직 범위 밖
 

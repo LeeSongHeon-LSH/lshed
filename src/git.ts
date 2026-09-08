@@ -23,6 +23,20 @@ export const clone = (url: string, dir: string, ref?: string) =>
 export const resetHard = (dir: string, sha: string) => git(["reset", "--hard", "--quiet", sha], dir);
 export const pullFf = (dir: string) => git(["pull", "--ff-only", "--quiet"], dir);
 
+/**
+ * 원격의 커밋을 clone 없이 읽는다 (`git ls-remote`). ref 가 없으면 HEAD.
+ * 같은 이름의 브랜치와 태그가 있으면 브랜치, 주석 태그는 가리키는 커밋(^{}) 을 택한다.
+ */
+export async function lsRemote(url: string, ref?: string): Promise<string> {
+  // 이름만 주면 git 이 peeled(^{}) 줄을 빼므로 셋을 전부 명시한다
+  const want = ref ? [`refs/heads/${ref}`, `refs/tags/${ref}^{}`, `refs/tags/${ref}`] : ["HEAD"];
+  const out = await git(["ls-remote", url, ...want]);
+  const lines = out.split("\n").filter(Boolean).map((l) => { const [sha, name] = l.split("\t"); return { sha, name }; });
+  if (!lines.length) throw new Error(`${url} 에 ${ref ?? "HEAD"} 가 없습니다`);
+  for (const w of want) { const hit = lines.find((l) => l.name === w); if (hit) return hit.sha; }
+  return lines[0].sha;
+}
+
 /** 설치 명령 실행. 출력은 그대로 터미널로 흘린다. 셸은 플랫폼 기본값 (sh / cmd.exe). */
 export function runShell(cmd: string, cwd: string): Promise<void> {
   return new Promise((resolve, reject) => {

@@ -10,7 +10,7 @@ import { status } from "../src/core/status.js";
 import { updatePackages } from "../src/core/packages.js";
 import { readLock } from "../src/lock.js";
 import { exists } from "../src/fsutil.js";
-import { git, head } from "../src/git.js";
+import { git, head, lsRemote } from "../src/git.js";
 
 let tmp: string, remote: string, rootA: string, rootB: string, shed: string, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
@@ -125,6 +125,47 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
 });
 
 describe("update", () => {
+  it("--dry-run: 업스트림을 읽기만 해서 = / ~ 이전 → 최신 을 찍고 clone 과 락은 그대로", async () => {
+    await init(ctxFor(rootA));
+    const ctx = ctxFor(rootB);
+    await restore(ctx, "default");
+    const { parseManifest } = await import("../src/manifest.js");
+    const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
+    const before = await head(path.join(rootB, "skills/toolkit"));
+
+    logs = [];
+    let res = await updatePackages(ctx, m.packages, { dryRun: true });
+    expect(res.lockChanged).toBe(false);
+    expect(logs).toEqual([`  = package toolkit  ${before.slice(0, 7)} (최신)`]);
+
+    const work = path.join(tmp, "upstream-work");
+    await w(path.join(work, "SKILL.md"), "toolkit v2");
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "v2"], work);
+    await git(["push", "-q", remote, "main"], work);
+    const tip = await head(work);
+
+    logs = [];
+    res = await updatePackages(ctx, m.packages, { dryRun: true });
+    expect(res.lockChanged).toBe(false);
+    expect(logs).toEqual([`  ~ package toolkit  ${before.slice(0, 7)} → ${tip.slice(0, 7)}`]);
+    expect(await head(path.join(rootB, "skills/toolkit"))).toBe(before);           // 옮기지 않았다
+    expect((await readLock(shed)).packages.toolkit.rev).toBe(before);              // 락도 그대로
+    expect(await r(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe("toolkit v1");
+  });
+
+  it("--dry-run: 업스트림에 닿지 못하면 ? 로 알리고 멈추지 않는다", async () => {
+    await init(ctxFor(rootA));
+    const ctx = ctxFor(rootB);
+    await restore(ctx, "default");
+    await fs.rm(remote, { recursive: true, force: true });                          // 원격이 사라졌다
+    const { parseManifest } = await import("../src/manifest.js");
+    const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
+    logs = [];
+    await updatePackages(ctx, m.packages, { dryRun: true });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatch(/^ {2}\? package toolkit {2}\(업스트림 조회 실패: /);
+  });
+
   it("원격 최신으로 올리고 락을 갱신하며, --yes 면 install 도 돌린다", async () => {
     await init(ctxFor(rootA));
     const y = await r(path.join(shed, "lshed.yaml"));
@@ -146,5 +187,27 @@ describe("update", () => {
     expect(after).not.toBe(before);
     expect(await r(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe("toolkit v2");
     if (process.platform !== "win32") expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
+  });
+});
+
+describe("lsRemote", () => {
+  it("브랜치·태그·HEAD 를 clone 없이 읽고, 같은 이름이면 브랜치가 이긴다", async () => {
+    const work = path.join(tmp, "upstream-work");
+    const main = await head(work);
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "tag", "-a", "v1", "-m", "v1"], work);                             // 주석 태그: 가리키는 커밋으로 풀린다
+    await git(["checkout", "-q", "-b", "v1-branch"], work);
+    await w(path.join(work, "SKILL.md"), "on branch");
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "branch"], work);
+    const onBranch = await head(work);
+    await git(["branch", "-q", "-f", "both", onBranch], work);
+    await git(["tag", "-f", "both", main], work);                                  // 브랜치 both ≠ 태그 both
+    await git(["push", "-q", "-f", "--all", remote], work);
+    await git(["push", "-q", "-f", "--tags", remote], work);
+
+    expect(await lsRemote(remote)).toBe(main);                                     // HEAD (main)
+    expect(await lsRemote(remote, "main")).toBe(main);
+    expect(await lsRemote(remote, "v1")).toBe(main);                               // 주석 태그 → 커밋
+    expect(await lsRemote(remote, "both")).toBe(onBranch);                         // 브랜치 우선
+    await expect(lsRemote(remote, "nope")).rejects.toThrow(/nope 가 없습니다/);
   });
 });

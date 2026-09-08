@@ -1,12 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.14.2 — 2026-09-08
 
-No code changes. Verification and documentation only (2026-09-08):
+`lshed update --dry-run` now asks upstream instead of guessing.
+
+- It printed `~ package X (… update)` for every installed package without looking anywhere, so on a real shed nine packages all looked stale while `status` said `= lock` for each. Now each installer that can look does: git packages run `git ls-remote` against the source branch (or tag) and compare with the clone's HEAD; marketplaces Claude Code cloned with git (`installLocation` is a repository) compare with their origin. The line reads `= 0d1bd56 (최신)`, `~ 0d1bd56 → 0530392`, or `? …` when it cannot be known (Claude plugins, and the official marketplace, which is not a git clone). A lookup failure is reported on that line and does not stop the others. Nothing is written in either case.
+- Installer interface: optional `upstream(ctx, pkg)` returning `{ current, latest }`; `git.ts` gains `lsRemote(url, ref?)`, which names `refs/heads/<ref>`, `refs/tags/<ref>^{}` and `refs/tags/<ref>` explicitly so an annotated tag resolves to its commit and a branch wins over a tag of the same name.
+
+Also in this release (2026-09-08):
 
 - Re-ran everything that runs on the development machine against 0.14.1: unit tests (147), the CLI smoke suite with `dist/cli.js` and with the compiled Linux binary, all five `bun` binaries, `restore --pick` through a real pseudo-terminal, and `status`/`diff`/`restore --dry-run`/`update --dry-run`/`sync --dry-run` against the real shed for `claude-code`, `codex` and `agy`. The VM probe passes in full for Codex 0.153.2 and Antigravity CLI 1.1.27; Gemini, Copilot, Cursor, `agents` and `claude-code` pass the placement-only run. `scripts/vm/README.md` now says how to run the model questions from a scratch `HOME` without touching the real config.
 - `test/sync.test.ts` gets a 30 s budget per test and hook, and its cleanup retries on `EBUSY`. Each of those tests spawns git about ten times; on the Windows CI runner that occasionally exceeded vitest's 5 s default (run 33976665907 failed that way on a docs-only commit while the Node 20 Windows job of the same run passed). Test-only change.
-- Known, not yet fixed: `update --dry-run` prints `~ (update)` for every package without checking upstream. Listed in `README.md` under "Known issues" and in `overview.md` §11.
+- No other code changes; the two items above are the whole diff since 0.14.1.
 
 ## 0.14.1 — 2026-09-05
 

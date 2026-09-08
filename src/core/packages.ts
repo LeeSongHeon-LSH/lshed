@@ -125,6 +125,18 @@ export function reportPending(ctx: Ctx, res: EnsureResult): void {
   for (const p of res.pendingInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
 }
 
+/** update --dry-run 의 한 줄: 업스트림을 읽기만 해서 = (최신) / ~ (옮겨질 거리) / ? (미리 알 수 없음·조회 실패) */
+async function previewUpdate(ctx: Ctx, pkg: Package): Promise<void> {
+  const inst = installerFor(ctx, pkg.source);
+  if (!inst.upstream) { ctx.log(`  ? package ${pkg.id}  (${inst.name}: 갱신 여부는 미리 알 수 없음 — update 가 확인)`); return; }
+  let up: { current: string; latest: string } | undefined;
+  try { up = await inst.upstream(ctx, pkg); }
+  catch (e) { ctx.log(`  ? package ${pkg.id}  (업스트림 조회 실패: ${(e as Error).message.split("\n")[0]})`); return; }
+  if (!up) ctx.log(`  ? package ${pkg.id}  (${inst.name}: 갱신 여부는 미리 알 수 없음 — update 가 확인)`);
+  else if (up.current === up.latest) ctx.log(`  = package ${pkg.id}  ${short(up.current)} (최신)`);
+  else ctx.log(`  ~ package ${pkg.id}  ${short(up.current)} → ${short(up.latest)}`);
+}
+
 /** lshed update: 패키지를 최신으로 올리고 락을 갱신한다. */
 export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
@@ -133,7 +145,7 @@ export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
     const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);
     if (!st.present) { ctx.log(`  ! package ${pkg.id}: 설치되어 있지 않음. 먼저 restore 하세요`); continue; }
-    if (opts.dryRun) { ctx.log(`  ~ package ${pkg.id}  (${inst.name} update)`); continue; }
+    if (opts.dryRun) { await previewUpdate(ctx, pkg); continue; }
     const now = await inst.update(ctx, pkg, opts);
     const before = lock.packages[pkg.id]?.rev;
     if (now !== before) {

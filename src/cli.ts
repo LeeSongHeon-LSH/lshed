@@ -128,7 +128,7 @@ program
 program
   .command("update [ids...]")
   .description("pull packages to their latest upstream and refresh lshed.lock")
-  .option("--dry-run", "show what would be updated")
+  .option("--dry-run", "ask upstream what would change, without touching anything")
   .option("--yes", "run package install commands after updating")
   .action((ids: string[], o: { dryRun?: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");

@@ -9,6 +9,7 @@ import { restore } from "../src/core/restore.js";
 import { status } from "../src/core/status.js";
 import { updatePackages } from "../src/core/packages.js";
 import { readLock } from "../src/lock.js";
+import { git, head } from "../src/git.js";
 
 let tmp: string, rootA: string, rootB: string, shed: string, logs: string[], calls: string[][];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
@@ -133,6 +134,51 @@ describe("restore: 새 기기", () => {
 });
 
 describe("update", () => {
+  it("--dry-run: 플러그인은 미리 알 수 없다고 하고 claude 를 부르지 않는다; git 으로 받은 마켓플레이스는 origin 과 견준다", async () => {
+    // 마켓플레이스가 git clone 으로 놓여 있는 기기 (Claude Code 가 GitHub 출처를 받는 방식)
+    const up = path.join(tmp, "mk-upstream");
+    await w(path.join(up, ".claude-plugin/marketplace.json"), "{}");
+    await git(["init", "-q", "-b", "main"], up);
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "v1"], up).catch(() => {});
+    await git(["add", "-A"], up); await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v1"], up);
+    const clone = path.join(rootA, "plugins/marketplaces/claude-plugins-official");
+    await git(["clone", "-q", up, clone]);
+    const v1 = await head(clone);
+    await w(path.join(rootA, "plugins/known_marketplaces.json"), J({ "claude-plugins-official": { source: { source: "github", repo: "anthropics/claude-plugins-official" }, installLocation: clone } }));
+
+    await init(ctxFor(rootA));
+    const ctx = ctxFor(rootA);
+    const { parseManifest } = await import("../src/manifest.js");
+    const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
+    logs = [];
+    const res = await updatePackages(ctx, m.packages, { dryRun: true });
+    expect(res.lockChanged).toBe(false);
+    expect(calls).toEqual([]);
+    expect(logs).toEqual([
+      `  = package claude-plugins-official  ${v1.slice(0, 7)} (최신)`,
+      "  ? package exa  (claude-plugin: 갱신 여부는 미리 알 수 없음 — update 가 확인)",
+      "  ? package notion  (claude-plugin: 갱신 여부는 미리 알 수 없음 — update 가 확인)",
+    ]);
+
+    await w(path.join(up, ".claude-plugin/marketplace.json"), "{ \"v\": 2 }");
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "v2"], up);
+    logs = [];
+    await updatePackages(ctx, m.packages, { dryRun: true });
+    expect(logs[0]).toBe(`  ~ package claude-plugins-official  ${v1.slice(0, 7)} → ${(await head(up)).slice(0, 7)}`);
+    expect(await head(clone)).toBe(v1);
+  });
+
+  it("--dry-run: 저장소가 아닌 마켓플레이스(공식, .gcs-sha) 는 미리 알 수 없다", async () => {
+    await init(ctxFor(rootA));
+    const ctx = ctxFor(rootA);
+    const { parseManifest } = await import("../src/manifest.js");
+    const m = parseManifest(await r(path.join(shed, "lshed.yaml")));
+    logs = [];
+    await updatePackages(ctx, m.packages.filter((p) => p.id === "claude-plugins-official"), { dryRun: true });
+    expect(logs).toEqual(["  ? package claude-plugins-official  (claude-marketplace: 갱신 여부는 미리 알 수 없음 — update 가 확인)"]);
+    expect(calls).toEqual([]);
+  });
+
   it("플러그인을 올리고 락을 갱신", async () => {
     await init(ctxFor(rootA));
     const ctx = ctxFor(rootA);

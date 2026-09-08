@@ -31,6 +31,12 @@ export interface Installer {
   install(ctx: Ctx, pkg: Package, locked: string | undefined, opts: InstallOpts): Promise<string>;
   /** 최신으로. 실제 rev 반환 */
   update(ctx: Ctx, pkg: Package, opts: InstallOpts): Promise<string>;
+  /**
+   * update 가 무엇을 바꿀지 아무것도 건드리지 않고 미리 본다 (`update --dry-run`).
+   * 지금 것과 업스트림 것을 같은 표기로 돌려주면 core 가 견준다. 미리 알 수 없는 종류(플러그인)는 구현하지 않는다.
+   * 네트워크를 쓸 수 있고 실패하면 던진다 — core 가 "조회 실패" 로 알린다.
+   */
+  upstream?(ctx: Ctx, pkg: Package): Promise<{ current: string; latest: string } | undefined>;
   /** 로그·dry-run 용 한 줄 */
   describe(pkg: Package, locked?: string): string;
   /** install: 셸 명령의 작업 디렉터리 */

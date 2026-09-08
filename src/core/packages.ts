@@ -93,11 +93,12 @@ export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
       const note = st.locked && st.rev !== st.locked ? `  (${short(st.rev)} ≠ lock ${short(st.locked)})` : "";
       ctx.log(`  = package ${pkg.id}${note}`);
       // 이미 있는 패키지도 --yes 면 install 을 돌린다. 첫 restore 가 "rerun with --yes" 라고 안내하므로 그 말이 참이어야 한다.
-      if (opts.yes && !opts.dryRun) await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
+      if (opts.yes) await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
       continue;
     }
     ctx.log(`  + package ${pkg.id}  (${inst.describe(pkg, st.locked)})`);
-    if (opts.dryRun) continue;
+    // dry-run 은 clone 도 install 도 하지 않지만, 어떤 install 명령이 기다리는지는 보여 준다 — 그것이 dry-run 의 몫이다
+    if (opts.dryRun) { await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res); continue; }
     const rev = await inst.install(ctx, pkg, st.locked, opts);
     if (rev !== st.locked) {
       if (st.locked) ctx.log(`    lock says ${short(st.locked)} but ${short(rev)} got installed; lock updated to match`);
@@ -113,7 +114,7 @@ export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
 
 export async function maybeInstall(ctx: Ctx, pkg: Package, dir: string, opts: InstallOpts, res: EnsureResult): Promise<void> {
   if (!pkg.install) return;
-  if (opts.yes) {
+  if (opts.yes && !opts.dryRun) {
     ctx.log(`  $ (${path.relative(ctx.adapter.root, dir) || "."}) ${pkg.install}`);
     await runShell(pkg.install, dir);
   } else {

@@ -111,6 +111,9 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
   it("이미 있으면 건드리지 않고, --dry-run 은 clone 하지 않는다", async () => {
     await restore(ctxFor(rootB), "default", { dryRun: true });
     expect(await exists(path.join(rootB, "skills/toolkit"))).toBe(false);
+    // clone 은 안 하지만 기다리는 install 명령은 보여 준다 (Windows 실기기 검증에서 빠져 있던 것)
+    expect(logs.join("\n")).toMatch(/1 install command was not run[\s\S]*cd .*skills[\\/]toolkit && \.\/setup/);
+    expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(false);
     await restore(ctxFor(rootB), "default");
     await w(path.join(rootB, "skills/toolkit/local-edit"), "x");
     await restore(ctxFor(rootB), "default");

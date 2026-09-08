@@ -138,6 +138,14 @@ describe("restore", () => {
 
 describe("restore --link (§3.6)", () => {
   const isLink = async (p: string) => (await fs.lstat(p)).isSymbolicLink();
+  // Windows 에서 파일 심볼릭 링크는 개발자 모드(또는 관리자)가 있어야 만들어진다. CI 러너는 있고 보통 사용자 PC 는 없다.
+  // 그때 linkTree 는 설계대로 복사로 폴백하므로, 이 기기에서 파일 링크가 되는지 먼저 재 보고 그에 맞춰 기대한다.
+  const canLinkFiles = async (): Promise<boolean> => {
+    const d = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-linkprobe-"));
+    try { await fs.writeFile(path.join(d, "f"), ""); await fs.symlink(path.join(d, "f"), path.join(d, "l"), "file"); return true; }
+    catch { return false; }
+    finally { await fs.rm(d, { recursive: true, force: true }); }
+  };
   beforeEach(async () => {
     await init(ctx);
     await fs.appendFile(path.join(shed, "lshed.yaml"), "  minimal:\n    skills: [alpha]\n");
@@ -145,8 +153,12 @@ describe("restore --link (§3.6)", () => {
   });
 
   it("파일 부품은 창고로 가는 링크, 생성 파일은 실제 파일. 편집이 창고에 바로 반영되고 diff/save 는 할 일이 없다", async () => {
+    const fileLinks = await canLinkFiles();
     const res = await restore(ctx, "default", { link: true });
-    for (const rel of ["skills/alpha", "agents/rev.md", "lshed/instructions/main.md"]) expect(await isLink(path.join(root, rel)), rel).toBe(true);
+    expect(await isLink(path.join(root, "skills/alpha"))).toBe(true); // 디렉터리는 Windows 에서도 junction 으로 늘 된다
+    for (const rel of ["agents/rev.md", "lshed/instructions/main.md"]) expect(await isLink(path.join(root, rel)), rel).toBe(fileLinks);
+    if (!fileLinks) expect(logs.join("\n")).toContain("could not link, copied instead");
+    expect(await r(path.join(root, "agents/rev.md"))).toBe("reviewer");
     expect(await isLink(path.join(root, "CLAUDE.md"))).toBe(false);
     expect(await r(path.join(root, "skills/alpha/ref/x.txt"))).toBe("x");
     expect(res.backedUp).toEqual([]);

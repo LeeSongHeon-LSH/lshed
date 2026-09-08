@@ -530,6 +530,7 @@ lshed scan                                      루트를 읽기만 하고 나�
 ## 검증된 것
 
 - 테스트, CLI 스모크, 단독 실행파일이 push마다 **Ubuntu, macOS, Windows**(Node 20, 22)에서 돕니다. Windows는 `--link`에 junction을, 플러그인 설치에 `claude.cmd`를 씁니다. 스모크에는 한글 이름 스킬이 들어 있어, macOS의 파일 이름 정규화 차이나 Windows의 코드페이지 문제는 사용자 기기가 아니라 CI에서 먼저 실패합니다.
+- 개발자 모드가 꺼진 실제 Windows 11 PC(PowerShell 7과 cmd.exe, Node 24, 공백과 한글이 든 경로)에서도 npm 으로 설치한 lshed 0.15.1 로 같은 절차가 통과했습니다. `init`, 이미 설정이 있는 기기로의 `restore`, `--link`(스킬은 junction, 단일 파일은 안내와 함께 복사), `add`/`diff`/`save`, 프로필 전환, `codex`·`agents` 대상, 원격 없는 `sync`, 스모크까지입니다.
 - 개발하는 Linux 기기에서는 CI 너머까지 전체 명령을 돌려 봅니다. `install:`이 있는 git·GitHub 패키지의 `restore`와 `update`, 충돌까지 포함한 실제 원격과의 `sync`, `remove`/`prune`, 모든 `--agent` 대상, 환경변수 기본값, 실제 터미널을 거친 `restore --pick`, 컴파일된 Linux 바이너리까지입니다.
 - 다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.2와 Antigravity CLI 1.1.27은 모든 검사를 통과했고(마지막 실행 2026-09-08, lshed 0.14.1), Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
 - 개발하는 기기에서는 실제 창고 하나를 매일 씁니다. Claude Code, Codex, Antigravity가 모두 `--link`로 그 창고를 읽고, 셋 다 `status`에 드리프트가 없습니다.

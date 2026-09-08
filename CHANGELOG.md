@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `restore --dry-run` now lists the `install:` commands that a real run would leave for you, under the same "install command was not run" heading. Before, the dry run showed the clone but said nothing about the install, so the first sight of the command was the real run. Found on the Windows verification pass below.
+- Fix: the `--link` integration test required file parts (`agents/*.md`, the instructions fragments) to be symbolic links, which on Windows needs Developer Mode. CI runners have that privilege; an ordinary Windows PC does not, and there `npm test` failed on a machine where the CLI itself behaved as designed (junction for directories, copy with a notice for files). The test now probes whether the machine can link files and expects the copy fallback otherwise, as the smoke suite already did.
+- Verified on a real Windows 11 machine (PowerShell 7.6 and cmd.exe, Node 24, Developer Mode off), with lshed 0.15.1 from npm and shed and root paths containing spaces and Korean: `init`, `restore` into a machine with its own setup, `--link` with junctions and the copy fallback, `add`/`diff`/`save`, a profile switch with backups, the `codex` and `agents` targets, `sync` without a remote, `LSHED_HOME` and the remembered shed, and the repository's own smoke suite. Secrets stayed out of the shed, `--no-link` left the shed's files in place, and code pages 65001 and 949 both carried `skills/논문리뷰` through intact.
+
 ## 0.15.1 — 2026-09-08
 
 - `restore --yes` and `update --yes` now run a package's `install:` even when the package is already present or already up to date. Before, a first `restore` printed "rerun with '--yes'" but the rerun skipped the present package, so the command did nothing; only running the install by hand worked. Without `--yes` nothing changes: present packages are left alone and pending installs are only printed after a fresh clone.

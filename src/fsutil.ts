@@ -1,5 +1,6 @@
 import { promises as fs } from "node:fs";
 import { createHash } from "node:crypto";
+import os from "node:os";
 import path from "node:path";
 import { DEFAULT_IGNORE, isIgnored } from "./ignore.js";
 
@@ -144,6 +145,17 @@ export async function linkTree(src: string, dst: string, ignore: Ignore = DEFAUL
     await copyTree(src, dst, ignore);
     return "copy";
   }
+}
+
+/**
+ * 이 기기가 파일 심볼릭 링크를 만들 수 있는가. Windows 는 개발자 모드(또는 관리자)가 없으면 못 만들고, 디렉터리는 junction 이라 늘 된다.
+ * 임시 폴더에 하나 만들어 보고 지운다. restore 가 링크 모드에서 복사로 떨어진 파일 부품을 매번 다시 놓지 않으려면 이것을 먼저 알아야 한다.
+ */
+export async function canLinkFiles(): Promise<boolean> {
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-link-"));
+  try { await fs.writeFile(path.join(d, "f"), ""); await fs.symlink(path.join(d, "f"), path.join(d, "l"), "file"); return true; }
+  catch { return false; }
+  finally { await fs.rm(d, { recursive: true, force: true }); }
 }
 
 export type FileChange = { status: "A" | "M" | "D"; file: string };

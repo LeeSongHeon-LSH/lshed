@@ -220,14 +220,21 @@ describe("restore --link (§3.6)", () => {
     expect(await readState(ctx.adapter)).toBeNull();
   });
 
-  it("링크를 못 만들면 복사로 폴백하고 알린다 (Windows 파일 링크)", async () => {
+  it("링크를 못 만들면 복사로 폴백하고 알린다 (Windows 파일 링크). 재적용은 그 복사본을 같은 것으로 보고 다시 놓지 않는다", async () => {
     const spy = vi.spyOn(nodefs.promises, "symlink").mockRejectedValue(Object.assign(new Error("EPERM"), { code: "EPERM" }));
     try {
       await restore(ctx, "default", { link: true });
+      expect(logs.join("\n")).toContain("could not link, copied instead");
+      // 실제 Windows(개발자 모드 OFF)에서 잡힌 것: 파일 부품이 복사본으로 떨어진 뒤 restore 를 다시 하면 매번 ~ 와 경고가 반복됐다.
+      // 파일 링크를 못 만드는 기기에서는 내용이 같은 복사본이 = 여야 한다. (이 mock 은 디렉터리 링크도 막으므로 파일 부품만 본다)
+      logs = [];
+      await restore(ctx, undefined);
+      const fileLines = logs.filter((l) => / agents\/rev\.md|lshed\/instructions\/main\.md/.test(l));
+      expect(fileLines).toEqual(["  = agents/rev.md  (copy; this machine cannot link files)", "  = lshed/instructions/main.md  (copy; this machine cannot link files)"]);
+      expect(fileLines.join("\n")).not.toContain("could not link");
     } finally { spy.mockRestore(); }
     expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);
     expect(await r(path.join(root, "skills/alpha/SKILL.md"))).toBe("alpha v1");
-    expect(logs.join("\n")).toContain("could not link, copied instead");
     expect((await readState(ctx.adapter))?.link).toBe(true); // 모드는 그대로: 다음엔 될 수도 있다
     // 복사본이니 diff/save 가 여느 때처럼 동작
     await w(path.join(root, "skills/alpha/SKILL.md"), "edited copy");

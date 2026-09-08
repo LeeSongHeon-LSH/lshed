@@ -550,7 +550,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 - **`status` keeps listing the same new things** — they are installer aliases or scratch. Add them to `exclude:` in `lshed.yaml`.
 - **restore says an MCP variable is missing** — export it in your shell profile and restart Claude Code. The placeholder in `~/.claude.json` is correct; Claude Code fills it at startup.
 - **restore wrote a hook with the wrong path** — the shed stores home paths as `${HOME}/…`. If a command points elsewhere on this machine, edit the JSON in the shed to use `${HOME}` or another variable and `restore` again. Paths outside your home directory (`D:\tools\x.exe`, `/opt/x`) are copied as written and are your job to keep portable.
-- **`--link` copied a file on Windows** — single-file links need Developer Mode. Turn it on and `restore` again, or keep the copy and use `save` for that file.
+- **`--link` copied a file on Windows** — single-file links need Developer Mode. Turn it on and `restore` again, or keep the copy: later restores report it as `= … (copy; …)` and leave it alone, and `save` brings edits back from it.
 - **sync stopped on a conflict** — `cd <shed> && git pull --rebase`, resolve, `git rebase --continue`, then `lshed sync` again.
 
 ## License

@@ -550,7 +550,7 @@ lshed scan                                      루트를 읽기만 하고 나�
 - **`status`가 같은 새 항목을 계속 보여 준다** — 설치기 별칭이거나 임시 파일입니다. `lshed.yaml`의 `exclude:`에 넣으세요.
 - **restore가 MCP 변수가 없다고 한다** — 셸 프로필에서 export하고 Claude Code를 다시 시작하세요. `~/.claude.json`의 자리표시자는 맞게 들어간 것이고, Claude Code가 시작할 때 채웁니다.
 - **restore가 훅 경로를 엉뚱하게 썼다** — 창고는 홈 경로를 `${HOME}/…`로 담습니다. 이 기기에서 다른 곳을 가리켜야 하면 창고의 JSON을 `${HOME}`이나 다른 변수로 고치고 다시 `restore`하세요. 홈 밖의 경로(`D:\tools\x.exe`, `/opt/x`)는 쓴 그대로 옮겨지며, 휴대성은 사용자 몫입니다.
-- **Windows에서 `--link`가 파일을 복사했다** — 파일 하나짜리 링크는 개발자 모드가 필요합니다. 켜고 다시 `restore`하거나, 복사본을 두고 그 파일은 `save`로 다루세요.
+- **Windows에서 `--link`가 파일을 복사했다** — 파일 하나짜리 링크는 개발자 모드가 필요합니다. 켜고 다시 `restore`하거나, 복사본을 그대로 두세요. 이후 `restore`는 그것을 `= … (copy; …)`로 알리고 건드리지 않으며, 편집은 `save`로 되가져옵니다.
 - **sync가 충돌로 멈췄다** — `cd <창고> && git pull --rebase`, 해결, `git rebase --continue`, 그리고 다시 `lshed sync`.
 
 ## 라이선스

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix: on a machine that cannot create file links (Windows without Developer Mode), `restore` in link mode placed a file part as a copy and then, on every later `restore`, replaced that copy again with a `~` line and the "could not link" notice, never settling on `=`. Found by the second Windows verification pass, where the `--link` test kept failing for this reason after 0.15.2 had fixed its first assertion. lshed now checks once per run whether the machine can link files; if it cannot, an identical copy counts as placed and is reported as `= agents/rev.md  (copy; file links on Windows need Developer Mode)`. Directories are unaffected, since junctions always work. Turning Developer Mode on later and running `restore` again still converts the copies to links.
+
 ## 0.15.2 — 2026-09-08
 
 - A shed no longer carries the separators of the machine that made it. Home paths in settings and MCP entries are stored as `${HOME}/…` with `/` throughout, whether the value was written `C:\Users\me\.claude\hooks\x`, `C:/Users/me/.claude/hooks/x` or `/home/me/.claude/hooks/x`; before, a Windows shed kept `${HOME}\.claude\…`, which restored on Linux or WSL as `/home/me\.claude\…`, and a Windows path written with `/` was not recognized as the home directory at all and went into the shed with the user name in it. On Windows, `restore` now fills `${HOME}` as `C:/Users/me`, so the result has one kind of separator, a form Node, PowerShell, cmd and Git Bash all accept; the same applies to the Codex `config.toml`. Drift comparison ignores separators and case for `${HOME}` strings, so a value you wrote with backslashes does not show as drift against the shed. A shed written by an earlier version is normalized the next time `save` or `add` touches the entry; a value that version already placed on a Windows machine keeps its mixed separators until the entry is next rewritten, since it still counts as the same value.

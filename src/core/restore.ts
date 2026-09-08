@@ -3,7 +3,7 @@ import path from "node:path";
 import { type Ctx, type PlanItem, loadManifest, planProfile, abs, INSTRUCTIONS, ignoreOf, entryOf, unsupportedCategories, installablePackages, schemeOf } from "./context.js";
 import { expand, envWithHome, matches, placeholdersIn, readEntryFile, writeEntryFile, type Json } from "./entries.js";
 import { readState, writeState, LSHED_DIR } from "../state.js";
-import { copyTree, exists, hashTree, isLink, isLinkTo, linkTree, removeTree } from "../fsutil.js";
+import { canLinkFiles, copyTree, exists, hashTree, isDir, isLink, isLinkTo, linkTree, removeTree } from "../fsutil.js";
 import { instructionsFile, isGenerated, renderInstructions } from "./instructions.js";
 import { ensurePackages, reportPending } from "./packages.js";
 import type { Manifest } from "../manifest.js";
@@ -39,6 +39,8 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   const profile = profileArg ?? state?.profile;
   if (!profile) throw new Error("Name a profile: lshed restore <profile>  (none was applied before)");
   const link = opts.link ?? state?.link ?? false;
+  let fileLinksMemo: boolean | undefined;
+  const fileLinks = async () => (fileLinksMemo ??= await canLinkFiles());
 
   const m = opts.manifest ?? await loadManifest(ctx);
   const plan = planProfile(ctx, m, profile);
@@ -130,11 +132,15 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     const there = (await exists(target)) || (await isLink(target)); // 끊어진 링크도 "있는 것" 으로 치워야 한다
     const sameContent = there && (await hashTree(target, ignoreOf(ctx))) === (await hashTree(it.src, ignoreOf(ctx)));
     const isLinked = await isLinkTo(target, it.src);
+    const anyLink = await isLink(target);
     // 링크 모드면 창고를 가리키는 링크여야 같은 것이고, 복사 모드면 링크가 아니면서 내용이 같아야 같은 것이다.
-    const same = link ? isLinked : sameContent && !(await isLink(target));
-    const note = link ? "  (link)" : (await isLink(target)) ? "  (link → copy)" : "";
+    // 링크 모드인데 이 기기가 파일 링크를 못 만들면(Windows, 개발자 모드 없음) 내용이 같은 복사본이 "같은 것" 이다 — 안 그러면 재적용마다
+    // 다시 복사하고 경고한다. 디렉터리는 junction 으로 늘 되니 그대로 링크를 요구한다.
+    const stuckCopy = link && !isLinked && !anyLink && sameContent && !(await isDir(it.src)) && !(await fileLinks());
+    const same = link ? isLinked || stuckCopy : sameContent && !anyLink;
+    const note = stuckCopy ? `  (copy; ${process.platform === "win32" ? "file links on Windows need Developer Mode" : "this machine cannot link files"})` : link ? "  (link)" : anyLink ? "  (link → copy)" : "";
     const mark = same ? "=" : there ? "~" : "+";
-    ctx.log(`  ${mark} ${it.rel}${same ? "" : note}`);
+    ctx.log(`  ${mark} ${it.rel}${same && !stuckCopy ? "" : note}`);
     if (same) { placed.push(it.rel); continue; }
     if (there && !sameContent) await backUp(it.rel); // 관리 여부와 무관하게 내용이 다르면 백업
     if (!opts.dryRun) {

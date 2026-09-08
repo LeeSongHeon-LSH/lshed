@@ -11,7 +11,7 @@ import { save } from "../src/core/save.js";
 import { status } from "../src/core/status.js";
 import { add } from "../src/core/add.js";
 import { readState } from "../src/state.js";
-import { mask, portable, expand, envWithHome, matches, diffEntry } from "../src/core/entries.js";
+import { mask, portable, expand, envWithHome, homeForExpand, matches, diffEntry } from "../src/core/entries.js";
 
 let tmp: string, rootA: string, rootB: string, shed: string, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
@@ -21,6 +21,9 @@ const ctxFor = (root: string): Ctx => ({ adapter: new ClaudeCodeAdapter(root), s
 const HOME = os.homedir();
 
 const hooks = { Stop: [{ hooks: [{ type: "command", command: `${HOME}/.claude/hooks/notify.sh`, timeout: 5 }] }] };
+// restore 가 놓는 형태: Windows 는 홈이 C:\Users\me 지만 C:/Users/me/... 로 채운다 (한 종류의 구분자)
+const placedHook = `${homeForExpand(HOME)}/.claude/hooks/notify.sh`;
+const placedHooks = { Stop: [{ hooks: [{ type: "command", command: placedHook, timeout: 5 }] }] };
 const permissions = { allow: ["Bash(npm test)", "Read"], deny: ["Bash(rm -rf *)"] };
 const env = { ANTHROPIC_API_KEY: "sk-ant-secret", CLAUDE_CODE_MAX_OUTPUT_TOKENS: "8000" };
 
@@ -36,7 +39,7 @@ afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
 describe("entries: settings 용 순수 로직", () => {
   it("portable: 홈 경로만 ${HOME} 으로", () => {
     expect(portable({ a: "/home/me/.claude/x", b: "/home/meow/x", c: "/home/me" }, "/home/me")).toEqual({ a: "${HOME}/.claude/x", b: "/home/meow/x", c: "${HOME}" });
-    expect(expand(portable(hooks, HOME), envWithHome({})).value).toEqual(hooks);
+    expect(expand(portable(hooks, HOME), envWithHome({})).value).toEqual(placedHooks);
   });
   it("portable: Windows 홈은 구분자·대소문자를 가리지 않고 알아보고, ${HOME} 뒤는 늘 / 로 담는다", () => {
     const home = "C:\\Users\\me";
@@ -98,7 +101,7 @@ describe("settings: 키 하나가 항목 하나", () => {
     const s = await rj(path.join(rootB, "settings.json"));
     expect(s.enabledPlugins).toEqual({ "x@y": true });
     expect(s.statusLine).toEqual({ type: "command", command: "mine" });
-    expect(s.hooks.Stop[0].hooks[0].command).toBe(`${HOME}/.claude/hooks/notify.sh`); // settings.json 은 Claude Code 가 안 채우므로 실제 경로
+    expect(s.hooks.Stop[0].hooks[0].command).toBe(placedHook); // settings.json 은 Claude Code 가 안 채우므로 실제 경로
     expect(s.env.ANTHROPIC_API_KEY).toBe("sk-on-B");
     expect(s.model).toBe("opus");
     expect(res.missingEnv).toEqual([]);

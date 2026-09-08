@@ -147,6 +147,25 @@ describe("restore: 다른 기기의 ~/.claude.json 에 그 키만 넣는다", ()
     expect(logs.filter((l) => /^\s+[+~] mcp:local/.test(l))).toEqual([]);
   });
 
+  it("0.15.3 이하가 ${HOME} 을 그대로 놓아 둔 기기: 창고와 글자가 같아도 ~ 로 다시 써서 채운다 (Windows 4차 검증)", async () => {
+    await w(path.join(shed, "mcp/local.json"), J({ type: "stdio", command: "node", args: ["${HOME}/mcp/server.js"], env: { MY_TOKEN: "${MY_TOKEN}" } }));
+    const y = await fs.readFile(path.join(shed, "lshed.yaml"), "utf8");
+    await fs.writeFile(path.join(shed, "lshed.yaml"), y.replace("\n  mcp:\n", "\n  mcp:\n    - id: local\n").replace("\n    mcp:\n", "\n    mcp:\n      - local\n"));
+    // 0.15.2 가 놓은 그대로의 로컬: ${HOME} 이 문자 그대로
+    await w(`${rootB}.json`, J({ machineID: "B", mcpServers: { theirs: plain, local: { type: "stdio", command: "node", args: ["${HOME}/mcp/server.js"], env: { MY_TOKEN: "${MY_TOKEN}" } } } }));
+    const ctx = ctxFor(rootB);
+    const res = await restore(ctx, "default");
+    expect(logs.join("\n")).toMatch(/~ mcp:local/);
+    expect(res.backedUp).toContain("mcp:local");
+    const b = await rj(`${rootB}.json`);
+    expect(b.mcpServers.local.args[0]).toBe(`${homeForExpand(os.homedir())}/mcp/server.js`);
+    expect(b.mcpServers.local.env.MY_TOKEN).toBe("${MY_TOKEN}");
+    expect(b.mcpServers.theirs).toEqual(plain);
+    logs = [];
+    await restore(ctx, "default");
+    expect(logs.filter((l) => /^\s+[+~] mcp:local/.test(l))).toEqual([]);
+  });
+
   it("CLAUDE_CONFIG_DIR 아래 새 기기: .claude.json 을 그 안에 만든다 (형제 파일은 Claude Code 가 안 읽음)", async () => {
     const dir = path.join(tmp, "C");
     const prev = process.env.CLAUDE_CONFIG_DIR;

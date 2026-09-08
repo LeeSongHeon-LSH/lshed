@@ -12,6 +12,7 @@ export interface JsonEntriesSpec {
   secretKeys: readonly string[];
   secretRootIds?: readonly string[];
   expandsEnv: boolean;
+  homeStaysPlaceholder?: boolean;
   /** 다른 것이 관리하는 키. 담지 않는다 (예: enabledPlugins 는 플러그인 설치기 몫) */
   skip?: readonly string[];
   /** 창고 형식 → 이 도구의 형식 (쓸 때). 없으면 그대로 */
@@ -30,12 +31,14 @@ export class JsonEntries implements EntryCategory {
   readonly secretKeys: readonly string[];
   readonly secretRootIds?: readonly string[];
   readonly expandsEnv: boolean;
+  readonly homeStaysPlaceholder?: boolean;
 
   constructor(private readonly spec: JsonEntriesSpec) {
     this.name = spec.name;
     this.secretKeys = spec.secretKeys;
     this.secretRootIds = spec.secretRootIds;
     this.expandsEnv = spec.expandsEnv;
+    this.homeStaysPlaceholder = spec.homeStaysPlaceholder;
   }
 
   file(): Promise<string> { return this.spec.file(); }

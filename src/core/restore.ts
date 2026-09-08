@@ -119,7 +119,9 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
       const ex = expand(shed, envWithHome());
       if (ex.missing.length) missingEnv.push({ rel: it.rel, vars: ex.missing });
       const value = it.entry.expandsEnv ? shed : ex.value;
-      const same = local !== undefined && matches(shed, local);
+      // ${HOME} 이 그대로 남은 로컬 값은 채우지 않던 버전(≤0.15.3)이 놓은 것: 창고와 글자가 같아도 "같은 값" 이 아니라 다시 쓴다.
+      const stale = local !== undefined && !it.entry.homeStaysPlaceholder && placeholdersIn(local).includes("HOME");
+      const same = local !== undefined && !stale && matches(shed, local);
       const mark = same ? "=" : local !== undefined ? "~" : "+";
       ctx.log(`  ${mark} ${it.rel}${vars.length ? `  (${vars.map((v) => "${" + v + "}").join(", ")})` : ""}`);
       if (same) { placed.push(it.rel); continue; }

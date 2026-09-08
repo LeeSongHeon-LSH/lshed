@@ -20,6 +20,12 @@ export interface EntryCategory {
   secretRootIds?: readonly string[];
   /** 에이전트가 "${VAR}" 를 스스로 확장하는가. true 면 자리표시자를 그대로 배치하고 시크릿은 lshed 를 거치지 않는다 */
   expandsEnv: boolean;
+  /**
+   * 로컬 값이 ${HOME} 을 자리표시자로 갖는 것이 정상인가. Cursor 는 자기 표기 ${userHome} 으로 두고 읽을 때 ${HOME} 으로 돌아온다.
+   * 그 밖에는 lshed 가 쓸 때 ${HOME} 을 채우므로, ${HOME} 이 그대로 남은 로컬 값은 채우지 않던 버전(≤0.15.3)이 놓은 것이다 —
+   * restore 가 "같은 값" 으로 두지 않고 다시 쓴다 (Windows 에는 HOME 이 없어 에이전트가 채울 수 없다).
+   */
+  homeStaysPlaceholder?: boolean;
   /** 로컬의 모든 항목 (id → 값) */
   read(): Promise<Record<string, unknown>>;
   /** 항목 하나를 쓰거나(value) 지운다(null). 설정 파일의 다른 키는 건드리지 않는다 */

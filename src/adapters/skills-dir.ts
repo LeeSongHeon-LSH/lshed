@@ -54,7 +54,7 @@ export class SkillsDirAdapter implements AgentAdapter {
     if (!m) { this.entryCats = []; return; }
     const form = MCP_FORMS[m.form];
     const file = async () => path.join(this.root, m.file);
-    const common = { name: "mcp", file, under: m.under, secretKeys: ["env", "headers"], expandsEnv: m.expandsEnv, toLocal: (_id: string, v: import("../core/entries.js").Json) => form.toLocal(v), fromLocal: (_id: string, v: import("../core/entries.js").Json) => form.fromLocal(v) };
+    const common = { name: "mcp", file, under: m.under, secretKeys: ["env", "headers"], expandsEnv: m.expandsEnv, homeStaysPlaceholder: m.form === "cursor", toLocal: (_id: string, v: import("../core/entries.js").Json) => form.toLocal(v), fromLocal: (_id: string, v: import("../core/entries.js").Json) => form.fromLocal(v) };
     this.entryCats = [m.kind === "toml" ? new TomlEntries(common) : new JsonEntries(common)];
   }
   categories(): readonly Category[] { return [this.skills]; }

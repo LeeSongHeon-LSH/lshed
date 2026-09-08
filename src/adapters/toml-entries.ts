@@ -11,6 +11,7 @@ export interface TomlEntriesSpec {
   under: string;
   secretKeys: readonly string[];
   expandsEnv: boolean;
+  homeStaysPlaceholder?: boolean;
   toLocal?: (id: string, v: Json) => Json;
   fromLocal?: (id: string, v: Json) => Json;
 }
@@ -25,11 +26,13 @@ export class TomlEntries implements EntryCategory {
   readonly name: string;
   readonly secretKeys: readonly string[];
   readonly expandsEnv: boolean;
+  readonly homeStaysPlaceholder?: boolean;
 
   constructor(private readonly spec: TomlEntriesSpec) {
     this.name = spec.name;
     this.secretKeys = spec.secretKeys;
     this.expandsEnv = spec.expandsEnv;
+    this.homeStaysPlaceholder = spec.homeStaysPlaceholder;
   }
 
   file(): Promise<string> { return this.spec.file(); }

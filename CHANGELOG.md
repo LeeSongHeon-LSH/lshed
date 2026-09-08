@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix: 0.15.4 filled `${HOME}` in Claude Code MCP entries only when it wrote them. A machine that 0.15.2 or 0.15.3 had already given the literal `${HOME}/…` kept it, because `restore` compared the local value with the shed's, found the same characters, reported `=` and did not write. Found by the fourth Windows pass. A local entry that still holds a literal `${HOME}` now counts as stale and is rewritten (`~`, backed up) on the next `restore`, for every agent except Cursor, whose own `${userHome}` notation is meant to stay a placeholder.
+
 ## 0.15.4 — 2026-09-09
 
 - `restore` now fills `${HOME}` in Claude Code MCP entries itself instead of leaving it for Claude Code. Claude Code expands `${VAR}` only from variables present in its environment, and Windows has no `HOME`; with it missing, Claude Code 2.1.265 reports "Missing environment variables: HOME" and does not start the server (checked with an isolated `CLAUDE_CONFIG_DIR` and a server command that leaves a marker file: with `HOME` set the marker appears, with `HOME` unset it does not). So a shed entry such as `"args": ["${HOME}/mcp/server.js"]` was placed verbatim and never worked on Windows. Secret placeholders (`${EXA_API_KEY}`) are still written as is and still expanded by Claude Code, so no secret value passes through lshed. The third Windows verification pass flagged the empty `HOME` as an open question.

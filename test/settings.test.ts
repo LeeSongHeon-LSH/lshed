@@ -11,7 +11,7 @@ import { save } from "../src/core/save.js";
 import { status } from "../src/core/status.js";
 import { add } from "../src/core/add.js";
 import { readState } from "../src/state.js";
-import { mask, portable, expand, envWithHome } from "../src/core/entries.js";
+import { mask, portable, expand, envWithHome, matches, diffEntry } from "../src/core/entries.js";
 
 let tmp: string, rootA: string, rootB: string, shed: string, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
@@ -37,6 +37,36 @@ describe("entries: settings 용 순수 로직", () => {
   it("portable: 홈 경로만 ${HOME} 으로", () => {
     expect(portable({ a: "/home/me/.claude/x", b: "/home/meow/x", c: "/home/me" }, "/home/me")).toEqual({ a: "${HOME}/.claude/x", b: "/home/meow/x", c: "${HOME}" });
     expect(expand(portable(hooks, HOME), envWithHome({})).value).toEqual(hooks);
+  });
+  it("portable: Windows 홈은 구분자·대소문자를 가리지 않고 알아보고, ${HOME} 뒤는 늘 / 로 담는다", () => {
+    const home = "C:\\Users\\me";
+    expect(portable({
+      a: "C:\\Users\\me\\.claude\\hooks\\x.ps1",   // 백슬래시
+      b: "C:/Users/me/.claude/hooks/x.sh",          // 슬래시 (Git Bash 식)
+      c: "c:\\users\\ME",                           // 대소문자
+      d: "C:\\Users\\meow\\x",                      // 다른 사용자: 그대로
+      e: "D:\\tools\\x.exe",                         // 홈 밖: 백슬래시 그대로
+      f: "${HOME}\\.claude\\old",                     // 이전 버전 창고: 구분자만 통일
+    }, home)).toEqual({ a: "${HOME}/.claude/hooks/x.ps1", b: "${HOME}/.claude/hooks/x.sh", c: "${HOME}", d: "C:\\Users\\meow\\x", e: "D:\\tools\\x.exe", f: "${HOME}/.claude/old" });
+  });
+  it("envWithHome: Windows 홈은 / 로 준다. 그래서 복원 결과가 C:/Users/me/... 한 종류다", () => {
+    expect(envWithHome({}, "C:\\Users\\me").HOME).toBe("C:/Users/me");
+    expect(envWithHome({ HOME: "C:\\Users\\me" }, "C:\\Users\\other").HOME).toBe("C:/Users/me");   // 환경의 HOME 이 우선
+    expect(envWithHome({ HOME: "/c/Users/me" }).HOME).toBe("/c/Users/me");                          // MSYS 형은 그대로
+    expect(envWithHome({}, "/home/me").HOME).toBe("/home/me");
+    const winHooks = { Stop: [{ hooks: [{ type: "command", command: "C:\\Users\\me\\.claude\\hooks\\x.ps1" }] }] };
+    const shed = portable(winHooks, "C:\\Users\\me");
+    expect(expand(shed, envWithHome({}, "C:\\Users\\me")).value).toEqual({ Stop: [{ hooks: [{ type: "command", command: "C:/Users/me/.claude/hooks/x.ps1" }] }] });
+    expect(expand(shed, envWithHome({}, "/home/me")).value).toEqual({ Stop: [{ hooks: [{ type: "command", command: "/home/me/.claude/hooks/x.ps1" }] }] });   // 같은 창고를 Linux/WSL 에
+  });
+  it("matches/diffEntry: 백슬래시로 써 둔 로컬 값은 / 로 담긴 창고와 드리프트가 아니다", () => {
+    expect(matches("${HOME}/.claude/hooks/x.ps1", "C:\\Users\\me\\.claude\\hooks\\x.ps1")).toBe(true);
+    expect(matches("${HOME}/.claude/hooks/x.ps1", "c:/users/me/.claude/hooks/X.PS1")).toBe(true);
+    expect(matches("${HOME}/.claude/hooks/x.ps1", "/home/me/.claude/hooks/x.ps1")).toBe(true);
+    expect(matches("${HOME}/.claude/hooks/x.ps1", "/home/me/.claude/hooks/y.ps1")).toBe(false);
+    expect(matches("${HOME}/.claude/hooks/x.ps1", "C:\\Users\\me\\.claude\\hooks\\y.ps1")).toBe(false);
+    expect(matches("/etc/x", "/ETC/X")).toBe(false);   // 홈이 아닌 Linux 경로는 여전히 정확히
+    expect(diffEntry({ Stop: [{ hooks: [{ command: "${HOME}/.claude/hooks/x.ps1" }] }] }, { Stop: [{ hooks: [{ command: "C:\\Users\\me\\.claude\\hooks\\x.ps1" }] }] })).toEqual([]);
   });
   it("mask: secretRootIds 인 항목은 자기 자신이 시크릿 맵", () => {
     const cat = { secretKeys: [], secretRootIds: ["env"] };

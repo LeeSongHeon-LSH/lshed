@@ -454,7 +454,7 @@ $ lshed add
 ```
 
 - `enabledPlugins` and `extraKnownMarketplaces` are never taken: the plugin and marketplace packages own them, and `restore` rebuilds them by installing those.
-- Absolute paths under your home directory become `${HOME}/…` in the shed, so a hook command written on one machine works on another. Claude Code does not expand variables in `settings.json`, so `restore` fills `${HOME}` and any `${VAR}` itself from your shell; unset variables are reported and left as placeholders.
+- Absolute paths under your home directory become `${HOME}/…` in the shed, so a hook command written on one machine works on another. The shed always uses `/` after `${HOME}`, whether the path was written as `C:\Users\me\.claude\hooks\x` or `/home/me/.claude/hooks/x`, so one shed serves Windows, WSL, macOS and Linux; on Windows `restore` writes it back as `C:/Users/me/.claude/hooks/x`, which Node, PowerShell, cmd and Git Bash all accept. Claude Code does not expand variables in `settings.json`, so `restore` fills `${HOME}` and any `${VAR}` itself from your shell; unset variables are reported and left as placeholders.
 - `env` is treated as a secret map: keys that look secret are masked, the rest (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`, …) travel as they are.
 - A value pointing inside a package (a hook a toolkit's installer wrote) is flagged. If the installer recreates it, put it in `exclude:` and let `restore --yes` bring it back.
 - Since the shed owns the whole key, extra permissions you grant locally show up in `diff` and go into the shed with `save`, like any other edit.
@@ -549,7 +549,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 - **`status` says a package differs from the lock** — something updated the clone or plugin behind lshed's back (Claude Code auto-updates plugins). `lshed update` records the new version.
 - **`status` keeps listing the same new things** — they are installer aliases or scratch. Add them to `exclude:` in `lshed.yaml`.
 - **restore says an MCP variable is missing** — export it in your shell profile and restart Claude Code. The placeholder in `~/.claude.json` is correct; Claude Code fills it at startup.
-- **restore wrote a hook with the wrong path** — the shed stores home paths as `${HOME}/…`. If a command points elsewhere on this machine, edit the JSON in the shed to use `${HOME}` or another variable and `restore` again.
+- **restore wrote a hook with the wrong path** — the shed stores home paths as `${HOME}/…`. If a command points elsewhere on this machine, edit the JSON in the shed to use `${HOME}` or another variable and `restore` again. Paths outside your home directory (`D:\tools\x.exe`, `/opt/x`) are copied as written and are your job to keep portable.
 - **`--link` copied a file on Windows** — single-file links need Developer Mode. Turn it on and `restore` again, or keep the copy and use `save` for that file.
 - **sync stopped on a conflict** — `cd <shed> && git pull --rebase`, resolve, `git rebase --continue`, then `lshed sync` again.
 

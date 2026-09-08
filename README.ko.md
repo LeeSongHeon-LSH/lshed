@@ -454,7 +454,7 @@ $ lshed add
 ```
 
 - `enabledPlugins`와 `extraKnownMarketplaces`는 담지 않습니다. 플러그인·마켓플레이스 패키지의 몫이고, `restore`가 설치하면서 다시 만듭니다.
-- 홈 아래 절대 경로는 창고에서 `${HOME}/…`가 되어, 한 기기에서 쓴 훅 명령이 다른 기기에서도 돕니다. Claude Code는 `settings.json`의 변수를 채우지 않으므로 `restore`가 `${HOME}`과 `${VAR}`를 셸에서 직접 채우고, 없는 변수는 알린 뒤 자리표시자로 둡니다.
+- 홈 아래 절대 경로는 창고에서 `${HOME}/…`가 되어, 한 기기에서 쓴 훅 명령이 다른 기기에서도 돕니다. `C:\Users\me\.claude\hooks\x`로 썼든 `/home/me/.claude/hooks/x`로 썼든 창고에서는 `${HOME}` 뒤가 늘 `/`라서, 창고 하나가 Windows·WSL·macOS·Linux를 함께 섬깁니다. Windows에서 `restore`는 이를 `C:/Users/me/.claude/hooks/x`로 되돌리며, 이 형태는 Node, PowerShell, cmd, Git Bash가 모두 읽습니다. Claude Code는 `settings.json`의 변수를 채우지 않으므로 `restore`가 `${HOME}`과 `${VAR}`를 셸에서 직접 채우고, 없는 변수는 알린 뒤 자리표시자로 둡니다.
 - `env`는 시크릿 맵으로 봅니다. 시크릿처럼 보이는 키는 마스킹하고 나머지(`CLAUDE_CODE_MAX_OUTPUT_TOKENS` 등)는 그대로 갑니다.
 - 패키지 안을 가리키는 값(툴킷 설치기가 쓴 훅)은 표시됩니다. 설치기가 다시 만들어 주는 것이면 `exclude:`에 넣고 `restore --yes`가 되살리게 두세요.
 - 창고가 키 전체를 소유하므로, 로컬에서 추가한 권한은 `diff`에 나타나고 다른 편집처럼 `save`로 창고에 들어갑니다.
@@ -549,7 +549,7 @@ lshed scan                                      루트를 읽기만 하고 나�
 - **`status`가 패키지가 lock과 다르다고 한다** — 무언가가 lshed 몰래 clone이나 플러그인을 갱신했습니다(Claude Code는 플러그인을 자동 갱신합니다). `lshed update`가 새 버전을 기록합니다.
 - **`status`가 같은 새 항목을 계속 보여 준다** — 설치기 별칭이거나 임시 파일입니다. `lshed.yaml`의 `exclude:`에 넣으세요.
 - **restore가 MCP 변수가 없다고 한다** — 셸 프로필에서 export하고 Claude Code를 다시 시작하세요. `~/.claude.json`의 자리표시자는 맞게 들어간 것이고, Claude Code가 시작할 때 채웁니다.
-- **restore가 훅 경로를 엉뚱하게 썼다** — 창고는 홈 경로를 `${HOME}/…`로 담습니다. 이 기기에서 다른 곳을 가리켜야 하면 창고의 JSON을 `${HOME}`이나 다른 변수로 고치고 다시 `restore`하세요.
+- **restore가 훅 경로를 엉뚱하게 썼다** — 창고는 홈 경로를 `${HOME}/…`로 담습니다. 이 기기에서 다른 곳을 가리켜야 하면 창고의 JSON을 `${HOME}`이나 다른 변수로 고치고 다시 `restore`하세요. 홈 밖의 경로(`D:\tools\x.exe`, `/opt/x`)는 쓴 그대로 옮겨지며, 휴대성은 사용자 몫입니다.
 - **Windows에서 `--link`가 파일을 복사했다** — 파일 하나짜리 링크는 개발자 모드가 필요합니다. 켜고 다시 `restore`하거나, 복사본을 두고 그 파일은 `save`로 다루세요.
 - **sync가 충돌로 멈췄다** — `cd <창고> && git pull --rebase`, 해결, `git rebase --continue`, 그리고 다시 `lshed sync`.
 

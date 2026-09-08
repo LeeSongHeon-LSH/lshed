@@ -73,16 +73,39 @@ export function mask(id: string, entry: Json, cat: MaskCat, home: string = os.ho
   return out;
 }
 
-/** 홈 디렉터리 절대 경로를 ${HOME} 으로. 기기마다 홈이 달라도 훅·명령 경로가 옮겨진다. expand 가 되돌린다. */
+/** `C:\Users\me` 나 `C:/Users/me` 처럼 드라이브 문자로 시작하는 Windows 경로인가. 대소문자를 가리지 않고 구분자가 둘 다 온다. */
+const isWinPath = (s: string): boolean => /^[A-Za-z]:[\\/]/.test(s);
+const slashes = (s: string): string => s.replace(/\\/g, "/");
+
+/**
+ * 홈 디렉터리 절대 경로를 ${HOME} 으로. 기기마다 홈이 달라도 훅·명령 경로가 옮겨진다. expand 가 되돌린다.
+ * 창고는 OS 를 가리지 않아야 하므로 ${HOME} 뒤는 늘 `/` 다: Windows 기기가 `C:\Users\me\.claude\x` 로도 `C:/Users/me/.claude/x` 로도
+ * 써 둔 값이 같은 `${HOME}/.claude/x` 가 되고, Linux 나 WSL 에 복원해도 깨지지 않는다. 홈으로 시작하지 않는 문자열은 손대지 않는다.
+ */
 export function portable(entry: Json, home: string = os.homedir()): Json {
   if (!home || home === "/") return entry;
-  // Windows 는 홈이 C:\Users\me 라 구분자가 둘 다 올 수 있다
-  return walk(entry, (s) => (s === home || s.startsWith(home + "/") || s.startsWith(home + "\\") ? "${HOME}" + s.slice(home.length) : s));
+  const win = isWinPath(home);
+  const norm = (s: string) => (win ? slashes(s).toLowerCase() : s);
+  const h = norm(home).replace(/\/+$/, "");
+  return walk(entry, (s) => {
+    if (s.startsWith("${HOME}")) return "${HOME}" + slashes(s.slice(7));   // 이전 버전이 담은 `${HOME}\...` 도 통일한다
+    const n = norm(slashes(s));
+    return n === h || n.startsWith(h + "/") ? "${HOME}" + slashes(s.slice(h.length)) : s;
+  });
 }
 
-/** expand 에 쓸 환경. HOME 은 항상 있다 (Windows 는 USERPROFILE 뿐이라). */
-export function envWithHome(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  return { HOME: os.homedir(), ...env };
+/**
+ * expand 에 쓸 환경. HOME 은 항상 있다 (Windows 는 USERPROFILE 뿐이라).
+ * Windows 에서는 HOME 을 `C:/Users/me` 처럼 `/` 로 준다. 창고의 `${HOME}/...` 뒤가 `/` 라서 결과가 한 종류의 구분자가 되고,
+ * 그 형태는 Node, PowerShell, cmd, Git Bash 가 모두 읽는다. `C:\Users\me/.claude/x` 처럼 섞이면 bash 가 `\U` 를 이스케이프로 읽는다.
+ */
+export function envWithHome(env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): NodeJS.ProcessEnv {
+  return { ...env, HOME: homeForExpand(env.HOME ?? home) };
+}
+
+/** ${HOME} 자리에 넣을 홈: Windows 는 `C:/Users/me` (envWithHome 참고). 창고 값에 홈을 직접 끼우는 어댑터도 이것을 쓴다. */
+export function homeForExpand(home: string = os.homedir()): string {
+  return isWinPath(home) ? slashes(home) : home;
 }
 
 /** 값 안에서 시크릿처럼 생긴 문자열 (args, url 등 마스킹 대상이 아닌 곳). init 이 경고만 한다. */
@@ -108,9 +131,14 @@ export function expand(entry: Json, env: NodeJS.ProcessEnv = process.env): Expan
   return { value, missing: [...missing] };
 }
 
-/** 자리표시자가 든 창고 문자열이 로컬 문자열과 맞는가. 자리표시자는 와일드카드. */
+/**
+ * 자리표시자가 든 창고 문자열이 로컬 문자열과 맞는가. 자리표시자는 와일드카드.
+ * ${HOME} 으로 시작하는 창고 문자열은 `/` 로 담기므로, 로컬이 `C:\Users\me\.claude\x` 처럼 Windows 식이어도 구분자와 대소문자를 무시하고
+ * 견준다 — 사용자가 직접 써 둔 값이 영구 드리프트로 잡히면 안 된다.
+ */
 function stringMatches(shed: string, local: string): boolean {
   if (shed === local) return true;
+  if (shed.startsWith("${HOME}") && isWinPath(local)) { shed = shed.toLowerCase(); local = slashes(local).toLowerCase(); }
   if (!PLACEHOLDER_RE.test(shed)) { PLACEHOLDER_RE.lastIndex = 0; return false; }
   PLACEHOLDER_RE.lastIndex = 0;
   const re = "^" + shed.split(PLACEHOLDER_RE).map((part, i) => (i % 3 === 0 ? part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : i % 3 === 1 ? ".+" : "")).join("") + "$";

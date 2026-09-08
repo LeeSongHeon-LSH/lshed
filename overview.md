@@ -471,7 +471,7 @@ Installer { schemes, priority, detect, status, install, update }
 - 로컬에서 권한을 더 주면 diff 에 보이고 save 로 되가져온다. 스킬과 같은 규칙(§3.4).
 - 프로필이 키를 고른다. `permissions`·`hooks` 는 옮기고 `model` 은 기기마다 다르게 둘 수 있다.
 - `enabledPlugins` 는 플러그인 설치기가 만드는 상태라 담지 않는다 (§3.7 의 "설치가 만들어낸 것").
-- 홈 아래 절대경로는 `${HOME}/…` 로 담는다. settings.json 은 Claude Code 가 `${VAR}` 를 안 채우므로 `expandsEnv: false` — restore 가 셸 환경으로 채운다. MCP 는 여전히 Claude Code 가 채운다.
+- 홈 아래 절대경로는 `${HOME}/…` 로 담는다. `${HOME}` 뒤는 늘 `/` (Windows 의 `C:\Users\me\…` 도, 대소문자가 달라도 홈으로 알아본다) 이고, Windows 복원은 `C:/Users/me/…` 로 채운다 — 창고가 OS 를 가리지 않게. 드리프트 비교(`stringMatches`)도 `${HOME}` 문자열은 구분자·대소문자를 무시한다. settings.json 은 Claude Code 가 `${VAR}` 를 안 채우므로 `expandsEnv: false` — restore 가 셸 환경으로 채운다. MCP 는 여전히 Claude Code 가 채운다.
 - 실환경: gstack setup 이 써 넣은 Stop 훅은 "패키지 안을 가리킴" 으로 감지되어 exclude 했다. 부분 소유(배열 일부만 생성물)는 다루지 않는다. 키 단위가 한계이고, 감지는 제안이다.
 
 ---

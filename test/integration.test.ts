@@ -230,7 +230,8 @@ describe("restore --link (§3.6)", () => {
       logs = [];
       await restore(ctx, undefined);
       const fileLines = logs.filter((l) => / agents\/rev\.md|lshed\/instructions\/main\.md/.test(l));
-      expect(fileLines).toEqual(["  = agents/rev.md  (copy; this machine cannot link files)", "  = lshed/instructions/main.md  (copy; this machine cannot link files)"]);
+      const why = process.platform === "win32" ? "file links on Windows need Developer Mode" : "this machine cannot link files";
+      expect(fileLines).toEqual([`  = agents/rev.md  (copy; ${why})`, `  = lshed/instructions/main.md  (copy; ${why})`]);
       expect(fileLines.join("\n")).not.toContain("could not link");
     } finally { spy.mockRestore(); }
     expect(await isLink(path.join(root, "skills/alpha"))).toBe(false);

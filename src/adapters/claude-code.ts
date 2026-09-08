@@ -5,6 +5,7 @@ import type { AgentAdapter, Category, EntryCategory, ScannedComponent } from "./
 import { marketplaceInstaller, pluginInstaller } from "../installers/claude-plugin.js";
 import { JsonEntries } from "./json-entries.js";
 import { exists } from "../fsutil.js";
+import { expandHome } from "../core/entries.js";
 
 const CATEGORIES: readonly Category[] = [
   { name: "skills", root: "skills", kind: "dir" },
@@ -27,7 +28,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     this.entryCats = [
       /**
        * 사용자 범위 MCP (§7.4): ~/.claude 의 형제 ~/.claude.json 의 mcpServers. CLAUDE_CONFIG_DIR 처럼 루트 안에 있으면 그것.
-       * Claude Code 가 ${VAR} 를 모든 범위에서 스스로 확장하므로 자리표시자를 그대로 둔다.
+       * Claude Code 가 ${VAR} 를 모든 범위에서 스스로 확장하므로 시크릿 자리표시자는 그대로 둔다. 단 ${HOME} 은 lshed 가 채운다:
+       * Claude Code 는 프로세스 환경에 있는 변수만 채우고, Windows 에는 HOME 이 없다 (expandHome 참고).
        */
       new JsonEntries({
         name: "mcp",
@@ -35,6 +37,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
         under: "mcpServers",
         secretKeys: ["env", "headers"],
         expandsEnv: true,
+        toLocal: (_id, v) => expandHome(v),
       }),
       /**
        * settings.json (§7.6): 최상위 키 하나 = 항목 하나 (hooks, permissions, env, model, ...).

@@ -108,6 +108,16 @@ export function homeForExpand(home: string = os.homedir()): string {
   return isWinPath(home) ? slashes(home) : home;
 }
 
+/**
+ * ${HOME} 만 채우고 다른 자리표시자는 남긴다. 에이전트가 ${VAR} 를 스스로 확장하더라도 HOME 은 lshed 가 채운다:
+ * ${HOME} 은 portable() 이 만든 lshed 의 표기이고, Windows 에는 HOME 변수가 없어 에이전트가 채울 수 없다
+ * (Claude Code 2.1.265 는 HOME 이 없으면 "Missing environment variables: HOME" 을 내고 서버를 띄우지 않는다 — 실측).
+ */
+export function expandHome(entry: Json, home: string = os.homedir()): Json {
+  const h = homeForExpand(home);
+  return walk(entry, (s) => s.split("${HOME}").join(h));
+}
+
 /** 값 안에서 시크릿처럼 생긴 문자열 (args, url 등 마스킹 대상이 아닌 곳). init 이 경고만 한다. */
 export function suspiciousStrings(entry: Json): string[] {
   const out: string[] = [];

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `restore` now fills `${HOME}` in Claude Code MCP entries itself instead of leaving it for Claude Code. Claude Code expands `${VAR}` only from variables present in its environment, and Windows has no `HOME`; with it missing, Claude Code 2.1.265 reports "Missing environment variables: HOME" and does not start the server (checked with an isolated `CLAUDE_CONFIG_DIR` and a server command that leaves a marker file: with `HOME` set the marker appears, with `HOME` unset it does not). So a shed entry such as `"args": ["${HOME}/mcp/server.js"]` was placed verbatim and never worked on Windows. Secret placeholders (`${EXA_API_KEY}`) are still written as is and still expanded by Claude Code, so no secret value passes through lshed. The third Windows verification pass flagged the empty `HOME` as an open question.
+
 ## 0.15.3 — 2026-09-09
 
 - Fix: on a machine that cannot create file links (Windows without Developer Mode), `restore` in link mode placed a file part as a copy and then, on every later `restore`, replaced that copy again with a `~` line and the "could not link" notice, never settling on `=`. Found by the second Windows verification pass, where the `--link` test kept failing for this reason after 0.15.2 had fixed its first assertion. lshed now checks once per run whether the machine can link files; if it cannot, an identical copy counts as placed and is reported as `= agents/rev.md  (copy; file links on Windows need Developer Mode)`. Directories are unaffected, since junctions always work. Turning Developer Mode on later and running `restore` again still converts the copies to links.

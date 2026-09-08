@@ -435,7 +435,7 @@ EntryCategory { name, kind: "entry", secretKeys, expandsEnv, read(), write(id, v
 - 창고에는 `mcp/<id>.json`. 배치는 `mcpServers.<id>` 키 하나만 바꾸고 파일은 임시 파일 → rename.
 - 관리 집합에는 `mcp:<id>` 로 적는다. 경로 구간에 `:` 이 못 오므로 파일과 구분된다.
 - **시크릿은 §7.1 A 그대로.** `env`·`headers` 아래 시크릿 같은 키의 값을 `${VAR}` 로 바꾼다.
-  Claude Code 가 모든 범위에서 `${VAR}` 를 스스로 확장하므로(실제 바이너리로 검증) `restore` 는 자리표시자를 그대로 놓는다.
+  Claude Code 가 모든 범위에서 `${VAR}` 를 스스로 확장하므로(실제 바이너리로 검증) `restore` 는 시크릿 자리표시자를 그대로 놓는다. `${HOME}` 만은 lshed 가 채운다(0.15.4): Claude Code 는 환경에 있는 변수만 채우고 Windows 에는 HOME 이 없어, HOME 이 없는 환경에서는 "Missing environment variables: HOME" 을 내고 서버를 띄우지 않는 것을 2.1.265 로 실측했다(`CLAUDE_CONFIG_DIR` 격리 + `claude mcp list`, 마커 파일).
   시크릿 값은 lshed 를 한 번도 거치지 않는다. `expandsEnv: false` 인 어댑터를 위해 `expand()` 는 남겨 두었다.
 - `diff`/`save` 에서 자리표시자는 와일드카드다. 로컬에 실제 값이 들어 있어도 드리프트가 아니고, `save` 는 자리표시자를 보존하며 새 시크릿 키를 마스킹한다.
 - 휴리스틱(키 이름 정규식)은 제안이다. `args`·`url` 의 토큰 같은 문자열은 경고만 하고, 확정은 사용자가 창고 json 을 고쳐서 한다.

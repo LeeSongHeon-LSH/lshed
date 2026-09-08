@@ -1,5 +1,5 @@
 import os from "node:os";
-import { homeForExpand, type Json } from "../core/entries.js";
+import { expandHome, type Json } from "../core/entries.js";
 
 /**
  * MCP 서버 항목의 도구별 형식 (§7.4 확장). 창고 형식은 Claude Code 의 것이다:
@@ -125,7 +125,7 @@ export const codex = {
       if (Object.keys(http).length) out.http_headers = http;
       if (Object.keys(envHeaders).length) out.env_http_headers = envHeaders;
     }
-    return mapStrings(out, (s) => s.split(HOME_PH).join(homeForExpand(home)));
+    return expandHome(out, home);
   },
   fromLocal(v: Json): Json {
     if (!isObj(v)) return v;

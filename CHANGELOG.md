@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.5 — 2026-09-09
 
 - Fix: 0.15.4 filled `${HOME}` in Claude Code MCP entries only when it wrote them. A machine that 0.15.2 or 0.15.3 had already given the literal `${HOME}/…` kept it, because `restore` compared the local value with the shed's, found the same characters, reported `=` and did not write. Found by the fourth Windows pass. A local entry that still holds a literal `${HOME}` now counts as stale and is rewritten (`~`, backed up) on the next `restore`, for every agent except Cursor, whose own `${userHome}` notation is meant to stay a placeholder.
 

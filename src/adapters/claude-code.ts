@@ -95,7 +95,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     for (const e of entries) {
       if (e.name.startsWith(".")) continue;
       const full = path.join(dir, e.name);
-      const id = rel ? `${rel}/${e.name}` : e.name;
+      // 매니페스트에 들어가는 id 는 NFC 로 고정한다. macOS 가 NFD 로 돌려준 이름을 그대로 적으면 Linux 창고에서 다른 이름이 된다.
+      const id = (rel ? `${rel}/${e.name}` : e.name).normalize("NFC");
       // 심볼릭 링크로 걸린 부품도 잡아야 하므로 Dirent 대신 stat 으로 판정한다
       let st: import("node:fs").Stats;
       try {

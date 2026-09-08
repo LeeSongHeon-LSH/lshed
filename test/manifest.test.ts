@@ -26,6 +26,17 @@ describe("parseManifest", () => {
     expect(Object.keys(m.profiles)).toEqual(["research", "teaching"]);
     expect(effectiveSource("skills", m.components.skills[0])).toBe("file:./skills/paper-review");
   });
+  it("id 는 어느 문자 체계의 글자든 되고, 공백·기호는 안 된다", () => {
+    const y = (id: string) => `version: 1\ncomponents:\n  skills:\n    - id: ${id}\nprofiles:\n  d:\n    skills: [${id}]\n`;
+    expect(parseManifest(y("논문리뷰")).components.skills[0].id).toBe("논문리뷰");
+    expect(parseManifest(y("team/논문리뷰")).components.skills[0].id).toBe("team/논문리뷰");
+    expect(() => parseManifest(y('"a b"'))).toThrow(/id may contain only/);
+    expect(() => parseManifest(y('"a:b"'))).toThrow(/id may contain only/);
+    const pk = (id: string) => `version: 1\ncomponents: {}\npackages:\n  - id: ${id}\n    source: github:x/y\n    into: skills/${id}\nprofiles:\n  d:\n    packages: [${id}]\n`;
+    expect(parseManifest(pk("도구모음")).packages[0].id).toBe("도구모음");
+    expect(() => parseManifest(pk('"a b"'))).toThrow(/id may contain only/);
+  });
+
   it("version 불일치", () => {
     expect(() => parseManifest("version: 2\n")).toThrow(/is malformed/);
   });

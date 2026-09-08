@@ -94,6 +94,20 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
   });
 
+  // 첫 restore 가 "rerun with '--yes'" 라고 안내하므로, 이미 clone 된 패키지에도 --yes 는 install 을 돌려야 한다
+  it.skipIf(process.platform === "win32")("이미 있는 패키지에도 --yes 면 install 을 다시 돌린다", async () => {
+    await restore(ctxFor(rootB), "default");
+    const marker = path.join(rootB, "skills/toolkit/installed");
+    expect(await exists(marker)).toBe(false);
+    await restore(ctxFor(rootB), "default", { yes: true, dryRun: true });
+    expect(await exists(marker)).toBe(false);
+    logs.length = 0;
+    await restore(ctxFor(rootB), "default", { yes: true });
+    expect(await exists(marker)).toBe(true);
+    expect(logs.join("\n")).toMatch(/= package toolkit\n {2}\$ \(skills\/toolkit\) \.\/setup/);
+    expect(logs.join("\n")).not.toMatch(/was not run/);
+  });
+
   it("이미 있으면 건드리지 않고, --dry-run 은 clone 하지 않는다", async () => {
     await restore(ctxFor(rootB), "default", { dryRun: true });
     expect(await exists(path.join(rootB, "skills/toolkit"))).toBe(false);
@@ -187,6 +201,14 @@ describe("update", () => {
     expect(after).not.toBe(before);
     expect(await r(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe("toolkit v2");
     if (process.platform !== "win32") expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
+
+    // 최신이어도 --yes 면 install 을 돌린다
+    if (process.platform !== "win32") {
+      await fs.rm(path.join(rootB, "skills/toolkit/installed"));
+      const again = await updatePackages(ctx, m.packages, { yes: true });
+      expect(again.lockChanged).toBe(false);
+      expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
+    }
   });
 });
 

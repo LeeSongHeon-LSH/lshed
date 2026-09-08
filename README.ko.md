@@ -420,7 +420,7 @@ profiles:
 
 `.git`과 remote가 있는 디렉터리는 **패키지**가 됩니다. 심볼릭 링크가 패키지 안을 가리키는 스킬은 생성물로 보고 건너뜁니다. 나머지는 직접 만든 것으로 보고 복사합니다. 이것을 안전하게 지키는 규칙은 다음과 같습니다.
 
-- 이미 있는 패키지는 `restore`가 절대 건드리지 않습니다. 로컬 체크아웃은 여러분 것입니다.
+- 이미 있는 패키지는 `restore`가 절대 건드리지 않습니다. 로컬 체크아웃은 여러분 것입니다. 예외는 `--yes` 하나로, 패키지의 `install:`을 다시 돌립니다. 첫 restore 뒤의 "rerun with `--yes`" 안내가 말 그대로 되도록요.
 - `install:`은 셸 명령입니다. `--yes`가 없으면 `restore`와 `update`는 **보여 주고 멈춥니다.** 플러그인 설치는 Claude Code 자체 패키지 관리자를 거치므로 그 없이도 돌고, 설치 명령을 선언한 플러그인에는 `--yes`가 `-y`로 전달됩니다.
 - 패키지는 관리 집합에 들어가지 않습니다. 프로필을 바꿔도 clone은 지워지지 않습니다.
 
@@ -476,7 +476,7 @@ lshed prune [--yes]                             어느 프로필도 안 쓰는 �
 lshed scan                                      루트를 읽기만 하고 나열
 ```
 
-키는 `카테고리/id`이고, 모호하지 않으면 `id`만 써도 됩니다: `skills/paper-review`, `mcp/exa`, `packages/gstack`.
+키는 `카테고리/id`이고, 모호하지 않으면 `id`만 써도 됩니다: `skills/paper-review`, `mcp/exa`, `packages/gstack`. id는 에이전트가 읽는 파일·디렉터리 이름 그대로이며 어느 문자 체계든 됩니다(`skills/논문리뷰`). 글자, 숫자, `.`, `_`, `-`, 그리고 하위 폴더에 둔 에이전트·명령을 위한 구간 사이 `/`가 허용됩니다.
 
 공통 옵션: `--shed <dir>`(또는 `LSHED_HOME`, 첫 restore 뒤에는 기억함), `--agent <name>`(또는 `LSHED_AGENT`, 기본은 창고의 `agent:`, 그다음 `claude-code`), `--root <dir>`(에이전트 설정 루트, 기본은 에이전트 자체 위치인 `~/.claude`나 `~/.codex` 등).
 
@@ -529,7 +529,8 @@ lshed scan                                      루트를 읽기만 하고 나�
 
 ## 검증된 것
 
-- 테스트, CLI 스모크, 단독 실행파일이 push마다 **Ubuntu, macOS, Windows**(Node 20, 22)에서 돕니다. Windows는 `--link`에 junction을, 플러그인 설치에 `claude.cmd`를 씁니다.
+- 테스트, CLI 스모크, 단독 실행파일이 push마다 **Ubuntu, macOS, Windows**(Node 20, 22)에서 돕니다. Windows는 `--link`에 junction을, 플러그인 설치에 `claude.cmd`를 씁니다. 스모크에는 한글 이름 스킬이 들어 있어, macOS의 파일 이름 정규화 차이나 Windows의 코드페이지 문제는 사용자 기기가 아니라 CI에서 먼저 실패합니다.
+- 개발하는 Linux 기기에서는 CI 너머까지 전체 명령을 돌려 봅니다. `install:`이 있는 git·GitHub 패키지의 `restore`와 `update`, 충돌까지 포함한 실제 원격과의 `sync`, `remove`/`prune`, 모든 `--agent` 대상, 환경변수 기본값, 실제 터미널을 거친 `restore --pick`, 컴파일된 Linux 바이너리까지입니다.
 - 다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.2와 Antigravity CLI 1.1.27은 모든 검사를 통과했고(마지막 실행 2026-09-08, lshed 0.14.1), Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
 - 개발하는 기기에서는 실제 창고 하나를 매일 씁니다. Claude Code, Codex, Antigravity가 모두 `--link`로 그 창고를 읽고, 셋 다 `status`에 드리프트가 없습니다.
 

@@ -26,7 +26,7 @@ export interface PickOptions extends Omit<RestoreOptions, "manifest"> {
 
 export interface PickResult { profile: string; selection: Record<string, string[]>; restored: RestoreResult | null }
 
-const PROFILE_NAME_RE = /^[\w.-]+$/;
+const PROFILE_NAME_RE = /^[\p{L}\p{N}_.-]+$/u;
 
 /**
  * 카테고리 순서: 패키지 → 어댑터 파일 카테고리(skills, agents, commands) → 지침 → 항목형(mcp, settings).

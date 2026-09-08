@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `restore --yes` and `update --yes` now run a package's `install:` even when the package is already present or already up to date. Before, a first `restore` printed "rerun with '--yes'" but the rerun skipped the present package, so the command did nothing; only running the install by hand worked. Without `--yes` nothing changes: present packages are left alone and pending installs are only printed after a fresh clone.
+- Fix: a skill, agent, command or package whose name has letters outside ASCII (`skills/논문리뷰`) was written into `lshed.yaml` by `init` and `add` and then rejected by the manifest check, so every later command failed with "id may contain only letters, digits, ._- and /". The agents read such directories without complaint, so lshed now accepts letters and digits from any script in ids and profile names. Scanned names are normalized to NFC before they become ids, so a shed made on macOS and one made on Linux agree on the bytes.
+- The smoke suite now carries a skill with a Korean name (`논문리뷰`) through `init`, `restore`, `--link` and a profile switch, so the CI runs on macOS and Windows would catch a filename-normalization or code-page problem that Linux never shows.
+- Verified on Linux (6.8, Node 24) beyond the CI matrix: git and GitHub packages with `install:` through `restore`, `update --dry-run` and `update`; `sync` against a real origin, including a rebase conflict; `remove`, `prune` and `list --unused`; the `gemini`, `copilot`, `cursor` and `agy` targets; `LSHED_HOME`, `LSHED_AGENT`, `CLAUDE_CONFIG_DIR` and `COPILOT_HOME` defaults; `restore --pick` through a pseudo-terminal; and the compiled `lshed-linux-x64` binary on the smoke suite.
+
 ## 0.15.0 — 2026-09-08
 
 Every message lshed prints is now English. Nothing else changed in behaviour.

@@ -231,7 +231,7 @@ packages:
   - id: gstack
     source: github:garrytan/gstack@main      # 또는 git:<url>#ref
     into: skills/gstack                       # 어댑터 루트 기준
-    install: ./setup                          # 선택. --yes 일 때만 실행
+    install: ./setup                          # 선택. --yes 일 때만 실행 (이미 있는 패키지에도)
 ```
 
 **감지 규칙 (init)**
@@ -243,10 +243,10 @@ packages:
 **복원 규칙**
 - 패키지가 없으면 `lshed.lock`의 커밋으로 clone한다. 락이 없으면 clone된 HEAD를 락에 적는다.
 - 이미 있으면 절대 건드리지 않는다. 사용자가 올렸을 수 있다. 락과 다르면 `status`가 알려준다.
-- `install:`은 임의 셸 명령이다. 창고는 어디서든 clone될 수 있으므로 **`--yes` 없이는 보여주기만 하고 실행하지 않는다.**
+- `install:`은 임의 셸 명령이다. 창고는 어디서든 clone될 수 있으므로 **`--yes` 없이는 보여주기만 하고 실행하지 않는다.** `--yes`는 "install 명령을 돌려라"는 뜻이라 이미 있는 패키지에도 돌린다 — 첫 restore가 "rerun with '--yes'"라고 안내하므로 그 말이 참이어야 하고, `update --yes`가 pull마다 다시 돌리므로 install 스크립트는 어차피 멱등이어야 한다. `--dry-run`이면 돌리지 않는다.
 - 패키지는 **관리 집합에 넣지 않는다.** 프로필 전환이 clone을 지우지 않는다. 백업하며 지우려면 저장소를 통째로 복사해야 하는데 그건 잘못된 도구다.
 
-**`lshed update [id]`** — `git pull --ff-only` 후 락 갱신. 커밋이 바뀌면 `install:`을 (`--yes`일 때) 다시 돌린다.
+**`lshed update [id]`** — `git pull --ff-only` 후 락 갱신. `--yes`이면 `install:`을 다시 돌린다 (커밋이 바뀌었든 이미 최신이든).
 
 ### 3.6 배치 방식 — 기본은 복사, 기기별로 `--link`
 
@@ -636,6 +636,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 
 - ~~**CI Windows 잡의 sync 테스트 타임아웃**~~ — **해결 (2026-09-08).** `test/sync.test.ts` 는 테스트마다 git 을 10회 안팎 띄우는데 Windows 러너에선 한 번에 수백 ms 라 vitest 기본 5초가 빠듯했다(코드 결함이 아니라 플레이크). `describe` 와 beforeEach/afterEach 에 30초, afterEach 의 `fs.rm` 에 `maxRetries: 3, retryDelay: 200` 으로 타임아웃 뒤의 EBUSY 를 흡수. 테스트만 바뀌었다.
 - ~~**`update --dry-run` 이 업스트림을 확인하지 않는다**~~ — **해결 (2026-09-08, 0.14.2).** `updatePackages` 가 dryRun 이면 조회 없이 `~ package X (… update)` 만 찍었다. 설치기 인터페이스에 선택적 `upstream(ctx, pkg) → { current, latest }` 를 두고, git 설치기는 `git ls-remote`(출처 브랜치·태그; `refs/heads/<ref>`, `refs/tags/<ref>^{}`, `refs/tags/<ref>` 를 명시해 주석 태그는 커밋으로, 같은 이름은 브랜치 우선) 와 clone 의 HEAD 를, 마켓플레이스 설치기는 `installLocation` 이 git 저장소일 때만 그 origin 과 견준다. 플러그인과 공식 마켓플레이스(.gcs-sha 배포, 저장소 아님)는 미리 알 수 없어 `?`. 플러그인 버전은 마켓 커밋 sha 이기도 하고 semver 이기도 해서(installed_plugins.json) Claude Code 의 판정을 흉내내지 않기로 했다 — §7.3 사양 변경에 약하다. 조회 실패는 그 줄에서 `?` 로 알리고 다음으로 넘어간다. 실제 창고에서 `~ gstack 0d1bd56 → 0530392`, `= llm-guidelines`, 나머지 `?` 가 1.3초.
+- ~~**비ASCII 이름의 부품이 매니페스트에서 거부된다**~~ — **해결 (2026-09-08).** `init`/`add` 는 `skills/논문리뷰` 를 그대로 적는데 `ID_RE` 가 `\w` 라 검증에서 걸려 이후 모든 명령이 죽었다. 에이전트는 디렉터리 이름을 그대로 읽으므로 id·프로필 이름 규칙을 `\p{L}\p{N}_.-` 로 넓혔고, 스캔한 이름은 NFC 로 정규화해 id 로 쓴다(macOS 가 NFD 를 돌려줘도 창고의 바이트는 같도록). 스모크에 한글 스킬을 넣어 macOS/Windows CI 에서도 본다. 같은 날 `restore --yes` 가 이미 있는 패키지의 `install:` 을 건너뛰던 것도 고쳤다(첫 restore 의 "rerun with --yes" 안내가 거짓이었다).
 
 - ~~**다른 에이전트 어댑터**~~ — **해결 (2026-09-04, 0.11.0).** Codex·Gemini CLI·Copilot CLI·Cursor 가 전부 Agent Skills 표준(`<root>/skills/<name>/SKILL.md`)을 쓰고 공용 `~/.agents/skills/` 도 읽으므로, 도구별 어댑터 대신 `SkillsDirAdapter` 하나에 루트·지침 파일만 다른 스펙 5개(codex/gemini/copilot/cursor/agents)를 넣었다. 창고는 하나이고 `--agent` 로 배치 대상을 고른다(`$LSHED_AGENT`, 창고의 `agent:` 는 기본값). 매니페스트 검증은 현재 어댑터가 아니라 **창고를 만든 에이전트** 기준이라 다른 에이전트로 열어도 오류가 아니며, 모르는 카테고리(mcp, settings, agents, instructions 없음)와 설치기 없는 패키지(claude-plugin:)는 알리고 건너뛴다. state 는 에이전트 루트마다 따로. 지침은 Codex/Gemini/Copilot 모두 이어붙임(Codex 는 import 문법이 없고, Gemini 는 @import 의 허용 디렉터리가 문서에 불명확, Copilot 은 저장소 안에서만). Cursor·~/.agents 는 사용자 지침 파일이 없어 `instructionsFileName()` 이 null. 실환경: 사용자의 `~/.agents/skills` 에 `skills` CLI 로 설치한 5개가 이미 있고 창고와 내용이 같아 dry-run 이 `=` 5, `+` 1(add-drivers) 로 나왔다. MCP 는 0.12.0 에서 추가: 창고 형식은 Claude Code 것 그대로 두고 `adapters/mcp-forms.ts` 가 도구별로 바꾼다(gemini: type 없음·httpUrl, copilot: type local·tools, cursor: `${env:VAR}`·`${userHome}`, codex: env_vars·bearer_token_env_var·env_http_headers 로 변수 *이름*을 적음). 변환은 어댑터의 read/write 안에서만 일어나 core 는 모른다. Codex 의 config.toml 은 `TomlEntries` 가 `[mcp_servers.<id>]` 표 블록만 잘라 붙여 주석·다른 표를 보존(smol-toml 은 읽기와 블록 생성에만). expandsEnv 는 codex·cursor true(이름으로 표현), gemini·copilot false(restore 가 채움). 이름이 다른 자리표시자(env.K = "${OTHER}")는 Codex 로 표현할 수 없어 문자열 그대로 남는다.
 - ~~**프로필 상속** (`extends: base`)~~ — **해결 (2026-09-04, 0.9.0).** `extends: base` 또는 `extends: [a, b]`. 부모를 먼저 풀고 자기 것을 뒤에 붙이며 중복은 한 번, 빼기는 없다(덜 원하면 상속하지 말고 나열). 지침은 순서가 의미라 부모 조각이 먼저 import 된다. 없는 부모·순환은 lshed.yaml 참조 오류. 프로필을 읽는 곳(restore 계획, 패키지, list 의 사용처, add 힌트, `--pick` 기준 체크)은 전부 해석된 프로필을 쓴다. `--pick` 이 기기별 프로필을 만들기 시작하면서 "공통 + 기기 차이" 표현이 필요해져 도입.

@@ -422,7 +422,7 @@ A real `~/.claude` mixes three kinds of content, and they need different handlin
 
 A directory with a `.git` and a remote becomes a **package**. A skill whose symlink points inside a package is treated as generated and skipped. Everything else is authored and copied. The rules that keep this safe:
 
-- A package that is already present is never touched by `restore`. Your local checkout is yours.
+- A package that is already present is never touched by `restore`. Your local checkout is yours. The one exception is `--yes`, which runs the package's `install:` again, so "rerun with `--yes`" after a first restore does what it says.
 - `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`. Plugin installs go through Claude Code's own package manager and run without it; `--yes` is forwarded as `-y` for plugins that declare an install command.
 - Packages are not part of the managed set. Switching profiles never deletes a clone.
 
@@ -478,7 +478,7 @@ lshed prune [--yes]                             drop everything no profile uses
 lshed scan                                      list what the agent root holds, without writing anything
 ```
 
-Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`.
+Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`. An id is the file or directory name the agent reads, in any script (`skills/논문리뷰` is fine); letters, digits, `.`, `_` and `-` are allowed, and `/` between segments for nested agents and commands.
 
 Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed remembers it), `--agent <name>` (or `LSHED_AGENT`; default is the shed's `agent:`, then `claude-code`), `--root <dir>` (agent config root, default is the agent's own, e.g. `~/.claude` or `~/.codex`).
 
@@ -531,7 +531,8 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 ## What has been verified
 
-- Tests, a CLI smoke run and the standalone binaries run on every push on **Ubuntu, macOS and Windows** (Node 20 and 22). Windows uses junctions for `--link` and `claude.cmd` for plugin installs.
+- Tests, a CLI smoke run and the standalone binaries run on every push on **Ubuntu, macOS and Windows** (Node 20 and 22). Windows uses junctions for `--link` and `claude.cmd` for plugin installs. The smoke run includes a skill with a Korean name, so a filename-normalization difference on macOS or a code-page problem on Windows would fail there, not on a user's machine.
+- On the Linux development machine the whole command set is exercised beyond CI: git and GitHub packages with `install:` through `restore` and `update`, `sync` against a real remote including a conflict, `remove`/`prune`, every `--agent` target, the environment-variable defaults, `restore --pick` through a real terminal, and the compiled Linux binary.
 - The other agents are checked against the tools themselves, not just their docs. `scripts/vm/probe.sh` restores a throwaway shed into a tool's real root and asks the tool, non-interactively, for a passphrase kept in a skill, a codeword kept in the instructions file, and the same skill again through a `--link` symlink. Codex 0.153.2 and Antigravity CLI 1.1.27 pass every check (last run 2026-09-08 with lshed 0.14.1); Gemini CLI, Copilot CLI and Cursor are verified for file placement and format so far. `scripts/vm/README.md` has the details and a cloud-init file for running the whole thing on a fresh VM.
 - One real shed is in daily use on the machine this is developed on: Claude Code, Codex and Antigravity all read it through `--link`, and `status` reports no drift for any of the three.
 

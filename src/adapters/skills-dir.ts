@@ -75,7 +75,7 @@ export class SkillsDirAdapter implements AgentAdapter {
       if (name.startsWith(".")) continue;
       const full = path.join(dir, name);
       try { if (!(await fs.stat(full)).isDirectory()) continue; } catch { continue; }
-      out.push({ category: this.skills.name, id: name, path: full });
+      out.push({ category: this.skills.name, id: name.normalize("NFC"), path: full });
     }
     return out;
   }

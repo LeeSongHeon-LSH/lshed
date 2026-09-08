@@ -81,7 +81,7 @@ function ordered(ctx: Ctx, pkgs: Package[]): Package[] {
  * 프로필의 패키지를 갖춘다 (§3.7).
  *  - 없으면 설치기에 맡긴다. 락이 있으면 맞추려 하고, 못 맞추면 실제 버전을 락에 적는다.
  *  - 이미 있으면 건드리지 않는다. 락과 다르면 알려만 준다.
- *  - install: 셸 명령은 --yes 일 때만 실행한다.
+ *  - install: 셸 명령은 --yes 일 때만 실행한다. 이미 있는 패키지에도 --yes 면 돌린다 (첫 restore 의 "rerun with --yes" 안내가 참이도록).
  */
 export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
@@ -92,6 +92,8 @@ export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
     if (st.present) {
       const note = st.locked && st.rev !== st.locked ? `  (${short(st.rev)} ≠ lock ${short(st.locked)})` : "";
       ctx.log(`  = package ${pkg.id}${note}`);
+      // 이미 있는 패키지도 --yes 면 install 을 돌린다. 첫 restore 가 "rerun with --yes" 라고 안내하므로 그 말이 참이어야 한다.
+      if (opts.yes && !opts.dryRun) await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
       continue;
     }
     ctx.log(`  + package ${pkg.id}  (${inst.describe(pkg, st.locked)})`);
@@ -156,6 +158,7 @@ export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
       await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
     } else {
       ctx.log(`  = package ${pkg.id}  ${short(now)} (latest)`);
+      if (opts.yes) await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res);
     }
   }
   if (res.lockChanged) await writeLock(ctx.shed, lock);

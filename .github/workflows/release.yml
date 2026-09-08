@@ -24,6 +24,22 @@ jobs:
           files: build/*
           generate_release_notes: true
           body: |
+            Machines without Node can take one of the binaries below and put it on PATH. With Node 20+, `npm install -g lshed` is lighter.
+
+            | Platform | File |
+            |---|---|
+            | Windows x64 | `lshed-windows-x64.exe` |
+            | macOS Apple Silicon | `lshed-darwin-arm64` |
+            | macOS Intel | `lshed-darwin-x64` |
+            | Linux x64 / arm64 | `lshed-linux-x64`, `lshed-linux-arm64` |
+
+            On macOS and Linux, run `chmod +x` on the file after downloading. The binaries are not signed, so macOS warns through Gatekeeper on the first run.
+
+            What changed is in [CHANGELOG.md](https://github.com/LeeSongHeon-LSH/lshed/blob/main/CHANGELOG.md); the docs are [README.md](https://github.com/LeeSongHeon-LSH/lshed/blob/main/README.md).
+
+            <details>
+            <summary>한국어</summary>
+
             Node 가 없는 기기는 아래 실행파일을 받아 PATH 에 두세요. Node 20+ 가 있으면 `npm install -g lshed` 가 더 가볍습니다.
 
             | 플랫폼 | 파일 |
@@ -34,3 +50,7 @@ jobs:
             | Linux x64 / arm64 | `lshed-linux-x64`, `lshed-linux-arm64` |
 
             macOS 와 Linux 는 받은 뒤 `chmod +x` 가 필요합니다. 서명하지 않았으므로 macOS 는 첫 실행에서 Gatekeeper 경고가 납니다.
+
+            바뀐 내용은 [CHANGELOG.md](https://github.com/LeeSongHeon-LSH/lshed/blob/main/CHANGELOG.md) 에, 한국어 문서는 [README.ko.md](https://github.com/LeeSongHeon-LSH/lshed/blob/main/README.ko.md) 에 있습니다.
+
+            </details>

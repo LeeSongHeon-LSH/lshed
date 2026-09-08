@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.1 — 2026-09-08
 
 - `restore --yes` and `update --yes` now run a package's `install:` even when the package is already present or already up to date. Before, a first `restore` printed "rerun with '--yes'" but the rerun skipped the present package, so the command did nothing; only running the install by hand worked. Without `--yes` nothing changes: present packages are left alone and pending installs are only printed after a fresh clone.
 - Fix: a skill, agent, command or package whose name has letters outside ASCII (`skills/논문리뷰`) was written into `lshed.yaml` by `init` and `add` and then rejected by the manifest check, so every later command failed with "id may contain only letters, digits, ._- and /". The agents read such directories without complaint, so lshed now accepts letters and digits from any script in ids and profile names. Scanned names are normalized to NFC before they become ids, so a shed made on macOS and one made on Linux agree on the bytes.

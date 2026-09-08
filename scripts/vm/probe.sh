@@ -14,6 +14,9 @@
 #   LSHED_PROBE_MCP=0      leave MCP servers out of the shed
 #   LSHED_PROBE_DIR=<dir>  work dir (default ~/lshed-probe); results land in <dir>/results
 #   LSHED_BIN=<path>       lshed executable (default: `lshed` on PATH)
+#   LSHED_PROBE_CODEX_MODEL=<slug>    model for `codex exec -m` (default: the config.toml model)
+#   LSHED_PROBE_CODEX_EFFORT=<level>  reasoning effort for codex (low|medium|high; default: the config.toml value).
+#                                     The questions only open one file, so a small model on `low` is enough and cheapest.
 #   Tool credentials come from the tool's own variables: OPENAI_API_KEY (or a prior
 #   `codex login --with-api-key`), GEMINI_API_KEY, COPILOT_GITHUB_TOKEN, CURSOR_API_KEY.
 set -u
@@ -80,7 +83,9 @@ ask() { # ask <cli> <prompt>  → answer on stdout
     case $cli in
       # the probe VM is disposable: no sandbox, so Codex can open the skill file even where
       # bubblewrap cannot create user namespaces (Ubuntu 24.04 blocks them by default)
-      codex)  $DETACH timeout 120 codex exec --skip-git-repo-check --ephemeral --sandbox danger-full-access "$prompt" ;;
+      codex)  $DETACH timeout 120 codex exec --skip-git-repo-check --ephemeral --sandbox danger-full-access \
+                ${LSHED_PROBE_CODEX_MODEL:+-m "$LSHED_PROBE_CODEX_MODEL"} \
+                ${LSHED_PROBE_CODEX_EFFORT:+-c "model_reasoning_effort=\"$LSHED_PROBE_CODEX_EFFORT\""} "$prompt" </dev/null ;;   # else codex waits on stdin when it is a pipe
       gemini) GEMINI_CLI_TRUST_WORKSPACE=true $DETACH timeout 120 gemini -p "$prompt" --approval-mode yolo --output-format json \
                 | { if command -v jq >/dev/null; then jq -r '.response // empty'; else cat; fi; } ;;
       copilot) $DETACH timeout 120 copilot -p "$prompt" -s --allow-all-tools ;;

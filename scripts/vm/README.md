@@ -65,7 +65,7 @@ HOME=$H LSHED_PROBE_DIR=$H/probe LSHED_BIN="node $PWD/dist/cli.js" scripts/vm/pr
 rm -rf $H      # the copied login files go with it
 ```
 
-Each target asks its model three questions (skill, instructions, linked skill), so a run costs a handful of small requests on the free Codex plan and the Antigravity plan. Note that `probe.sh` runs Codex with `--sandbox danger-full-access`; the prompts only ask it to open one file, but do not point it at a shed you care about.
+Each target asks its model three questions (skill, instructions, linked skill), so a run costs a handful of small requests on the free Codex plan and the Antigravity plan. For Codex, `LSHED_PROBE_CODEX_MODEL=gpt-5.4-mini LSHED_PROBE_CODEX_EFFORT=low` picks the smallest model the account lists at its lightest effort; the questions only open one file, so that is enough. Check the key first with one tiny call (`codex exec --ephemeral -m gpt-5.4-mini "Reply with exactly: pong" </dev/null`): a stored API key can be revoked while `codex login status` still says "Logged in using an API key", and the probe would then burn its three attempts per question on 401s. On 2026-09-09 the model-free part (`LSHED_PROBE_ASK=0`) passed 14/14 here with lshed 0.15.4 and Codex 0.153.4; the model questions were not run because the stored key was rejected. Note that `probe.sh` runs Codex with `--sandbox danger-full-access`; the prompts only ask it to open one file, but do not point it at a shed you care about.
 
 ## Runbook: the day the VM is ready
 

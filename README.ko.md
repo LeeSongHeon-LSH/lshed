@@ -1,0 +1,556 @@
+# lshed
+
+[English](README.md) | **한국어**
+
+코딩 에이전트의 하네스(스킬, 서브에이전트, 명령, 지침, MCP 서버, 설정)를 **창고(shed)** 에 두고, 어느 기기에서든 명령 하나로 되살립니다.
+
+```
+lshed init --shed ~/lshed          # ~/.claude 를 스캔해 창고에 담고 lshed.yaml 생성
+lshed restore research             # 어디서든 프로필 적용
+```
+
+창고는 그냥 디렉터리입니다. git 저장소에 두든 Dropbox에 두든 상관없고, git 부분은 `lshed sync`가 대신해 줍니다. Claude Code 기준으로 만들었지만 같은 창고를 Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity, 공용 `~/.agents/skills`에도 놓을 수 있습니다.
+
+## 왜 필요한가
+
+새 노트북, 서버, 컨테이너, WSL을 하나 늘릴 때마다 `~/.claude`를 다시 꾸며야 합니다. 가장 뻔한 해법은 `~/.claude` 자체를 git에 넣는 것이고, 많은 사람에게는 그것이 정답입니다.
+
+**`~/.claude`를 그냥 git 저장소로 두면 충분한 경우.** 혼자 쓰고, 모든 기기가 같은 구성이며, `~/.claude` 안의 것이 전부 직접 만든 것이라면 `~/.claude` 자체를 git 저장소로 만들면 끝나고, lshed를 설치할 이유가 없습니다. 옮기는 것은 git이고, `.gitignore`는 세션 기록·캐시 같은 기기 상태값을 저장소에서 빼는 제외 목록일 뿐입니다.
+
+```
+cd ~/.claude && git init
+printf 'projects/\ncache/\nsessions/\nshell-snapshots/\nhistory.jsonl\n*.bak*\n' > .gitignore
+git add skills agents commands CLAUDE.md settings.json .gitignore && git commit -m init
+```
+
+새로 배울 개념도, 복사 단계도 없습니다. 편집하는 디렉터리가 곧 저장소이고, 여기서 `git push`한 뒤 다음 기기에서 `git clone <원격> ~/.claude`하는 것이 곧 복원입니다.
+
+**그것이 막히는 지점.** `~/.claude`가 "내가 쓴 것"만이 아니게 되는 순간 위 저장소는 아프기 시작합니다.
+
+- **설치한 툴킷.** 툴킷 하나가 1.6 GB짜리 clone이고, 직접 쓴 스킬 4개 옆에 별칭 스킬 53개를 만들어 놓습니다. 날것의 git은 이것을 전부 커밋하거나, 아니면 ignore 목록을 손으로 관리해야 합니다.
+- **JSON 파일 하나 안의 시크릿.** MCP 서버와 토큰이 `~/.claude.json` 안에 무관한 상태값과 함께 있습니다. 파일 단위 ignore로는 가를 수 없어, 토큰을 커밋하거나 MCP를 포기해야 합니다.
+- **이미 설정이 있는 기기.** 비어 있지 않은 `~/.claude`에 `git clone`하는 것은 손으로 하는 병합이고, 어떤 파일이 저장소에서 왔고 어떤 것이 원래 있던 것인지 아무도 기억하지 않습니다.
+- **기기마다 다른 부분집합.** 헤드리스 서버에는 브라우저 툴킷도 MCP도 필요 없습니다. 브랜치나 템플릿으로 흉내낼 수는 있지만, 구성을 바꿀 때 더 이상 원치 않는 부품을 치워 주는 것은 없습니다.
+- **기기에서 직접 고르기.** `git clone`은 전부 아니면 전무입니다. 새 기기에서는 창고에 뭐가 있는지 카테고리별로 보고, 이 기기에 필요한 것만 체크하고 싶습니다.
+
+lshed는 이 다섯 경우를 위해 있습니다. 창고는 여전히 git 안의 평범한 디렉터리이고, 그 위에 개념 셋을 얹습니다.
+
+| 개념 | 얻는 것 |
+|---|---|
+| **부품(component)** | 스킬·에이전트·명령·지침 조각·MCP 서버·설정 키 하나하나가 이름 있는 부품입니다. 설치한 툴킷은 복사하지 않고 출처와 버전만 기록합니다. |
+| **프로필(profile)** | `research`, `work`, `minimal`처럼 이름 붙인 조합입니다. `lshed.yaml`에 적거나, `restore --pick`의 체크리스트로 만듭니다. |
+| **관리 집합(managed set)** | lshed는 자기가 놓은 것을 기억하므로, 프로필을 바꾸거나 기존 기기에 복원해도 자기 파일만 치우고 여러분의 파일은 건드리지 않습니다. |
+
+대가도 있습니다. 편집은 `~/.claude`에서 하고 `lshed save`로 창고에 복사해야 하며(많이 편집하는 기기에서는 `restore --link`로 복사 단계를 없앨 수 있습니다), lshed는 각 에이전트의 파일 배치를 알아야 합니다. 다섯 경우 중 하나도 해당하지 않으면 그냥 git 저장소가 낫습니다.
+
+## 설치
+
+Node 20 이상이 있으면:
+
+```
+npm install -g lshed          # 또는 한 번만 실행: npx lshed status
+```
+
+Node가 없으면 [최신 릴리스](https://github.com/LeeSongHeon-LSH/lshed/releases/latest)에서 단독 실행파일을 받아 PATH에 두세요. 런타임을 품고 있어 80 MB쯤 됩니다.
+
+| 플랫폼 | 파일 |
+|---|---|
+| Windows x64 | `lshed-windows-x64.exe` → `lshed.exe`로 이름 변경 |
+| macOS Apple Silicon / Intel | `lshed-darwin-arm64` / `lshed-darwin-x64` |
+| Linux x64 / arm64 | `lshed-linux-x64` / `lshed-linux-arm64` |
+
+macOS와 Linux에서는 먼저 `chmod +x`가 필요합니다. 서명하지 않았으므로 macOS는 첫 실행에서 경고합니다. 어느 쪽이든 패키지와 `sync`에는 PATH의 `git`이, 창고에 플러그인이 있으면 `claude`가 필요합니다.
+
+## 빠른 시작
+
+```bash
+# 1. 이미 설정이 있는 기기에서
+lshed init --shed ~/lshed
+cd ~/lshed && git init && git remote add origin <비공개 저장소>
+lshed sync                                  # commit + push
+
+# 2. ~/lshed/lshed.yaml 을 열어 프로필을 만들고, 모든 기기에 필요하지 않은 부품은 빼세요
+
+# 3. 다른 기기에서
+git clone <비공개 저장소> ~/lshed
+lshed restore research --shed ~/lshed       # --shed 는 처음 한 번만
+lshed restore --pick --shed ~/lshed         # 또는 카테고리별로 이 기기에 둘 것을 체크
+```
+
+## 사용법
+
+### 첫날: 가진 것을 창고에 담기
+
+```
+$ lshed init --shed ~/lshed --exclude _gstack-command connect-chrome
+스캔: /home/me/.claude  →  창고: /home/me/lshed
+  ≡ package gstack  github:garrytan/gstack@main @253d1df  (참조만 기록)
+  ≡ package claude-plugins-official  claude-marketplace:anthropics/claude-plugins-official  (참조만 기록)
+  ≡ package exa  claude-plugin:exa@claude-plugins-official @3.4.1  (참조만 기록)
+  · skills/browse  (gstack 가 생성한 것 → 건너뜀)
+  · skills/review  (gstack 가 생성한 것 → 건너뜀)
+  - skills/_gstack-command  (--exclude)
+  + skills/add-drivers
+  + skills/domain-modeling
+  + mcp/notion  (시크릿 → ${NOTION_AUTHORIZATION})
+  + instructions/main  (CLAUDE.md)
+
+lshed.yaml 생성: /home/me/lshed/lshed.yaml  (부품 4개, 패키지 3개, 생성물 53개 건너뜀, 제외 2개, 프로필 "default")
+```
+
+`init`은 에이전트 루트를 읽기만 하고, 쓰는 곳은 창고와 `~/.claude/lshed/`뿐입니다. 발견한 것을 [세 종류](#세-종류의-것)로 나눕니다. 직접 만든 것은 복사(`+`), 설치한 것은 출처와 버전만 적은 패키지(`≡`), 설치기가 만든 파일은 건너뜀(`·`)입니다. 설치기가 심볼릭 링크 없이 만든 별칭은 직접 만든 것처럼 보이므로 `--exclude`로 빼세요. 그 선택은 매니페스트의 `exclude:`에 남습니다.
+
+그다음 `lshed.yaml`을 여세요. 전부를 담은 `default` 프로필 하나가 있습니다. clone 뒤 설치 단계가 필요한 git 패키지에는 `install:`을 적고, 창고를 git 저장소로 만듭니다.
+
+```
+cd ~/lshed && git init && git remote add origin git@github.com:me/harness.git
+lshed sync
+```
+
+### 매일: 편집, 저장, 동기화
+
+스킬은 에이전트가 읽는 자리인 `~/.claude`에서 편집합니다. 창고는 저절로 바뀌지 않습니다.
+
+```
+lshed status          # 적용된 프로필, 드리프트, 새로 생긴 것
+lshed diff            # ~/.claude 와 창고의 파일 차이
+lshed save            # 로컬 편집을 창고로 (또는: lshed save skills/add-drivers)
+lshed sync            # 창고 커밋, pull, push
+```
+
+`~/.claude`에서 창고로 가는 길은 `save`뿐이고, 창고가 소유한 부품(`file:` 출처)에만 동작합니다. `sync`는 저장하지 않은 편집이 있으면 경고해서, 기기보다 뒤처진 창고를 push하지 않게 합니다.
+
+### 이미 설정이 있는 기기
+
+빈 기기보다 흔한 것은 이미 에이전트를 쓰고 있어 자기 스킬·설정·MCP 서버가 있는 기기입니다. `restore`는 그 경우를 위해 만들어졌습니다. 이전 lshed 상태가 없으면 **아무것도 지우지 않습니다.** 프로필이 적은 것을 놓고, 덮어쓰는 것은 먼저 `~/.claude/lshed/backups/<시각>/`에 백업합니다. 그 기기에만 있는 부품은 그대로 둡니다.
+
+```
+$ lshed restore default --shed ~/lshed --dry-run
+  + skills/mine
+  ~ skills/shared            # 같은 이름, 다른 내용 → 백업 뒤 교체
+  + mcp:exa  (${EXA_API_KEY})
+  ~ settings:model
+(dry-run) 변경 없음. 배치 5, 제거 0, 백업 예정 3
+```
+
+먼저 `--dry-run`을 돌리세요. `+`는 새로 놓음, `~`는 백업 뒤 교체, `-`는 백업 뒤 제거입니다. 계획이 맞으면 플래그를 빼고 다시 돌립니다. 그다음 그 기기만의 부품을 창고에 올리면 두 기기가 같은 것을 갖게 됩니다.
+
+```
+lshed add                    # 창고에 없는 것을 나열
+lshed add windows-only mcp/my-local-server
+lshed sync
+```
+
+둘러보려고 그런 기기에서 `init`을 돌리지 마세요. `init`은 찾은 것을 lshed 관리 대상으로 등록하므로, 나중에 진짜 창고로 `restore`하면 그 부품들을 제거 대상으로 봅니다(백업은 되지만 제거됩니다). 출력만 하는 `lshed scan`을 쓰세요. 이미 그랬다면 `restore`가 제거 전에 경고하고, `lshed add`가 빠져나오는 길입니다.
+
+### 새 기기
+
+```
+git clone git@github.com:me/harness.git ~/lshed
+lshed restore default --shed ~/lshed
+```
+
+```
+  + package gstack  (clone https://github.com/garrytan/gstack.git @main → 253d1df)
+  + package claude-plugins-official  (claude plugin marketplace add anthropics/claude-plugins-official)
+  + package exa  (claude plugin install exa@claude-plugins-official  (전에 3.4.1; 고정은 안 됨))
+  + skills/add-drivers
+  + skills/domain-modeling
+  + mcp:notion  (${NOTION_AUTHORIZATION})
+  + lshed/instructions/main.md
+  + CLAUDE.md
+
+프로필 "default" 적용: 배치 5, 제거 0, 패키지 설치 3
+
+설치 명령 1개를 실행하지 않았습니다. 확인 후 '--yes' 로 다시 실행하거나 직접 돌리세요:
+  cd /home/me/.claude/skills/gstack && ./setup
+
+환경변수가 없는 항목이 있습니다. 시크릿 값은 창고에 담지 않으므로 이 기기의 셸 환경에 넣으세요 (예: ~/.zshrc 의 export):
+  mcp:notion: NOTION_AUTHORIZATION
+```
+
+그 뒤 손이 가는 것은 둘입니다. 패키지의 `install:`은 clone해 온 저장소의 셸 명령이므로 `restore`는 보여 주고 멈춥니다. 직접 돌리거나 `--yes`로 다시 실행하세요. MCP 서버는 시크릿을 `${VAR}`로 참조하니 셸에서 export하면 Claude Code가 채웁니다. 이후로는 인자 없는 `lshed restore`가 마지막 프로필을 다시 적용하고, 창고 위치도 기억합니다.
+
+### 프로필 이름 대신 골라서 넣기
+
+기기를 꾸미려고 프로필 이름을 알거나 `lshed.yaml`을 고칠 필요는 없습니다. `restore --pick`은 창고를 카테고리 하나씩 보여 주며 이 기기에 둘 것을 묻습니다.
+
+```
+$ lshed restore --pick --shed ~/lshed
+창고: /home/me/lshed  (packages (3), skills (4), instructions (1), mcp (1))
+◆  packages (3)  — 이 기기에 둘 것을 고르세요 (space 선택, a 전체, enter 다음)
+│  ◼ gstack  github:garrytan/gstack@main
+│  ◻ claude-plugins-official  claude-marketplace:anthropics/claude-plugins-official
+│  ◻ exa  claude-plugin:exa@claude-plugins-official
+◆  skills (4)  — 이 기기에 둘 것을 고르세요
+│  ◼ add-drivers
+│  ◼ domain-modeling
+│  ◻ grilling
+│  ◻ paper-review
+◆  instructions (1)
+│  ◼ main
+◆  mcp (1)
+│  ◻ notion
+◆  이 선택을 저장할 프로필 이름
+│  lab-box
+
+프로필 "lab-box" 을 lshed.yaml 에 저장했습니다. 다른 기기에서도 쓰려면 lshed sync 로 올리세요.
+
+  + package gstack  (clone https://github.com/garrytan/gstack.git @main → 253d1df)
+  + skills/add-drivers
+  + skills/domain-modeling
+  + lshed/instructions/main.md
+  + CLAUDE.md
+
+프로필 "lab-box" 적용: 배치 4, 제거 0, 패키지 설치 1
+```
+
+창고에 아무것도 없는 카테고리(여기서는 `agents`, `commands`, `settings`)는 빈 화면 대신 건너뜁니다. 선택은 반드시 프로필로 저장되며, 이름을 따로 치지 않으면 기기 이름이 됩니다. 그래야 다음 번 인자 없는 `lshed restore`가 같은 것을 다시 적용하고, `lshed sync`가 다른 기기로 실어 나릅니다. 같은 이름의 프로필이 이미 있으면 덮어쓰기 전에 묻습니다.
+
+`lshed restore default --pick`은 `default`의 부품이 체크된 채 시작하므로, 빈 손에서 시작하는 대신 이 기기용으로 덜어낼 수 있습니다. 인자가 없으면 마지막 적용 프로필이 출발점입니다. `--dry-run`은 계획만 보여 주고 `lshed.yaml`도 `~/.claude`도 쓰지 않습니다. 어느 화면에서든 Ctrl+C는 아무것도 바꾸지 않습니다. 적용된 프로필이 없는 기기에서 터미널에서 `lshed restore --shed ~/lshed`만 치면 picker가 저절로 열립니다. 스크립트나 파이프에서는 대신 프로필 이름을 요구합니다.
+
+### 프로필
+
+프로필은 카테고리별 id 목록입니다. `lshed.yaml`에 얼마든지 추가하세요.
+
+```yaml
+profiles:
+  default:
+    packages: [gstack, claude-plugins-official, exa]
+    skills: [add-drivers, domain-modeling, grilling]
+    instructions: [main]
+    mcp: [notion]
+  server:                       # 헤드리스 서버: 브라우저 툴킷도 MCP 도 없음
+    skills: [add-drivers]
+    instructions: [main, server-rules]
+```
+
+```
+lshed restore server
+  - skills/domain-modeling
+  - skills/grilling
+  - mcp:notion
+  = skills/add-drivers
+  ~ CLAUDE.md
+  + lshed/instructions/server-rules.md
+```
+
+전환은 이전 프로필이 놓은 것만 치우고(`-`), 둘 다 쓰는 것은 두고(`=`), 내용이 바뀐 것만 다시 씁니다(`~`). 치우거나 덮어쓰는 것은 모두 `~/.claude/lshed/backups/<시각>/`에 먼저 갑니다. 패키지는 더하기만 합니다. `gstack`을 적지 않은 프로필도 clone은 그대로 둡니다. `--dry-run`은 이 계획만 출력합니다. 지침 조각은 순서가 있습니다. `restore`는 조각을 `@`-import하는 `CLAUDE.md`를 만들므로, 창고에서 조각을 고치면 다음 `restore`에 반영되고 병합할 것이 없습니다.
+
+프로필은 `extends`로 다른 프로필 위에 쌓을 수 있어, 기기별 프로필에는 다른 점만 적으면 됩니다.
+
+```yaml
+profiles:
+  default:
+    skills: [add-drivers, domain-modeling]
+    instructions: [main]
+  laptop:
+    extends: default            # default 전부에 더해서
+    packages: [gstack]
+    mcp: [notion]
+  lab:
+    extends: [default]          # 목록도 되고, 순서대로 적용
+    instructions: [lab-rules]   # default 의 main 뒤에 옴
+```
+
+상속은 더하기만 합니다. 부모의 부품이 먼저, 자기 것이 뒤에 오고, 지침도 그 순서로 `CLAUDE.md`에 들어갑니다. 부모보다 *적게* 가지려면 상속하지 말고 원하는 것을 직접 적으세요. 없는 부모나 순환은 아무것도 건드리기 전에 `lshed.yaml` 오류로 알리고, `lshed list`는 상속받는 프로필도 그 부품을 쓰는 것으로 셉니다.
+
+### 다른 에이전트도 같은 창고로
+
+Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity(`agy`)는 모두 `<자기 설정 디렉터리>/skills/<이름>/SKILL.md`를 읽습니다. Claude Code와 같은 배치이고, Antigravity를 뺀 나머지는 공용 `~/.agents/skills/`도 읽습니다. 그래서 창고 하나로 전부를 채울 수 있습니다. 대상은 `--agent`로 고릅니다. Codex의 스킬은 Codex 문서가 정한 위치인 `~/.agents/skills`에 놓으므로, 한 기기에서 스킬은 `--agent codex`와 `--agent agents` 중 하나로만 넣으세요.
+
+```
+lshed restore --agent agents            # ~/.agents/skills: 규약을 따르는 모든 도구가 읽는 공용 위치
+lshed restore --agent codex             # ~/.agents/skills + ~/.codex/AGENTS.md + config.toml
+lshed restore --agent gemini --link     # ~/.gemini/skills + ~/.gemini/GEMINI.md, 링크로
+lshed restore --agent agy               # ~/.gemini/config/skills + ~/.gemini/AGENTS.md (Antigravity IDE 와 CLI)
+```
+
+| `--agent` | 루트 | 스킬 | 지침 파일 | MCP 서버 |
+|---|---|---|---|---|
+| `claude-code` (기본) | `~/.claude` 또는 `$CLAUDE_CONFIG_DIR` | 됨, agents·commands·settings 도 | `CLAUDE.md`, 조각을 `@`-import | `~/.claude.json` |
+| `codex` | `~/.codex` 또는 `$CODEX_HOME` | 됨, `~/.agents/skills`에 (Codex 문서가 정한 위치; `~/.codex/skills`는 deprecated) | `AGENTS.md`, 조각을 이어 붙임 | `config.toml` `[mcp_servers.*]` |
+| `gemini` | `~/.gemini` | 됨 | `GEMINI.md`, 이어 붙임 | `settings.json` |
+| `copilot` | `~/.copilot` 또는 `$COPILOT_HOME` | 됨 | `copilot-instructions.md`, 이어 붙임 | `mcp-config.json` |
+| `cursor` | `~/.cursor` | 됨 | 없음 (Cursor 의 사용자 규칙은 설정 UI 안에 있음) | `mcp.json` |
+| `agy` | `~/.gemini/config` | 됨 | `../AGENTS.md`, 이어 붙임 (agy 는 `GEMINI.md`도 읽지만 그건 Gemini CLI 의 것) | `mcp_config.json` |
+| `agents` | `~/.agents` | 됨 | 없음 | 없음 |
+
+MCP 항목은 창고에 Claude Code 형식으로 두고 나갈 때 바꿉니다. Gemini는 `type` 없이 `httpUrl`, Antigravity는 `serverUrl`, Copilot은 `type: local`과 `tools: ["*"]`, Cursor는 `${env:VAR}` 자리표시자, Codex는 `env_vars` / `bearer_token_env_var` / `env_http_headers`에 변수 *이름*을 적습니다. 그래서 Cursor와 Codex의 설정 파일에는 시크릿 값이 아예 들어가지 않습니다. Gemini, Antigravity, Copilot은 자리표시자를 스스로 채우지 않으므로 `restore`가 셸 환경에서 채웁니다. Codex의 `config.toml`은 해당 표만 골라 고치므로 주석과 다른 설정은 그대로입니다. `lshed init --agent gemini`처럼 반대 방향도 되며, 시크릿은 마스킹돼 창고에 들어갑니다.
+
+에이전트 루트마다 자기 `lshed/state.json`이 있어, `~/.codex`에 복원해도 `~/.claude`에 놓은 것은 건드리지 않고, 루트마다 다른 프로필이나 `--link` 선택을 가질 수 있습니다. 대상이 모르는 부품은 알리고 건너뜁니다. 설정 키가 든 프로필을 Codex에 복원하면 `codex 은 settings 를 다루지 않아 건너뜁니다`라는 줄과 함께 나머지만 놓습니다. Claude 플러그인 패키지도 같은 식으로 건너뛰지만, `github:`/`git:` 패키지는 그 프로필을 복원하는 모든 에이전트 루트에 clone되므로, 원치 않으면 다른 에이전트용으로 그것이 없는 프로필을 두세요. `lshed init --agent codex`도 되고, Codex에서 만든 창고를 Claude Code로 복원하면 같은 조각으로 `CLAUDE.md`가 생성됩니다. 창고의 `agent:`는 `--agent`의 기본값일 뿐입니다(`$LSHED_AGENT`도 됩니다).
+
+### 복사 대신 링크
+
+편집을 주로 하는 기기에서는 `restore --link`가 스킬·에이전트·명령·지침 조각을 복사본 대신 창고를 가리키는 링크로 놓습니다. `~/.claude`에서 한 편집이 곧바로 창고에 있으므로 `diff`는 보고할 것이 없고 `save`는 할 일이 없습니다. `lshed sync`가 순환의 전부입니다.
+
+```
+$ lshed restore --link
+  ~ skills/add-drivers  (link)
+  ~ agents/reviewer.md  (link)
+  ~ lshed/instructions/main.md  (link)
+  = CLAUDE.md
+
+프로필 "default" 적용 (link): 배치 4, 제거 0
+```
+
+선택은 기기별이고 기억됩니다. 그 기기의 이후 `lshed restore`도 계속 링크로 놓고, `lshed status`는 `배치 link`를 보여 주며, `restore --no-link`로 복사로 돌아갑니다. 다른 기기에는 영향이 없습니다. MCP 항목과 설정 키는 파일이 아니라 JSON 값이라 항상 씁니다. 프로필을 바꾸면 링크만 지우고 그 뒤의 창고는 절대 지우지 않습니다. Windows에서는 디렉터리가 특별한 권한 없이 junction이 되고, 파일 하나짜리 부품(에이전트, 명령, 조각)은 링크에 개발자 모드가 필요합니다. 없으면 복사하고 그렇다고 알린 뒤 보통 복사본처럼 다룹니다(`save`도 됩니다).
+
+### 나중에 추가하기
+
+새 스킬을 쓰거나, `claude mcp add`로 MCP 서버를 넣거나, 툴킷을 `~/.claude/skills/`에 clone한 뒤:
+
+```
+$ lshed add
+창고에 없는 항목 3개 (넣으려면 lshed add <key...> 또는 --all):
+    skills/paper-review
+    mcp/linear
+  ≡ packages/superpowers  github:obra/superpowers@main
+  · 패키지 gstack 가 생성한 것 53개는 담지 않습니다
+
+$ lshed add paper-review mcp/linear
+  + skills/paper-review
+  + mcp/linear  (시크릿 → ${LINEAR_API_KEY})
+
+2개를 창고에 넣고 프로필 "default" 에 추가했습니다. 창고를 커밋하세요: /home/me/lshed
+```
+
+`add`는 `init`과 똑같이 분류하고, 주석을 흐트러뜨리지 않고 `lshed.yaml`에 덧붙이며, 현재 프로필과 관리 집합에 넣습니다. 키 없이 부르면 나열만 합니다. `status`는 그 수를 `창고 밖`으로 보여 줍니다. 이미 창고에 있는 부품을 다른 프로필에 넣는 것은 `profiles:`를 직접 고치는 일이고, 그런 경우 `add`가 알려 줍니다.
+
+### 패키지 최신으로 유지하기
+
+```
+lshed status                # clone 이 움직였으면 "253d1df ≠ lock 0d1bd56 → lshed update" 로 알림
+lshed update --dry-run      # 업스트림에 물어만 보고 아무것도 안 바꿈
+lshed update                # 프로필의 모든 패키지를 당기고 lshed.lock 갱신
+lshed update gstack --yes   # 하나만, 그리고 install: 실행
+```
+
+git 패키지는 `lshed.lock`에 커밋으로 고정되어 새 기기도 정확히 그 커밋을 받습니다. 플러그인은 고정할 수 없으므로 lock에는 설치된 버전을 적고, 이전 기기와 다르면 `status`가 알려 줍니다.
+
+`update --dry-run`은 아무것도 바꾸지 않고 업스트림만 읽습니다. clone이 이미 원격 끝에 있으면 `= (최신)`, pull이 옮길 것이면 `~ 0d1bd56 → 0530392`, 미리 알 수 없으면 `?`입니다. git 패키지와 Claude Code가 git으로 받은 마켓플레이스는 확인할 수 있고, Claude 플러그인과 공식 마켓플레이스(git clone이 아님)는 알 수 없어 `?`로 표시되며 실제 `update`만이 답합니다.
+
+### 정리
+
+```
+lshed list                  # 창고의 모든 것과 그것을 쓰는 프로필
+lshed list --unused         # 어느 프로필도 안 쓰는 것
+lshed remove skills/old     # 창고에서 삭제 (프로필이 쓰는 동안은 거부)
+lshed prune --yes           # 안 쓰는 것 전부 삭제
+```
+
+`remove`와 `prune`은 백업 없이 창고에서 지웁니다. 창고는 git 안에 있으니 prune 전에 커밋하세요.
+
+### 출력 읽기
+
+| 기호 | 뜻 |
+|---|---|
+| `+` | 놓음 / 추가함 |
+| `=` | 이미 같아서 한 일 없음 |
+| `~` | 다른 내용이 있어 교체함 (백업) |
+| `-` | 제거함 (백업) 또는 제외 |
+| `≡` | 패키지: 출처만 기록, 복사 안 함 |
+| `·` | 설치기가 만든 것, 건너뜀 |
+| `!` | 확인 필요 |
+| `↑` `↓` | push / pull (sync), 갱신 (update) |
+
+오류는 stderr로 나가고 종료 코드는 1입니다. 나머지는 전부 stdout입니다.
+
+## 매니페스트
+
+`lshed.yaml`은 창고 루트에 있습니다. `init`이 만들고, 그다음부터는 직접 고칩니다. `add`와 `remove`도 주석을 보존하며 고쳐 줍니다.
+
+```yaml
+version: 1
+agent: claude-code
+exclude: [skills/_gstack-command]   # init/add 가 집어 오면 안 되는 것
+ignore: [dist]                      # 복사하지 않을 이름 추가 (기본 목록에 더해짐)
+
+components:
+  skills:
+    - id: paper-review            # source 기본값은 file:./skills/paper-review
+    - id: grading-helper
+  agents:
+    - id: reviewer                # file:./agents/reviewer.md
+  commands:
+    - id: summarize
+  instructions:
+    - id: base                    # file:./instructions/base.md
+    - id: research-style
+  mcp:
+    - id: exa                     # file:./mcp/exa.json — 시크릿은 ${VAR}
+  settings:
+    - id: permissions             # file:./settings/permissions.json — settings.json 의 최상위 키 하나
+    - id: hooks
+
+packages:
+  - id: gstack
+    source: github:garrytan/gstack@main
+    into: skills/gstack
+    install: ./setup
+
+profiles:
+  research:
+    packages: [gstack]
+    skills: [paper-review]
+    agents: [reviewer]
+    instructions: [base, research-style]    # 순서가 의미 있음
+    mcp: [exa]
+    settings: [permissions, hooks]
+  teaching:
+    skills: [grading-helper]
+    commands: [summarize]
+    instructions: [base]
+```
+
+- 부품의 `source`는 `file:<창고 기준 상대 경로>`입니다. 패키지의 `source`는 `github:owner/repo@ref`, `git:<url>#ref`, `claude-marketplace:<owner/repo>`, `claude-plugin:<name>@<marketplace>`를 받습니다.
+- 카테고리 이름은 어댑터가 정합니다. Claude Code는 `skills`, `agents`, `commands`, `instructions`, `mcp`, `settings`이고, 다른 에이전트는 `skills`에 더해 위 표에 있는 대로 `instructions` / `mcp`를 가집니다.
+- `ignore:`는 기본 목록(`node_modules`, `.git`, `__pycache__`, `.venv`, 캐시 디렉터리, `*.log`)에 더해집니다. `dist/` 같은 빌드 산출물은 스킬에 따라 필요하므로 기본으로는 빼지 않습니다.
+- `exclude:`는 로컬에는 있지만 창고에 들어가면 안 되는 부품입니다. `init --exclude`가 적어 줍니다.
+
+## 세 종류의 것
+
+실제 `~/.claude`에는 세 종류가 섞여 있고, 각각 다르게 다뤄야 합니다.
+
+| 종류 | 예 | lshed 가 하는 일 |
+|---|---|---|
+| **직접 만든 것** | 직접 쓴 스킬, `CLAUDE.md`, 직접 넣은 MCP 서버 | 창고에 복사 |
+| **설치한 것** | `git clone`한 툴킷, 플러그인 | 출처와 커밋만 기록, `restore`가 다시 clone·설치 |
+| **설치가 만든 것** | 설치기가 만들어 둔 스텁 스킬 | 건너뜀, 설치기를 돌리면 돌아옴 |
+
+`.git`과 remote가 있는 디렉터리는 **패키지**가 됩니다. 심볼릭 링크가 패키지 안을 가리키는 스킬은 생성물로 보고 건너뜁니다. 나머지는 직접 만든 것으로 보고 복사합니다. 이것을 안전하게 지키는 규칙은 다음과 같습니다.
+
+- 이미 있는 패키지는 `restore`가 절대 건드리지 않습니다. 로컬 체크아웃은 여러분 것입니다.
+- `install:`은 셸 명령입니다. `--yes`가 없으면 `restore`와 `update`는 **보여 주고 멈춥니다.** 플러그인 설치는 Claude Code 자체 패키지 관리자를 거치므로 그 없이도 돌고, 설치 명령을 선언한 플러그인에는 `--yes`가 `-y`로 전달됩니다.
+- 패키지는 관리 집합에 들어가지 않습니다. 프로필을 바꿔도 clone은 지워지지 않습니다.
+
+Claude Code 플러그인은 자기 스킴을 가진 패키지입니다. `init`은 `~/.claude/plugins`의 사용자 범위 플러그인을 찾고, `restore`는 마켓플레이스를 먼저 추가한 뒤 `claude plugin install`을 돌립니다. 프로젝트 범위 플러그인은 그 프로젝트의 것이라 기록하지 않습니다.
+
+## MCP 서버와 시크릿
+
+사용자 범위 MCP 서버는 `~/.claude.json` 안에 기기 ID, 세션 상태와 함께 있습니다. lshed는 서버 하나를 `mcp` 카테고리의 부품 하나로 봅니다. 창고에는 `mcp/<이름>.json`이 있고, `restore`는 `~/.claude.json`의 `mcpServers.<이름>` 키만 고치고 나머지는 그대로 둡니다.
+
+**시크릿 값은 창고에 들어가지 않습니다.** `init`과 `add`는 `env`와 `headers` 아래에서 키 이름에 시크릿처럼 보이는 단어(`key`, `token`, `secret`, `password`, `auth`, `authorization`, `credential`, `cookie`, `session` — 단어 단위라 `MAX_OUTPUT_TOKENS`는 해당 없음)가 있는 값을 `${VAR}` 자리표시자로 바꿉니다.
+
+```json
+{ "type": "stdio", "command": "npx", "args": ["-y", "exa-mcp-server"],
+  "env": { "EXA_API_KEY": "${EXA_API_KEY}" } }
+{ "type": "http", "url": "https://mcp.notion.com/mcp",
+  "headers": { "Authorization": "Bearer ${NOTION_AUTHORIZATION}" } }
+```
+
+`restore`는 자리표시자를 그대로 씁니다. Claude Code가 서버를 띄울 때 환경에서 `${VAR}`를 채우므로 값은 셸에만 있습니다(`~/.zshrc`의 `export EXA_API_KEY=...` 등, 시크릿을 관리하는 방식대로). `restore`와 `status`는 프로필에 필요한데 설정되지 않은 변수를 나열합니다. 휴리스틱은 제안일 뿐입니다. 창고의 JSON을 고쳐 자리표시자를 더하거나 빼도 되고, `args`나 `url`에 토큰처럼 보이는 것이 있으면 `init`이 경고합니다. `save`는 기존 자리표시자를 유지하고 새로 생긴 시크릿 키를 마스킹하므로, 교체한 키가 실수로 창고에 새지 않습니다. `diff`는 자리표시자를 와일드카드로 비교해서, 실제 값을 가진 기기가 드리프트로 잡히지 않습니다.
+
+## 설정
+
+`~/.claude/settings.json`에는 훅, 권한, `env`, 모델, 테마, 그리고 Claude Code가 스스로 쓰는 상태값이 있습니다. lshed는 이 파일을 병합하지 않습니다. **최상위 키 하나가 `settings` 카테고리의 부품 하나**입니다. 창고에는 `settings/permissions.json`, `settings/hooks.json` 같은 파일이 있고, `restore`는 딱 그 키만 쓰고 나머지는 둡니다. 프로필은 `permissions`와 `hooks`만 실어 나르고 `model`은 기기마다 다르게 둘 수 있습니다.
+
+```
+$ lshed add
+창고에 없는 항목 3개:
+    settings/hooks  ! 패키지 gstack 안을 가리킵니다. 그 설치가 만든 것이면 exclude 하세요: settings/hooks
+    settings/model
+    settings/theme
+```
+
+- `enabledPlugins`와 `extraKnownMarketplaces`는 담지 않습니다. 플러그인·마켓플레이스 패키지의 몫이고, `restore`가 설치하면서 다시 만듭니다.
+- 홈 아래 절대 경로는 창고에서 `${HOME}/…`가 되어, 한 기기에서 쓴 훅 명령이 다른 기기에서도 돕니다. Claude Code는 `settings.json`의 변수를 채우지 않으므로 `restore`가 `${HOME}`과 `${VAR}`를 셸에서 직접 채우고, 없는 변수는 알린 뒤 자리표시자로 둡니다.
+- `env`는 시크릿 맵으로 봅니다. 시크릿처럼 보이는 키는 마스킹하고 나머지(`CLAUDE_CODE_MAX_OUTPUT_TOKENS` 등)는 그대로 갑니다.
+- 패키지 안을 가리키는 값(툴킷 설치기가 쓴 훅)은 표시됩니다. 설치기가 다시 만들어 주는 것이면 `exclude:`에 넣고 `restore --yes`가 되살리게 두세요.
+- 창고가 키 전체를 소유하므로, 로컬에서 추가한 권한은 `diff`에 나타나고 다른 편집처럼 `save`로 창고에 들어갑니다.
+
+## 명령 레퍼런스
+
+```
+lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
+lshed add [keys...] [--all]                     init 뒤에 생긴 것을 창고로
+lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes]   (--agent <name> 으로 다른 도구 대상)
+lshed status                                    적용 프로필, 드리프트, 패키지, 없는 환경변수, 새것
+lshed diff                                      로컬과 창고가 다른 파일(또는 JSON 키)
+lshed save [ids...]                             로컬 편집을 창고로
+lshed sync [-m <msg>] [--no-push] [--dry-run]   창고 커밋, pull --rebase, push
+lshed update [ids...] [--dry-run] [--yes]       패키지 당기고 lshed.lock 갱신, --dry-run 은 업스트림에 묻기만
+lshed list [--unused]                           창고의 내용과 그것을 쓰는 프로필
+lshed remove <key>                              창고에서 부품이나 패키지 삭제
+lshed prune [--yes]                             어느 프로필도 안 쓰는 것 전부 삭제
+lshed scan                                      루트를 읽기만 하고 나열
+```
+
+키는 `카테고리/id`이고, 모호하지 않으면 `id`만 써도 됩니다: `skills/paper-review`, `mcp/exa`, `packages/gstack`.
+
+공통 옵션: `--shed <dir>`(또는 `LSHED_HOME`, 첫 restore 뒤에는 기억함), `--agent <name>`(또는 `LSHED_AGENT`, 기본은 창고의 `agent:`, 그다음 `claude-code`), `--root <dir>`(에이전트 설정 루트, 기본은 에이전트 자체 위치인 `~/.claude`나 `~/.codex` 등).
+
+### `restore` 가 하는 일
+
+0. 프로필의 패키지 중 없는 것을 `lshed.lock`의 버전으로 설치합니다.
+1. **이전** 프로필이 놓았고 새 프로필에는 없는 경로를 치웁니다.
+2. 새 프로필의 부품을 제자리에 복사합니다(`--link`이거나 전에 링크를 쓴 기기라면 창고로 가는 링크로). MCP 항목은 `~/.claude.json`에, 설정 키는 `settings.json`에 씁니다.
+3. 지침 파일을 다시 만듭니다.
+
+덮어쓰거나 치우는 것은 `--no-backup`이 없는 한 먼저 `~/.claude/lshed/backups/<시각>/`에 백업합니다. lshed가 놓은 적 없는 파일은 건드리지 않습니다. `--dry-run`은 계획만 출력합니다. `--pick`이면 비어 있지 않은 카테고리마다 체크리스트가 먼저 나옵니다(packages, skills, agents, commands, instructions, MCP 서버, 설정 키). `[profile]`을 주면 그 프로필의 부품이 미리 체크됩니다. 결과는 `lshed.yaml`에 프로필로 저장되고, 그 프로필로 0~3단계가 돕니다.
+
+### `sync` 가 하는 일
+
+1. `diff`에 저장하지 않은 로컬 편집이 있으면 경고합니다.
+2. 창고의 모든 것을 커밋합니다(메시지는 바뀐 부품 이름, 또는 `-m`).
+3. `origin`이 있으면 `git pull --rebase` 뒤 `git push`(첫 번째는 upstream 설정).
+4. 받은 커밋이 있으면 `lshed restore`를 돌리라고 알립니다.
+
+충돌이 나면 rebase를 중단하고, 커밋은 그대로 둔 채 창고를 깨끗하게 남기고, git으로 해결하라고 알립니다. remote가 없으면 커밋만 합니다. `save`를 대신 돌리지는 않습니다.
+
+### 소유권
+
+직접 만든 부품의 진실은 창고입니다. `save`는 `file:` 부품의 로컬 편집을 창고로 되가져오고, 링크된 부품은 곧 창고입니다. 패키지의 주인은 upstream입니다. `update`가 당겨 오고, `save`는 건드리지 않습니다.
+
+## 어디에 무엇이 있나
+
+```
+<창고>/
+  lshed.yaml                                    매니페스트
+  lshed.lock                                    패키지 버전 (생성됨)
+  skills/<id>/    agents/<id>.md    commands/<id>.md    instructions/<id>.md
+  mcp/<id>.json                                 시크릿은 ${VAR}
+  settings/<id>.json                            최상위 키 하나씩, 홈 경로는 ${HOME}
+
+~/.claude/
+  skills/ agents/ commands/ CLAUDE.md           ← restore 가 놓음
+  settings.json  <id>                           ← 부품마다 키 하나, 나머지는 그대로
+  lshed/state.json                              ← 어느 프로필, 어느 경로를 관리하는지
+  lshed/instructions/<id>.md                    ← CLAUDE.md 가 import 하는 조각
+  lshed/backups/<시각>/                         ← restore 가 교체한 것
+~/.claude.json  mcpServers.<id>                 ← 부품마다 키 하나, 나머지는 그대로
+
+~/.codex/  ~/.gemini/  ~/.copilot/  ~/.cursor/  ~/.gemini/config/  ~/.agents/
+  skills/  <지침 파일>  <mcp 파일>              ← --agent 별로 같은 구조 (위 표 참고; codex 의 스킬은 ~/.agents/skills)
+  lshed/state.json  lshed/backups/              ← 루트마다 따로
+```
+
+`state.json`은 기기별이고 창고에 들어가지 않습니다. `CLAUDE_CONFIG_DIR`가 있으면 lshed는 그것을 루트로 쓰고, Claude Code처럼 `.claude.json`도 그 안에 씁니다.
+
+## 검증된 것
+
+- 테스트, CLI 스모크, 단독 실행파일이 push마다 **Ubuntu, macOS, Windows**(Node 20, 22)에서 돕니다. Windows는 `--link`에 junction을, 플러그인 설치에 `claude.cmd`를 씁니다.
+- 다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.2와 Antigravity CLI 1.1.27은 모든 검사를 통과했고(마지막 실행 2026-09-08, lshed 0.14.1), Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
+- 개발하는 기기에서는 실제 창고 하나를 매일 씁니다. Claude Code, Codex, Antigravity가 모두 `--link`로 그 창고를 읽고, 셋 다 `status`에 드리프트가 없습니다.
+
+## 아직 범위 밖
+
+- "변수 이름만 적는" 것 이상의 시크릿 처리. 암호화된 값, `op://` 참조, OS 키체인은 나중 일이고, 지금은 일부러 dotfiles보다 나을 것이 없게 두었습니다.
+- 프로젝트 범위 MCP 서버(`.mcp.json`, `~/.claude.json`의 `projects.*`)와 프로젝트 범위 플러그인. 프로젝트의 것입니다.
+- 다른 에이전트는 스킬, 지침 파일, MCP 서버만 옮깁니다. 각 도구의 설정 파일, 규칙 폴더, 플러그인은 그대로 둡니다.
+
+## 문제 해결
+
+- **"창고 위치를 모릅니다"** — `--shed <dir>`를 주거나 `LSHED_HOME`을 설정하세요. `restore`가 한 번 성공하면 기억합니다.
+- **restore가 내 `CLAUDE.md`를 바꿨다** — `~/.claude/lshed/backups/<시각>/CLAUDE.md`에 있습니다. 내용을 창고의 조각으로 옮기고 그 조각을 프로필에 넣으세요.
+- **로컬에서 고친 스킬을 지키고 싶다** — `lshed diff`로 보고, `lshed save <id>`로 창고에 넣고, `lshed sync`.
+- **`status`가 패키지가 lock과 다르다고 한다** — 무언가가 lshed 몰래 clone이나 플러그인을 갱신했습니다(Claude Code는 플러그인을 자동 갱신합니다). `lshed update`가 새 버전을 기록합니다.
+- **`status`가 같은 새 항목을 계속 보여 준다** — 설치기 별칭이거나 임시 파일입니다. `lshed.yaml`의 `exclude:`에 넣으세요.
+- **restore가 MCP 변수가 없다고 한다** — 셸 프로필에서 export하고 Claude Code를 다시 시작하세요. `~/.claude.json`의 자리표시자는 맞게 들어간 것이고, Claude Code가 시작할 때 채웁니다.
+- **restore가 훅 경로를 엉뚱하게 썼다** — 창고는 홈 경로를 `${HOME}/…`로 담습니다. 이 기기에서 다른 곳을 가리켜야 하면 창고의 JSON을 `${HOME}`이나 다른 변수로 고치고 다시 `restore`하세요.
+- **Windows에서 `--link`가 파일을 복사했다** — 파일 하나짜리 링크는 개발자 모드가 필요합니다. 켜고 다시 `restore`하거나, 복사본을 두고 그 파일은 `save`로 다루세요.
+- **sync가 충돌로 멈췄다** — `cd <창고> && git pull --rebase`, 해결, `git rebase --continue`, 그리고 다시 `lshed sync`.
+
+## 라이선스
+
+MIT

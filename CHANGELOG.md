@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.15.0 — 2026-09-08
 
 Every message lshed prints is now English. Nothing else changed in behaviour.
 

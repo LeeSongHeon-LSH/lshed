@@ -665,8 +665,6 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 - `lshed update --dry-run` lists every installed package as `~ (update)` without asking upstream whether anything changed. Use `lshed status`, which compares the clone with `lshed.lock`, to see what actually moved. A fix is planned.
   `lshed update --dry-run`은 업스트림에 변경이 있는지 묻지 않고 설치된 패키지를 전부 `~ (update)`로 표시합니다. 실제로 무엇이 움직였는지는 clone과 `lshed.lock`을 비교하는 `lshed status`로 보세요. 수정 예정입니다.
-- The Windows CI job occasionally fails on `test/sync.test.ts` with a 5-second timeout: the git subprocesses are slower on that runner, not a bug in `sync`. The same suite passed on the Node 20 Windows job of the same run and on the run before it. The timeout will be raised for that file.
-  Windows CI 잡이 이따금 `test/sync.test.ts`의 5초 타임아웃으로 실패합니다. 그 러너에서 git 자식 프로세스가 느린 것이지 `sync`의 버그가 아닙니다. 같은 런의 Node 20 Windows 잡과 직전 런에서는 같은 테스트가 통과했습니다. 그 파일의 타임아웃을 늘릴 예정입니다.
 
 ## Not in scope (yet) · 아직 범위 밖
 

@@ -3,7 +3,7 @@
 > **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13) · 2026-09-05 (0.14.1 기준으로 상태 갱신) · 2026-09-08 (전수 테스트 결과와 알려진 문제 둘, §10.3)
 > **프로젝트명**: `lshed` (읽기: 엘셰드 / *el-shed*)
 > **성격**: 오픈소스 CLI 도구 / 개인 취미 프로젝트로 시작
-> **상태 (2026-09-08)**: 0.14.1 이 push·publish 되어 있고, 개발 항목은 §12 기준으로 모두 닫혔다 — 부품·프로필·관리 집합, 패키지(git·Claude 플러그인)·락, MCP·settings 항목형, add/sync, `--pick`, `extends`, `--link`, 다른 에이전트(`--agent codex|gemini|copilot|cursor|agy|agents`)와 MCP 형식 변환, 단독 실행파일 5종, 3 OS CI. 2026-09-08 에 이 기기에서 할 수 있는 검사를 전부 다시 돌렸다(§10.3): 단위 147·스모크·바이너리·`--pick`·실환경 dry-run·Codex/agy probe 전부 통과. **알려진 문제 둘(미수정, §11)**: CI Windows 잡의 sync 테스트가 5초 타임아웃에 이따금 걸린다, `update --dry-run` 이 업스트림을 보지 않고 모든 패키지를 갱신 대상으로 찍는다. 남은 검증 둘: Gemini CLI·Copilot CLI·Cursor 의 VM probe(§10.2, 런북은 `scripts/vm/README.md`)와 사용자 실제 Windows 기기(§10.1). 이 기기는 Claude Code·Codex·Antigravity 가 모두 실제 창고 `~/harness` 를 링크로 쓴다.
+> **상태 (2026-09-08)**: 0.14.1 이 push·publish 되어 있고, 개발 항목은 §12 기준으로 모두 닫혔다 — 부품·프로필·관리 집합, 패키지(git·Claude 플러그인)·락, MCP·settings 항목형, add/sync, `--pick`, `extends`, `--link`, 다른 에이전트(`--agent codex|gemini|copilot|cursor|agy|agents`)와 MCP 형식 변환, 단독 실행파일 5종, 3 OS CI. 2026-09-08 에 이 기기에서 할 수 있는 검사를 전부 다시 돌렸다(§10.3): 단위 147·스모크·바이너리·`--pick`·실환경 dry-run·Codex/agy probe 전부 통과. **알려진 문제(§11)**: `update --dry-run` 이 업스트림을 보지 않고 모든 패키지를 갱신 대상으로 찍는다(미수정). CI Windows 잡의 sync 테스트 5초 타임아웃 플레이크는 같은 날 테스트 쪽에서 고쳤다. 남은 검증 둘: Gemini CLI·Copilot CLI·Cursor 의 VM probe(§10.2, 런북은 `scripts/vm/README.md`)와 사용자 실제 Windows 기기(§10.1). 이 기기는 Claude Code·Codex·Antigravity 가 모두 실제 창고 `~/harness` 를 링크로 쓴다.
 > **배포**: GitHub `LeeSongHeon-LSH/lshed`(public), npm `lshed`(latest 0.14.1), 릴리스마다 실행파일 5종 + SHA256SUMS (v0.14.1 까지 게시됨)
 > **배경 기록**(비용·수익·연구 연결·폐기 대안): `notes/background.md`
 
@@ -512,7 +512,7 @@ v0.4  다른 도구
    ✓ 도그푸딩이 잡은 셋 (마켓플레이스/플러그인 id, extraKnownMarketplaces, 빈 JSON) ← 0.14.1
 
 알려진 문제 (2026-09-08, §11)
-   - CI Windows 잡의 sync 테스트 5초 타임아웃 플레이크
+   ✓ CI Windows 잡의 sync 테스트 5초 타임아웃 플레이크 (테스트에 30초 여유)
    - update --dry-run 이 업스트림을 안 봄
 
 검증 (사용자 기기·키 필요)
@@ -630,11 +630,11 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 | 3 | `restore --pick` 을 실제 pty 로 구동(스크래치 창고): 스킬 2개 선택 → 프로필 `pickbox` 저장 → 배치 2 | 통과 |
 | 4 | §10.2 probe: Codex·agy 전체, 나머지는 배치만 | 통과 |
 
-여기서 나온 **문제 둘**은 §11 에 미결로 적었다: (1) CI 의 마지막 main 런(6b7b77e, 문서만 바꾼 커밋)에서 windows-22 잡이 `test/sync.test.ts` 두 테스트의 5초 타임아웃으로 실패 — 같은 런의 windows-20 과 직전 런의 windows 잡 둘은 통과했으므로 러너에서 git 자식 프로세스 spawn 이 느린 날 터지는 플레이크이고, 뒤따른 `EBUSY rmdir` 는 타임아웃 뒤 afterEach 가 아직 도는 git 밑을 지우려다 난 연쇄다; (2) `lshed update --dry-run` 이 실환경에서 9개 패키지 전부에 `~ (update)` 를 찍는데 `status` 는 전부 `= lock` 이라 모순처럼 보인다.
+여기서 나온 **문제 둘**은 §11 에 적었다(1번은 같은 날 해결): (1) CI 의 마지막 main 런(6b7b77e, 문서만 바꾼 커밋)에서 windows-22 잡이 `test/sync.test.ts` 두 테스트의 5초 타임아웃으로 실패 — 같은 런의 windows-20 과 직전 런의 windows 잡 둘은 통과했으므로 러너에서 git 자식 프로세스 spawn 이 느린 날 터지는 플레이크이고, 뒤따른 `EBUSY rmdir` 는 타임아웃 뒤 afterEach 가 아직 도는 git 밑을 지우려다 난 연쇄다; (2) `lshed update --dry-run` 이 실환경에서 9개 패키지 전부에 `~ (update)` 를 찍는데 `status` 는 전부 `= lock` 이라 모순처럼 보인다.
 
 ## 11. 미결 질문
 
-- **CI Windows 잡의 sync 테스트 타임아웃 (2026-09-08 발견, 미수정).** `test/sync.test.ts` 는 테스트마다 git 을 10회 안팎 띄우는데 Windows 러너에선 한 번에 수백 ms 라 vitest 기본 5초가 빠듯하다. 코드 결함이 아니라 플레이크. 제안: 이 파일의 `describe` 에 `{ timeout: 30_000 }`, afterEach 의 `fs.rm` 에 `maxRetries: 3, retryDelay: 200`(EBUSY 흡수). 두 줄 변경.
+- ~~**CI Windows 잡의 sync 테스트 타임아웃**~~ — **해결 (2026-09-08).** `test/sync.test.ts` 는 테스트마다 git 을 10회 안팎 띄우는데 Windows 러너에선 한 번에 수백 ms 라 vitest 기본 5초가 빠듯했다(코드 결함이 아니라 플레이크). `describe` 와 beforeEach/afterEach 에 30초, afterEach 의 `fs.rm` 에 `maxRetries: 3, retryDelay: 200` 으로 타임아웃 뒤의 EBUSY 를 흡수. 테스트만 바뀌었다.
 - **`update --dry-run` 이 업스트림을 확인하지 않는다 (2026-09-08 발견, 미수정).** `src/core/packages.ts` 의 `updatePackages` 가 dryRun 이면 조회 없이 `~ package X (… update)` 만 찍는다. "무엇이 갱신될지 보여준다"는 옵션 설명과 어긋난다. 제안: 설치기 인터페이스에 읽기 전용 `latest()`(git 은 `ls-remote`, 마켓플레이스 플러그인은 마켓 버전)를 두고 dry-run 이 lock 과 비교해 `=` / `~ 이전 → 최신` 으로 찍는다. 1번보다 손이 간다.
 
 - ~~**다른 에이전트 어댑터**~~ — **해결 (2026-09-04, 0.11.0).** Codex·Gemini CLI·Copilot CLI·Cursor 가 전부 Agent Skills 표준(`<root>/skills/<name>/SKILL.md`)을 쓰고 공용 `~/.agents/skills/` 도 읽으므로, 도구별 어댑터 대신 `SkillsDirAdapter` 하나에 루트·지침 파일만 다른 스펙 5개(codex/gemini/copilot/cursor/agents)를 넣었다. 창고는 하나이고 `--agent` 로 배치 대상을 고른다(`$LSHED_AGENT`, 창고의 `agent:` 는 기본값). 매니페스트 검증은 현재 어댑터가 아니라 **창고를 만든 에이전트** 기준이라 다른 에이전트로 열어도 오류가 아니며, 모르는 카테고리(mcp, settings, agents, instructions 없음)와 설치기 없는 패키지(claude-plugin:)는 알리고 건너뛴다. state 는 에이전트 루트마다 따로. 지침은 Codex/Gemini/Copilot 모두 이어붙임(Codex 는 import 문법이 없고, Gemini 는 @import 의 허용 디렉터리가 문서에 불명확, Copilot 은 저장소 안에서만). Cursor·~/.agents 는 사용자 지침 파일이 없어 `instructionsFileName()` 이 null. 실환경: 사용자의 `~/.agents/skills` 에 `skills` CLI 로 설치한 5개가 이미 있고 창고와 내용이 같아 dry-run 이 `=` 5, `+` 1(add-drivers) 로 나왔다. MCP 는 0.12.0 에서 추가: 창고 형식은 Claude Code 것 그대로 두고 `adapters/mcp-forms.ts` 가 도구별로 바꾼다(gemini: type 없음·httpUrl, copilot: type local·tools, cursor: `${env:VAR}`·`${userHome}`, codex: env_vars·bearer_token_env_var·env_http_headers 로 변수 *이름*을 적음). 변환은 어댑터의 read/write 안에서만 일어나 core 는 모른다. Codex 의 config.toml 은 `TomlEntries` 가 `[mcp_servers.<id>]` 표 블록만 잘라 붙여 주석·다른 표를 보존(smol-toml 은 읽기와 블록 생성에만). expandsEnv 는 codex·cursor true(이름으로 표현), gemini·copilot false(restore 가 채움). 이름이 다른 자리표시자(env.K = "${OTHER}")는 Codex 로 표현할 수 없어 문자열 그대로 남는다.
@@ -694,7 +694,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 0.12.1 VM probe (`scripts/vm/`) + CLAUDE_CONFIG_DIR 아래 `.claude.json` 위치 수정 — 2026-09-05
 - [x] 0.13.0 `--agent agy` (Antigravity) — 2026-09-05, README 영어/한국어 병기
 - [x] 2026-09-08 전수 테스트 (§10.3): 단위·스모크·바이너리·`--pick` pty·실환경 dry-run·Codex/agy probe 전부 통과, 코드 변경 없음
-- [ ] CI Windows 잡의 sync 테스트 타임아웃 여유 (§11) — 테스트만 고치면 됨
+- [x] CI Windows 잡의 sync 테스트 타임아웃 여유 (§11) — 2026-09-08, 테스트만
 - [ ] `update --dry-run` 이 업스트림을 확인하도록 (§11)
 - [ ] Gemini CLI·Copilot CLI·Cursor 를 VM 에서 probe (§10.2) — 사용자: 이미지 굽고 cloud-init 으로 부팅
 - [ ] 사용자 실제 Windows 노트북에서 §10.1 3층 (실행파일로 restore --dry-run, --link 의 junction·복사 폴백)

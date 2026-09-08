@@ -15,6 +15,9 @@ const r = (p: string) => fs.readFile(p, "utf8");
 const G = (args: string[], cwd: string) => git(["-c", "user.name=t", "-c", "user.email=t@t", ...args], cwd);
 const ctxFor = (root: string, shed: string): Ctx => ({ adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l), exec: async () => {} });
 
+// 테스트마다 git 을 10회 안팎 띄운다. Windows CI 러너는 spawn 한 번에 수백 ms 라 vitest 기본 5초에 이따금 걸렸다.
+const SLOW = 30_000;
+
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-sync-"));
   rootA = path.join(tmp, "A"); rootB = path.join(tmp, "B"); shedA = path.join(tmp, "shedA"); shedB = path.join(tmp, "shedB"); bare = path.join(tmp, "origin.git"); logs = [];
@@ -25,10 +28,11 @@ beforeEach(async () => {
   await git(["remote", "add", "origin", bare], shedA);
   await git(["config", "user.name", "t"], shedA); await git(["config", "user.email", "t@t"], shedA);
   logs = [];
-});
-afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
+}, SLOW);
+// 타임아웃으로 끊긴 테스트 밑에서 git 이 아직 돌면 Windows 는 EBUSY 를 낸다 — 몇 번 더 시도한다
+afterEach(() => fs.rm(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }), SLOW);
 
-describe("lshed sync", () => {
+describe("lshed sync", { timeout: SLOW }, () => {
   it("git 저장소가 아니면 안내하고 멈춘다", async () => {
     await expect(sync(ctxFor(rootA, path.join(tmp, "plain")))).rejects.toThrow(/git init/);
   });

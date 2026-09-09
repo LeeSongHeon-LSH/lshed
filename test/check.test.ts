@@ -102,9 +102,11 @@ describe("plumbing", () => {
     // 여기서 흉내 내는 플랫폼의 구분자로 이어 붙인다 — Windows 러너의 임시 경로에는 `:` 가 들어 있어 linux 흉내에 `:` 를 쓰면 잘린다
     expect(await installed("codex", { PATH: `C:\\nowhere;${d}`, PATHEXT: ".EXE;.CMD" }, "win32")).toBe(true);
     expect(await installed("agy", { PATH: `C:\\nowhere;${d}`, PATHEXT: ".EXE;.CMD" }, "win32")).toBe(false);   // 확장자 없는 파일은 Windows 에선 실행파일이 아니다
-    expect(await installed("codex", { PATH: d }, "linux")).toBe(false);   // .cmd 는 Linux 에서 codex 가 아니다
-    expect(await installed("agy", { PATH: d }, "linux")).toBe(true);
-    expect(await installed("gemini", { PATH: d }, "linux")).toBe(false);
+    if (process.platform !== "win32") {   // Windows 의 임시 경로(`C:\…`)는 `:` 로 나뉘는 linux PATH 에 넣을 수 없다
+      expect(await installed("codex", { PATH: d }, "linux")).toBe(false);   // .cmd 는 Linux 에서 codex 가 아니다
+      expect(await installed("agy", { PATH: d }, "linux")).toBe(true);
+      expect(await installed("gemini", { PATH: d }, "linux")).toBe(false);
+    }
   });
   it("skillsDirOf: the adapter's skills category, absolute", () => {
     expect(skillsDirOf(createAdapter("claude-code", "/r"))).toBe(path.join("/r", "skills"));

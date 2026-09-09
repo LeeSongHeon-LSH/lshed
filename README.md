@@ -509,6 +509,10 @@ On a conflict it aborts the rebase, leaves the shed clean with your commit intac
 
 The shed is the source of truth for authored parts: `save` copies local edits back for `file:` components, and a linked part is the shed. Packages are owned by their upstream: `update` pulls them, `save` ignores them.
 
+### Trust
+
+A shed is executable, not just data. `restore` places files into your agent's config, fills `${VAR}` from your shell into the configs it writes, and with `--yes` runs each package's `install:` shell command. So restore only a shed you trust as much as your own dotfiles, and keep yours private (a private git repo). Restoring someone else's shed is close to handing them your machine: its manifest can carry an `install:` command, and a config it writes can point an MCP server at a URL that then receives one of your secrets. lshed confines what it places to the agent's own root and rejects a package source that could smuggle a git option, but it cannot vouch for what a shed's `install:` runs or where a config sends a secret. Treat a shed you did not write like any other code you are about to run.
+
 ## Where things live
 
 ```

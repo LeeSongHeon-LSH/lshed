@@ -42,6 +42,22 @@ export async function exists(p: string): Promise<boolean> {
   try { await fs.access(p); return true; } catch { return false; }
 }
 
+/**
+ * 임시 파일 → rename 으로 통째로 바꾸되, 대상 파일의 권한을 보존한다.
+ * `~/.claude.json` 은 OAuth 토큰을 담고 흔히 600 인데, umask 로 만든 새 임시 파일을 그대로 rename 하면 664 로 넓어져
+ * 비밀이 그룹·타 사용자에게 노출된다. 이미 있으면 그 mode 를, 없으면 소유자 전용(600)을 쓴다.
+ */
+export async function writeFilePreservingMode(p: string, data: string): Promise<void> {
+  await fs.mkdir(path.dirname(p), { recursive: true });
+  let mode = 0o600;
+  try { mode = (await fs.stat(p)).mode & 0o777; } catch { /* 새 파일: 소유자 전용 */ }
+  const tmp = `${p}.lshed-${process.pid}.tmp`;
+  await fs.writeFile(tmp, data);
+  // writeFile 은 umask 를 타므로, rename 전에 목표 mode 로 못 박는다.
+  await fs.chmod(tmp, mode).catch(() => { /* chmod 를 지원하지 않는 파일 시스템은 rename 만 */ });
+  await fs.rename(tmp, p);
+}
+
 export async function isDir(p: string): Promise<boolean> {
   try { return (await fs.stat(p)).isDirectory(); } catch { return false; }
 }

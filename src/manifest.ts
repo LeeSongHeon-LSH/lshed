@@ -6,7 +6,9 @@ import { parseSource, isComponentSource } from "./source.js";
  * id 는 경로 구간을 가질 수 있다 (agents/team/reviewer.md → "team/reviewer"). 구간마다 글자·숫자·._-
  * 글자는 어느 문자 체계든 된다 (`skills/논문리뷰`). 에이전트는 디렉터리 이름을 그대로 스킬 이름으로 읽으므로 lshed 가 더 좁힐 이유가 없다.
  */
-const ID_SEG = "[\\p{L}\\p{N}_.-]+";
+// 구간마다 `.` 이나 `..` 만으로 된 것은 거부한다 (선행 부정형). 그것을 허용하면 id 가 "../../.bashrc" 처럼 에이전트 루트 밖을 가리켜
+// restore 가 홈의 임의 파일을 덮어쓸 수 있다. 실제 부품 이름에 `.` 하나로 된 구간은 없다.
+const ID_SEG = "(?!\\.\\.?(?:\\/|$))[\\p{L}\\p{N}_.-]+";
 const ID_RE = new RegExp(`^${ID_SEG}(?:\\/${ID_SEG})*$`, "u");
 
 /**
@@ -34,7 +36,11 @@ const PackageSchema = z.object({
   id: z.string().regex(/^[\p{L}\p{N}_.@-]+$/u, "id may contain only letters, digits and ._@-"),   // 패키지 id 는 경로가 아니다. 플러그인은 "이름@마켓플레이스" 로 구분될 수 있다
   source: z.string(),
   /** git 계열 패키지의 위치 (어댑터 루트 기준). 어댑터 설치기 스킴은 필요 없다 */
-  into: z.string().regex(/^[^/\\][^\\]*$/, "into must be a relative POSIX path under the root").optional(),
+  into: z.string()
+    .regex(/^[^/\\][^\\]*$/, "into must be a relative POSIX path under the root")
+    // `..` 구간은 어댑터 루트 밖으로 clone·설치를 유도한다 (예: into: ../../.config/autostart). 정상 into 는 늘 루트 아래다.
+    .refine((s) => !s.split("/").some((seg) => seg === "." || seg === ".."), "into must stay under the root (no '.' or '..' segments)")
+    .optional(),
   /** 설치 후 실행할 셸 명령. --yes 일 때만 실행 */
   install: z.string().optional(),
 });

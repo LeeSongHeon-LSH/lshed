@@ -6,11 +6,14 @@ import type { Package } from "../manifest.js";
 import type { ScannedComponent } from "../adapters/types.js";
 import { parseSource, cloneTarget, sourceFromRemote } from "../source.js";
 import * as g from "../git.js";
-import { exists } from "../fsutil.js";
+import { exists, isInside } from "../fsutil.js";
 
 function dirOf(ctx: Ctx, pkg: Package): string {
   if (!pkg.into) throw new Error(`package ${pkg.id}: a git package needs into`);
-  return path.join(ctx.adapter.root, ...pkg.into.split("/"));
+  const dir = path.join(ctx.adapter.root, ...pkg.into.split("/"));
+  // 스키마가 `..` 를 이미 막지만, 최종 경로가 루트 안인지 여기서도 확인한다 (심볼릭 링크·다른 진입점 대비).
+  if (!isInside(ctx.adapter.root, dir)) throw new Error(`package ${pkg.id}: into escapes the agent root: ${pkg.into}`);
+  return dir;
 }
 
 /** github: / git: — clone 하고 락 커밋으로 맞춘다 */

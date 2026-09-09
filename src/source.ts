@@ -35,6 +35,8 @@ export function parseSource(raw: string): Source {
       const url = hash >= 0 ? rest.slice(0, hash) : rest;
       const ref = hash >= 0 ? rest.slice(hash + 1) : undefined;
       if (!url) throw new Error(`git: needs a URL: "${raw}"`);
+      // `-` 로 시작하는 URL 은 git 명령의 옵션으로 샐 수 있다 (예: --upload-pack=<명령>). 거부한다.
+      if (url.startsWith("-")) throw new Error(`git: URL cannot start with '-': "${raw}"`);
       return { scheme, url, ref: ref || undefined };
     }
     default:

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { EntryCategory } from "./types.js";
 import type { Json } from "../core/entries.js";
+import { writeFilePreservingMode } from "../fsutil.js";
 
 export interface JsonEntriesSpec {
   name: string;
@@ -73,9 +73,6 @@ export class JsonEntries implements EntryCategory {
     if (value === null) delete sect[id];
     else sect[id] = this.spec.toLocal ? this.spec.toLocal(id, value as Json) : value;
     const next = this.spec.under ? { ...all, [this.spec.under]: sect } : sect;
-    await fs.mkdir(path.dirname(p), { recursive: true });
-    const tmp = `${p}.lshed-${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(next, null, 2) + "\n");
-    await fs.rename(tmp, p);
+    await writeFilePreservingMode(p, JSON.stringify(next, null, 2) + "\n");
   }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.17.1 — 2026-09-09
+
+- Security: a shed you `restore` could reach outside the agent's own root. A component `id` or a package `into` of `../../.bashrc` passed the manifest check, because the id pattern allowed a `..` path segment and `into` only forbade a leading slash, so `restore` would overwrite files anywhere under the home directory (a login file, an SSH `authorized_keys`, an autostart entry). The manifest now rejects `.` and `..` path segments in ids and in `into`, and the git installer refuses a package path that resolves outside the agent root. Everything a shed places stays under the root it targets.
+- Security: a `git:` package source was passed to `git ls-remote`/`git clone` as the first positional word, so a URL beginning with `-` became a git option — `git:--upload-pack=<command>#main` ran that command during `restore` or `update --dry-run`. lshed now rejects a `git:` URL that starts with `-`, and passes the URL after a `--` separator so git can never read it as an option.
+- Security: rewriting an entry file (`~/.claude.json`, a Codex `config.toml`) replaced it through a fresh temp file, which took the process umask and widened the mode — a `~/.claude.json` kept at `600` for its OAuth token came back at `664`, readable by the group. The write now preserves the existing file's mode, and creates a new one owner-only (`600`).
+- The README gains a **Trust** section: a shed is executable, not just data — `restore` places configs, fills `${VAR}` from your shell, and with `--yes` runs each package's `install:` — so restore only a shed you trust as much as your own dotfiles, and keep yours private.
+
 ## 0.17.0 — 2026-09-09
 
 - A Codex, Gemini, Copilot, Cursor or Antigravity user who followed the quick start without `--agent` got two quiet failures: `init` scanned a `~/.claude` that did not exist and wrote a shed with zero parts, and after `restore --agent codex` on another machine, `status`, `diff` and `save` without flags looked at `~/.claude` again and reported nothing applied. Now `init` refuses to scan a root that is not there and names the agent folders it did find (`Found here: codex (~/.codex). Try: lshed init --agent codex`), and when neither `--agent`, `LSHED_AGENT` nor a shed says which agent, lshed uses the one agent on the machine that has lshed state; Claude Code keeps precedence when it has state, and with several candidates the command asks you to say which. The README's quick start and loop are written for any agent, and the smoke suite walks them on a home folder that has only `~/.codex`.

@@ -1,8 +1,8 @@
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import { parse, stringify } from "smol-toml";
 import type { EntryCategory } from "./types.js";
 import type { Json } from "../core/entries.js";
+import { writeFilePreservingMode } from "../fsutil.js";
 
 export interface TomlEntriesSpec {
   name: string;
@@ -63,10 +63,7 @@ export class TomlEntries implements EntryCategory {
       const block = stringify({ [this.spec.under]: { [id]: local } }).trimEnd() + "\n";
       t = (t.length && !t.endsWith("\n") ? t + "\n" : t) + (t.trim().length ? "\n" : "") + block;
     }
-    await fs.mkdir(path.dirname(p), { recursive: true });
-    const tmp = `${p}.lshed-${process.pid}.tmp`;
-    await fs.writeFile(tmp, t);
-    await fs.rename(tmp, p);
+    await writeFilePreservingMode(p, t);
   }
 }
 

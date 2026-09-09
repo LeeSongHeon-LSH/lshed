@@ -99,9 +99,11 @@ describe("plumbing", () => {
     const d = await tmpHome();
     await fs.writeFile(path.join(d, "codex.cmd"), "");
     await fs.writeFile(path.join(d, "agy"), "");
-    expect(await installed("codex", { PATH: d, PATHEXT: ".EXE;.CMD" }, "win32")).toBe(true);
-    expect(await installed("codex", { PATH: d }, "linux")).toBe(false);
-    expect(await installed("agy", { PATH: `/nowhere:${d}` }, "linux")).toBe(true);
+    // 여기서 흉내 내는 플랫폼의 구분자로 이어 붙인다 — Windows 러너의 임시 경로에는 `:` 가 들어 있어 linux 흉내에 `:` 를 쓰면 잘린다
+    expect(await installed("codex", { PATH: `C:\\nowhere;${d}`, PATHEXT: ".EXE;.CMD" }, "win32")).toBe(true);
+    expect(await installed("agy", { PATH: `C:\\nowhere;${d}`, PATHEXT: ".EXE;.CMD" }, "win32")).toBe(false);   // 확장자 없는 파일은 Windows 에선 실행파일이 아니다
+    expect(await installed("codex", { PATH: d }, "linux")).toBe(false);   // .cmd 는 Linux 에서 codex 가 아니다
+    expect(await installed("agy", { PATH: d }, "linux")).toBe(true);
     expect(await installed("gemini", { PATH: d }, "linux")).toBe(false);
   });
   it("skillsDirOf: the adapter's skills category, absolute", () => {

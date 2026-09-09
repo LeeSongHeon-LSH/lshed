@@ -137,6 +137,21 @@ check("실패 뒤(비대화형): 힌트 한 줄, exit 1", r.code === 1 && r.out.
 r = run(B, ["restore", "no-such-profile"], { LSHED_REPORT: "0" });
 check("LSHED_REPORT=0: 힌트도 없음", r.code === 1 && !r.out.includes("lshed report"));
 
+// --agent 없이 따라 한 다른 도구 사용자: (1) ~/.claude 가 없는 기기에서 init 은 빈 창고를 쓰지 않고 --agent 를 권한다,
+// (2) restore --agent codex 뒤의 status 는 플래그 없이도 codex 의 상태를 본다. --root 없이 HOME 만 바꿔서 돌린다.
+const H = path.join(tmp, "home-codex");
+await w(path.join(H, ".codex/AGENTS.md"), "# theirs\n");
+const homeEnv = (extra = {}) => { const e = { ...process.env, ...extra, HOME: H, USERPROFILE: H }; for (const k of ["CLAUDE_CONFIG_DIR", "CODEX_HOME", "COPILOT_HOME", "LSHED_AGENT", "LSHED_HOME"]) delete e[k]; return e; };
+const raw = (args, extra) => { const rr = bin ? spawnSync(bin, args, { encoding: "utf8", env: homeEnv(extra) }) : spawnSync(process.execPath, [cli, ...args], { encoding: "utf8", env: homeEnv(extra) }); const out = (rr.stdout + rr.stderr).trim(); console.log(`\n$ HOME=<home-codex> lshed ${args.join(" ")}\n${out.replace(/^/gm, "  ")}`); return { code: rr.status, out }; };
+r = raw(["init", "--shed", path.join(H, "shed")]);
+check("init(--agent 없음, ~/.claude 없음): 빈 창고 대신 --agent codex 권유, exit 1", r.code === 1 && r.out.includes("does not exist") && r.out.includes("--agent codex") && !(await there(path.join(H, "shed/lshed.yaml"))));
+r = raw(["--agent", "codex", "restore", "default", "--shed", shed]);
+check("codex 로 restore (HOME 기준 루트)", r.code === 0 && (await there(path.join(H, ".agents/skills/alpha/SKILL.md"))));
+r = raw(["status"]);
+check("status(플래그 없음): codex 의 상태를 찾는다", r.code === 0 && r.out.includes("(codex:") && r.out.includes("profile    default"));
+r = raw(["diff"]);
+check("diff(플래그 없음): 창고도 codex 상태에서 찾는다", r.code === 0);
+
 // check: 물어볼 CLI 가 없으면(PATH 비움) 그렇다고 말하고 exit 1, 임시 스킬은 남기지 않는다 — 모델 없이 배치·정리 경로를 어느 OS 에서든 돈다
 r = run(B, ["check"], { PATH: "", Path: "" });
 check("check(CLI 없음): 어느 CLI 를 찾았는지 말하고 exit 1", r.code === 1 && r.out.includes("· claude: not installed here") && r.out.includes("no CLI to ask for claude-code"));

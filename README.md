@@ -63,9 +63,11 @@ On macOS and Linux, `chmod +x` it first. The binaries are unsigned, so macOS war
 
 ## Quick start
 
+Works the same for every supported agent. `--agent` names the tool; without it lshed assumes Claude Code, and if that tool's folder is not on the machine `init` says which ones it found instead of writing an empty shed. The shed remembers the agent, so the other commands do not need the flag.
+
 ```bash
 # 1. On the machine that already has your setup
-lshed init --shed ~/lshed
+lshed init --shed ~/lshed                   # Claude Code; for another tool: --agent codex|gemini|copilot|cursor|agy
 cd ~/lshed && git init && git remote add origin <your private repo>
 lshed sync                                  # commit + push
 
@@ -73,13 +75,16 @@ lshed sync                                  # commit + push
 
 # 3. On any other machine
 git clone <your private repo> ~/lshed
-lshed restore research --shed ~/lshed       # --shed only needed the first time
+lshed restore default --shed ~/lshed        # or a profile you added in step 2; --shed only the first time
 lshed restore --pick --shed ~/lshed         # or tick what this machine gets, category by category
+lshed check                                 # optional: ask the agent whether it reads what was placed
 ```
+
+If the other machine runs a different agent, add `--agent` to `restore` there; skills, the instructions file and MCP servers carry over, the rest is announced and skipped ([details](#other-agents-same-shed)).
 
 ## How to use it
 
-### Day one: put what you have into a shed
+### Setup: put what you have into a shed
 
 ```
 $ lshed init --shed ~/lshed --exclude _gstack-command connect-chrome
@@ -98,7 +103,7 @@ scan: /home/me/.claude  →  shed: /home/me/lshed
 lshed.yaml written: /home/me/lshed/lshed.yaml  (4 parts, 3 packages, 53 generated skipped, 2 excluded, profile "default")
 ```
 
-`init` reads your agent root and writes only to the shed and `~/.claude/lshed/`. It sorts everything into [three kinds](#three-kinds-of-things): authored parts are copied (`+`), things you installed become packages recorded by source and version (`≡`), and files an installer generated are skipped (`·`). Aliases an installer created without symlinks look authored; leave them out with `--exclude`, and lshed remembers that under `exclude:` in the manifest.
+`init` reads your agent root (`~/.claude` here; `~/.codex`, `~/.gemini`, … with `--agent`) and writes only to the shed and `<root>/lshed/`. It sorts everything into [three kinds](#three-kinds-of-things): authored parts are copied (`+`), things you installed become packages recorded by source and version (`≡`), and files an installer generated are skipped (`·`). Aliases an installer created without symlinks look authored; leave them out with `--exclude`, and lshed remembers that under `exclude:` in the manifest.
 
 Then open `lshed.yaml`. It has one profile, `default`, listing everything. Fill in `install:` for git packages that need a post-clone step, and make it a git repo:
 
@@ -107,18 +112,18 @@ cd ~/lshed && git init && git remote add origin git@github.com:me/harness.git
 lshed sync
 ```
 
-### Every day: edit, save, sync
+### The loop: edit, save, sync
 
-You edit skills where the agent reads them, in `~/.claude`. The shed does not change by itself.
+You edit skills where the agent reads them, in its own folder (`~/.claude`, `~/.codex`, `~/.gemini`, …). The shed does not change by itself.
 
 ```
 lshed status          # what profile is applied, what drifted, what is new
-lshed diff            # file-level differences between ~/.claude and the shed
+lshed diff            # file-level differences between the agent folder and the shed
 lshed save            # copy local edits into the shed (or: lshed save skills/add-drivers)
 lshed sync            # commit the shed, pull, push
 ```
 
-`save` is the only path from `~/.claude` to the shed, and it only works for parts the shed owns (`file:` sources). `sync` warns if you have unsaved edits so you do not push a shed that is behind your machine.
+None of these need `--agent`: on a machine where only one agent has lshed state, they find it; where several do, they ask you to say which. `save` is the only path from the agent folder to the shed, and it only works for parts the shed owns (`file:` sources). `sync` warns if you have unsaved edits so you do not push a shed that is behind your machine.
 
 ### A machine that already has a setup
 

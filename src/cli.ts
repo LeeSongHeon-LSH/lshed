@@ -21,6 +21,7 @@ import { add } from "./core/add.js";
 import { sync } from "./core/sync.js";
 import { collectReport, formatReport, issueUrl, openUrl, redact, ISSUES_URL } from "./core/report.js";
 import { check, formatCheck } from "./core/check.js";
+import { agentsHere, agentByState, missingRootMessage } from "./core/detect.js";
 
 /** 빌드 시점에 tsup 이 박는다 (tsup.config.ts). 실행파일 안에는 package.json 이 없다. */
 declare const __LSHED_VERSION__: string;
@@ -50,6 +51,8 @@ async function adapterFromOpts(): Promise<AgentAdapter> {
   if (!name && shedDir) {
     try { name = manifestAgent(await fs.readFile(path.join(path.resolve(shedDir), MANIFEST_FILE), "utf8")); } catch { /* 창고가 아직 없음 (init) */ }
   }
+  // 아무 단서도 없으면 이 기기의 lshed 상태가 말해 준다: Codex 만 쓰는 기기에서 `status` 가 ~/.claude 를 보지 않게
+  if (!name && !root) name = agentByState(await agentsHere());
   return createAdapter(name ?? DEFAULT_AGENT, root ? path.resolve(root) : undefined);
 }
 
@@ -109,6 +112,10 @@ program
   .option("--exclude <id...>", "components to leave out (id or category/id)")
   .action((o: { profile: string; exclude?: string[] }) => run(async () => {
     const ctx = await ctxFor("init");
+    // 루트가 없는 에이전트를 훑으면 부품 0개의 창고가 조용히 생긴다 — 다른 도구를 쓰는 사람이 --agent 없이 따라 한 경우다
+    const here = await agentsHere();
+    const me = here.find((a) => a.name === ctx.adapter.name && a.root === ctx.adapter.root);
+    if (me && !me.exists) throw new Error(missingRootMessage(me, here));
     console.log(`scan: ${ctx.adapter.root}  →  shed: ${ctx.shed}`);
     await init(ctx, { profile: o.profile, exclude: o.exclude });
     console.log(`\nNext: put the shed under git.  cd ${ctx.shed} && git init`);

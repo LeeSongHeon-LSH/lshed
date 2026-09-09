@@ -63,9 +63,11 @@ macOS와 Linux에서는 먼저 `chmod +x`가 필요합니다. 서명하지 않�
 
 ## 빠른 시작
 
+지원하는 어느 에이전트든 같은 절차입니다. `--agent` 로 도구를 고르고, 없으면 Claude Code 로 봅니다. 그 도구의 폴더가 기기에 없으면 `init` 은 빈 창고를 만드는 대신 어떤 도구를 찾았는지 알려 줍니다. 창고가 에이전트를 기억하므로 나머지 명령에는 플래그가 필요 없습니다.
+
 ```bash
 # 1. 이미 설정이 있는 기기에서
-lshed init --shed ~/lshed
+lshed init --shed ~/lshed                   # Claude Code 기준. 다른 도구는 --agent codex|gemini|copilot|cursor|agy
 cd ~/lshed && git init && git remote add origin <비공개 저장소>
 lshed sync                                  # commit + push
 
@@ -73,13 +75,16 @@ lshed sync                                  # commit + push
 
 # 3. 다른 기기에서
 git clone <비공개 저장소> ~/lshed
-lshed restore research --shed ~/lshed       # --shed 는 처음 한 번만
+lshed restore default --shed ~/lshed        # 또는 2 에서 만든 프로필. --shed 는 처음 한 번만
 lshed restore --pick --shed ~/lshed         # 또는 카테고리별로 이 기기에 둘 것을 체크
+lshed check                                 # 선택: 놓인 것을 에이전트가 읽는지 물어본다
 ```
+
+다른 기기가 다른 에이전트를 쓰면 거기서 `restore` 에 `--agent` 를 붙이세요. 스킬·지침 파일·MCP 서버는 그대로 옮겨지고 나머지는 알리고 건너뜁니다([자세히](#다른-에이전트도-같은-창고로)).
 
 ## 사용법
 
-### 첫날: 가진 것을 창고에 담기
+### 초기화: 가진 것을 창고에 담기
 
 ```
 $ lshed init --shed ~/lshed --exclude _gstack-command connect-chrome
@@ -98,7 +103,7 @@ scan: /home/me/.claude  →  shed: /home/me/lshed
 lshed.yaml written: /home/me/lshed/lshed.yaml  (4 parts, 3 packages, 53 generated skipped, 2 excluded, profile "default")
 ```
 
-`init`은 에이전트 루트를 읽기만 하고, 쓰는 곳은 창고와 `~/.claude/lshed/`뿐입니다. 발견한 것을 [세 종류](#세-종류의-것)로 나눕니다. 직접 만든 것은 복사(`+`), 설치한 것은 출처와 버전만 적은 패키지(`≡`), 설치기가 만든 파일은 건너뜀(`·`)입니다. 설치기가 심볼릭 링크 없이 만든 별칭은 직접 만든 것처럼 보이므로 `--exclude`로 빼세요. 그 선택은 매니페스트의 `exclude:`에 남습니다.
+`init`은 에이전트 루트(여기서는 `~/.claude`, `--agent` 를 주면 `~/.codex`, `~/.gemini` 등)를 읽기만 하고, 쓰는 곳은 창고와 `<루트>/lshed/`뿐입니다. 발견한 것을 [세 종류](#세-종류의-것)로 나눕니다. 직접 만든 것은 복사(`+`), 설치한 것은 출처와 버전만 적은 패키지(`≡`), 설치기가 만든 파일은 건너뜀(`·`)입니다. 설치기가 심볼릭 링크 없이 만든 별칭은 직접 만든 것처럼 보이므로 `--exclude`로 빼세요. 그 선택은 매니페스트의 `exclude:`에 남습니다.
 
 그다음 `lshed.yaml`을 여세요. 전부를 담은 `default` 프로필 하나가 있습니다. clone 뒤 설치 단계가 필요한 git 패키지에는 `install:`을 적고, 창고를 git 저장소로 만듭니다.
 
@@ -107,18 +112,18 @@ cd ~/lshed && git init && git remote add origin git@github.com:me/harness.git
 lshed sync
 ```
 
-### 매일: 편집, 저장, 동기화
+### 반복: 편집, 저장, 동기화
 
-스킬은 에이전트가 읽는 자리인 `~/.claude`에서 편집합니다. 창고는 저절로 바뀌지 않습니다.
+스킬은 에이전트가 읽는 자리, 곧 그 도구의 폴더(`~/.claude`, `~/.codex`, `~/.gemini` 등)에서 편집합니다. 창고는 저절로 바뀌지 않습니다.
 
 ```
 lshed status          # 적용된 프로필, 드리프트, 새로 생긴 것
-lshed diff            # ~/.claude 와 창고의 파일 차이
+lshed diff            # 에이전트 폴더와 창고의 파일 차이
 lshed save            # 로컬 편집을 창고로 (또는: lshed save skills/add-drivers)
 lshed sync            # 창고 커밋, pull, push
 ```
 
-`~/.claude`에서 창고로 가는 길은 `save`뿐이고, 창고가 소유한 부품(`file:` 출처)에만 동작합니다. `sync`는 저장하지 않은 편집이 있으면 경고해서, 기기보다 뒤처진 창고를 push하지 않게 합니다.
+이 명령들에는 `--agent` 가 필요 없습니다. lshed 상태가 있는 에이전트가 하나뿐인 기기에서는 그것을 찾고, 여럿이면 어느 것인지 물어봅니다. 에이전트 폴더에서 창고로 가는 길은 `save`뿐이고, 창고가 소유한 부품(`file:` 출처)에만 동작합니다. `sync`는 저장하지 않은 편집이 있으면 경고해서, 기기보다 뒤처진 창고를 push하지 않게 합니다.
 
 ### 이미 설정이 있는 기기
 

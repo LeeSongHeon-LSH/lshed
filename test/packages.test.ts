@@ -122,7 +122,7 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     expect(await exists(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe(true);
     expect((await readState(ctx.adapter))?.profile).toBe("default");
     const log = logs.join("\n");
-    expect(log).toMatch(/\$ \(skills\/toolkit\) exit 3\n {4}! install failed: command exited with 3: exit 3/);
+    expect(log).toMatch(/\$ \(skills[\\/]toolkit\) exit 3\n {4}! install failed: command exited with 3: exit 3/);   // Windows 는 skills\toolkit
     expect(log).toMatch(/Profile "default" applied: placed 1[\s\S]*1 install command failed\. Everything else was placed\.[\s\S]*cd .*skills[\\/]toolkit && exit 3[\s\S]*lshed report/);
     expect(log).not.toMatch(/was not run/);
   });

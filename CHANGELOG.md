@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- New `lshed check`: the failure that makes no noise is an agent that does not read what lshed placed, and until now only the developer's `scripts/vm/probe.sh` could tell. `check` puts a throwaway skill holding a random passphrase into the agent's skills folder, asks the agent's own CLI for it non-interactively (the same invocations the probe verified: `claude -p`, `codex exec --ephemeral`, `gemini -p --output-format json`, `copilot -p -s`, `agent -p`, `agy -p`), and removes the skill again, whatever happens. ✔ means location and format are right; ✘ prints every answer the agent gave and the end of its stderr, which is what a bug report needs. `--agent agents` asks every installed CLI. It refuses to touch an existing `lshed-check` skill, runs the CLI from an empty temporary directory so no project config interferes, and costs one or two small model calls.
+- `lshed --help` ends with two lines pointing at `check` and `report`, and `restore` adds one line, `If any of the above is not what you expected: lshed report`, only when it printed a notice (a skipped category or package, a copy instead of a link, an install it did not run, a variable that is not set). A clean restore prints nothing extra.
+
 ## 0.16.1 — 2026-09-09
 
 - `lshed report --open` on Windows went through `cmd /c start`, which cuts the URL at its first `&` and expands `%…%` sequences, so the issue form would have opened without the summary. It now hands PowerShell an encoded command, which parses nothing. On Linux without `xdg-open` (WSL, most servers) `wslview` is tried next, and `lshed report --url` prints the prefilled link for a machine with no browser at all. On Windows the report also hides the profile folder when a path spells it with an 8.3 short name (`C:\Users\RUNNER~1\…` for `runneradmin`, which is how `TEMP` usually reads), by treating any `<drive>:\Users\<name>` on the home drive as `~`. The smoke suite, which CI runs on Ubuntu, macOS and Windows, now runs `report` and checks that no user directory appears in its output in any spelling.

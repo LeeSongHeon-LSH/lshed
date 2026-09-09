@@ -474,6 +474,7 @@ lshed list [--unused]                           창고의 내용과 그것을 �
 lshed remove <key>                              창고에서 부품이나 패키지 삭제
 lshed prune [--yes]                             어느 프로필도 안 쓰는 것 전부 삭제
 lshed scan                                      루트를 읽기만 하고 나열
+lshed check [--attempts <n>] [--timeout <s>]    방금 놓은 스킬을 에이전트 CLI 가 읽는지 물어본다 (작은 모델 호출 한두 번)
 lshed report [--open | --url]                   이슈에 붙여 넣을 이 설정의 요약, --open 은 GitHub 이슈 폼에 채워서 열고 --url 은 그 링크만 찍는다
 ```
 
@@ -535,7 +536,7 @@ lshed report [--open | --url]                   이슈에 붙여 넣을 이 설�
 - 개발하는 Linux 기기에서는 CI 너머까지 전체 명령을 돌려 봅니다. `install:`이 있는 git·GitHub 패키지의 `restore`와 `update`, 충돌까지 포함한 실제 원격과의 `sync`, `remove`/`prune`, 모든 `--agent` 대상, 환경변수 기본값, 실제 터미널을 거친 `restore --pick`, 컴파일된 Linux 바이너리까지입니다.
 - 다른 에이전트는 문서만이 아니라 도구 자체로 확인합니다. `scripts/vm/probe.sh`는 임시 창고를 도구의 실제 루트에 복원한 뒤, 스킬에 든 암호어, 지침 파일에 든 코드워드, `--link` 링크를 거친 같은 스킬을 비대화형으로 물어봅니다. Codex 0.153.4와 Antigravity CLI 1.1.27은 모든 검사를 통과했고(마지막 실행 2026-09-09, lshed 0.15.5), Gemini CLI·Copilot CLI·Cursor는 아직 파일 배치와 형식까지만 확인했습니다. 자세한 내용과 새 VM에서 전부 돌리는 cloud-init 파일은 `scripts/vm/README.md`에 있습니다.
 - 개발하는 기기에서는 실제 창고 하나를 매일 씁니다. Claude Code, Codex, Antigravity가 모두 `--link`로 그 창고를 읽고, 셋 다 `status`에 드리프트가 없습니다.
-- 위는 전부 한 사람의 기기입니다. 여기 없는 도구 버전이나 OS 에서 lshed 가 잘 돌았다면 [검증 보고](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=verified.yml)를 남겨 주세요. 2분이면 되고, 이 절의 한 줄이 됩니다. 안 돌았다면 `lshed report` 가 [버그 보고](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml)에 필요한 것을 찍어 줍니다. 버전, 에이전트와 루트, 적용 프로필, 창고에 든 것의 이름까지이고 값이나 시크릿은 없으며 홈 디렉터리는 `~` 로 나옵니다. 명령이 실패한 직후에는 그 요약을 채운 폼을 열지 물어봅니다. lshed 가 스스로 보내는 것은 없고, `LSHED_REPORT=0` 이면 묻지 않습니다.
+- 위는 전부 한 사람의 기기입니다. 여기 없는 도구 버전이나 OS 에서 lshed 가 잘 돌았다면 [검증 보고](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=verified.yml)를 남겨 주세요. 2분이면 되고, 이 절의 한 줄이 됩니다. 안 돌았다면 `lshed report` 가 [버그 보고](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml)에 필요한 것을 찍어 줍니다. 버전, 에이전트와 루트, 적용 프로필, 창고에 든 것의 이름까지이고 값이나 시크릿은 없으며 홈 디렉터리는 `~` 로 나옵니다. 명령이 실패한 직후에는 그 요약을 채운 폼을 열지 물어봅니다. lshed 가 스스로 보내는 것은 없고, `LSHED_REPORT=0` 이면 묻지 않습니다. 소리 없이 실패하는 경우, 즉 에이전트가 놓인 것을 그냥 안 읽는 경우는 `lshed check` 가 에이전트에게 직접 물어봅니다.
 
 ## 아직 범위 밖
 
@@ -545,6 +546,7 @@ lshed report [--open | --url]                   이슈에 붙여 넣을 이 설�
 
 ## 문제 해결
 
+- **restore 는 다 놓았다는데 에이전트가 못 본다** — `lshed check`. 임의 암호어가 든 임시 스킬을 에이전트의 스킬 폴더에 놓고, 사용자가 하듯 그 CLI 에 비대화형으로 암호어를 물은 뒤(`claude -p`, `codex exec`, `gemini -p`, `copilot -p`, `agent -p`, `agy -p`) 스킬을 치웁니다. ✔ 면 위치와 형식은 맞고 문제는 다른 데 있는 것이고, ✘ 면 에이전트의 실제 답이 찍히는데 그것이 버그 보고에 딱 필요한 것입니다. 작은 모델 호출 한두 번이 들고, 그 CLI 가 이 기기에 있어야 합니다.
 - **다른 문제가 생겼다** — `lshed report` 가 버그 보고에 필요한 요약을 찍습니다(비밀은 없지만 직접 확인하세요). `lshed report --open` 은 그것을 새 이슈 폼에 채워 엽니다(브라우저가 없는 기기에서는 `--url` 이 링크만 찍습니다). 명령이 실패한 직후에도 같은 것을 묻는데, 아니오라고 하거나 `LSHED_REPORT=0` 을 두면 아무 일도 없습니다.
 - **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** (창고 위치를 모름) — `--shed <dir>`를 주거나 `LSHED_HOME`을 설정하세요. `restore`가 한 번 성공하면 기억합니다.
 - **restore가 내 `CLAUDE.md`를 바꿨다** — `~/.claude/lshed/backups/<시각>/CLAUDE.md`에 있습니다. 내용을 창고의 조각으로 옮기고 그 조각을 프로필에 넣으세요.

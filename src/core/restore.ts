@@ -48,10 +48,13 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     if (!(await exists(it.src))) throw new Error(`${it.category}/${it.id}: missing in the shed: ${it.src}`);
   }
   // 창고 하나를 여러 에이전트가 쓴다 (§4.6). 이 에이전트가 모르는 카테고리·설치기 없는 패키지는 조용히가 아니라 알리고 건너뛴다.
+  // 정상이 아닌 결과(건너뜀, 링크 대신 복사, 안 돌린 설치, 없는 변수)는 그 자리에 한 줄씩 나간다. 그런 줄이 하나라도 있었으면
+  // 끝에 "이상하면 report" 를 붙인다 — 매번이 아니라 이 순간에만, 조용히 넘어간 실패를 사용자가 알릴 길이 있게.
+  let notices = 0;
   const skippedCats = unsupportedCategories(ctx, m, profile);
-  if (skippedCats.length) ctx.log(`  · ${ctx.adapter.name} does not handle ${skippedCats.join(", ")}, skipped`);
+  if (skippedCats.length) { notices++; ctx.log(`  · ${ctx.adapter.name} does not handle ${skippedCats.join(", ")}, skipped`); }
   const pk = installablePackages(ctx, m, profile);
-  for (const p of pk.skipped) ctx.log(`  · package ${p.id}  (${schemeOf(p.source)}: cannot be installed by ${ctx.adapter.name}, skipped)`);
+  for (const p of pk.skipped) { notices++; ctx.log(`  · package ${p.id}  (${schemeOf(p.source)}: cannot be installed by ${ctx.adapter.name}, skipped)`); }
 
   // 0) 패키지 먼저. 생성물이 있어야 하는 부품이 있을 수 있다. 관리 집합에는 넣지 않는다.
   const pkgRes = await ensurePackages(ctx, pk.packages, { dryRun: opts.dryRun, yes: opts.yes });
@@ -143,11 +146,13 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     const note = stuckCopy ? `  (copy; ${process.platform === "win32" ? "file links on Windows need Developer Mode" : "this machine cannot link files"})` : link ? "  (link)" : anyLink ? "  (link → copy)" : "";
     const mark = same ? "=" : there ? "~" : "+";
     ctx.log(`  ${mark} ${it.rel}${same && !stuckCopy ? "" : note}`);
+    if (stuckCopy) notices++;
     if (same) { placed.push(it.rel); continue; }
     if (there && !sameContent) await backUp(it.rel); // 관리 여부와 무관하게 내용이 다르면 백업
     if (!opts.dryRun) {
       if (!link) await copyTree(it.src, target, ignoreOf(ctx));
       else if ((await linkTree(it.src, target, ignoreOf(ctx))) === "copy") {
+        notices++;
         ctx.log(`    ! could not link, copied instead. Bring edits back with lshed save${process.platform === "win32" ? " (file links on Windows need Developer Mode)" : ""}`);
       }
     }
@@ -184,6 +189,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   ctx.log(`\nProfile "${profile}" applied${link ? " (link)" : ""}: placed ${placed.length}, removed ${toRemove.length}${pkgRes.installed.length ? `, installed ${pkgRes.installed.length} ${pkgRes.installed.length === 1 ? "package" : "packages"}` : ""}${bdir ? `, backed up ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
   reportMissingEnv(ctx, missingEnv);
+  if (notices + pkgRes.pendingInstalls.length + missingEnv.length) ctx.log(`\nIf any of the above is not what you expected: lshed report`);
   return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv };
 }
 

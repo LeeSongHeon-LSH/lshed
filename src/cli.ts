@@ -19,7 +19,8 @@ import { listRows, formatRows } from "./core/list.js";
 import { remove, prune } from "./core/remove.js";
 import { add } from "./core/add.js";
 import { sync } from "./core/sync.js";
-import { collectReport, formatReport, issueUrl, openUrl, ISSUES_URL } from "./core/report.js";
+import { collectReport, formatReport, issueUrl, openUrl, redact, ISSUES_URL } from "./core/report.js";
+import { check, formatCheck } from "./core/check.js";
 
 /** 빌드 시점에 tsup 이 박는다 (tsup.config.ts). 실행파일 안에는 package.json 이 없다. */
 declare const __LSHED_VERSION__: string;
@@ -271,6 +272,20 @@ program
   }));
 
 program
+  .command("check")
+  .description("ask the agent whether it reads what lshed places: a throwaway skill with a passphrase goes into its skills folder, its CLI is asked for the passphrase, the skill is removed")
+  .option("--attempts <n>", "how many times to ask before giving up (models are not deterministic)", "2")
+  .option("--timeout <seconds>", "how long to wait for one answer", "120")
+  .action((o: { attempts: string; timeout: string }) => run(async () => {
+    const adapter = await adapterFromOpts();
+    console.error(`asking ${adapter.name}'s CLI for a passphrase kept in a temporary skill (one or two small model calls)…`);
+    const r = await check(adapter, { attempts: Number(o.attempts), timeoutMs: Number(o.timeout) * 1000 });
+    console.log(formatCheck(r, (s) => redact(s)));
+    if (r.results.some((c) => c.status === "not-read")) process.exitCode = 1;
+    else if (r.results.every((c) => c.status === "not-installed")) throw new Error(`no CLI to ask for ${adapter.name} on this machine (${r.results.map((c) => c.cli).join(", ")})`);
+  }));
+
+program
   .command("scan")
   .description("(debug) list components found in the agent config root")
   .action(() => run(async () => {
@@ -281,5 +296,9 @@ program
     for (const e of adapter.entries()) for (const id of Object.keys(await e.read())) { console.log(`${e.name}/${id}\t(entry)`); n++; }
     console.error(`${n} found (root: ${adapter.root})`);
   }));
+
+program.addHelpText("after", `
+Something looks wrong?  lshed check   asks the agent whether it reads what lshed placed
+                        lshed report  prints a summary to paste into ${ISSUES_URL}`);
 
 program.parseAsync();

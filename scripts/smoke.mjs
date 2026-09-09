@@ -137,6 +137,13 @@ check("실패 뒤(비대화형): 힌트 한 줄, exit 1", r.code === 1 && r.out.
 r = run(B, ["restore", "no-such-profile"], { LSHED_REPORT: "0" });
 check("LSHED_REPORT=0: 힌트도 없음", r.code === 1 && !r.out.includes("lshed report"));
 
+// check: 물어볼 CLI 가 없으면(PATH 비움) 그렇다고 말하고 exit 1, 임시 스킬은 남기지 않는다 — 모델 없이 배치·정리 경로를 어느 OS 에서든 돈다
+r = run(B, ["check"], { PATH: "", Path: "" });
+check("check(CLI 없음): 어느 CLI 를 찾았는지 말하고 exit 1", r.code === 1 && r.out.includes("· claude: not installed here") && r.out.includes("no CLI to ask for claude-code"));
+check("check: 임시 스킬이 남지 않음", !(await there(path.join(B, "skills/lshed-check"))));
+r = run(B, ["--agent", "agents", "check"], { PATH: "", Path: "" });
+check("check(agents, CLI 없음): 네 CLI 모두 없음으로", r.code === 1 && ["codex", "gemini", "copilot", "agent"].every((c) => r.out.includes(`· ${c}: not installed here`)));
+
 // sync (원격 없음): 커밋만
 spawnSync("git", ["init", "-q"], { cwd: shed });
 spawnSync("git", ["config", "user.name", "smoke"], { cwd: shed });

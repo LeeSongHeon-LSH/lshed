@@ -73,13 +73,15 @@ describe("collectReport", () => {
     await fs.writeFile(path.join(shed, "lshed.yaml"), "version: 1\nagent: codex\ncomponents:\n  skills:\n    - id: s1\n  mcp:\n    - id: exa\nprofiles:\n  p:\n    skills: [s1]\n");
     const asked: string[] = [];
     const r = await collectReport({ version: "1.2.3", adapter, shed, home, command: `lshed --shed ${shed} restore p`, error: `EACCES ${root}/x`, toolVersion: async (b) => { asked.push(b); return "codex-cli 0.1"; } });
+    // Windows 는 path.join 이 `\` 를 쓰므로 `~\.codex` 가 된다. 홈이 `~` 로 바뀌었는지가 요점이라 구분자는 맞춰서 본다.
+    const fwd = (s?: string) => s?.replace(/\\/g, "/");
     expect(asked).toEqual(["codex"]);
     expect(r.tool).toBe("codex codex-cli 0.1");
-    expect(r.root).toBe("~/.codex");
+    expect(fwd(r.root)).toBe("~/.codex");
     expect(r.state).toEqual({ profile: "p", managed: 2, appliedAt: "2026-01-01T00:00:00.000Z", placement: "links" });
-    expect(r.shed).toEqual({ path: "~/harness", components: { skills: ["s1"], mcp: ["exa"] }, packages: [], profiles: ["p"] });
-    expect(r.command).toBe("lshed --shed ~/harness restore p");
-    expect(r.error).toBe("EACCES ~/.codex/x");
+    expect(typeof r.shed === "object" && r.shed && { ...r.shed, path: fwd(r.shed.path) }).toEqual({ path: "~/harness", components: { skills: ["s1"], mcp: ["exa"] }, packages: [], profiles: ["p"] });
+    expect(fwd(r.command)).toBe("lshed --shed ~/harness restore p");
+    expect(fwd(r.error)).toBe("EACCES ~/.codex/x");
     expect(JSON.stringify(r)).not.toContain(home);
   });
   it("reports a missing CLI and an unreadable shed without throwing", async () => {

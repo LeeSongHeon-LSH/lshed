@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.2 — 2026-09-09
+
+- Fix: `restore --yes` stopped at the first `install:` command that failed, before any part was placed and before the profile was recorded. The fifth Windows pass hit it: gstack's `./setup` is an sh script, cmd.exe answered `'.' is not recognized`, and the run ended with exit 1, nine parts unplaced and no state written. A failing command now prints `! install failed: …` under the package, the restore goes on to place everything and record the profile, the failed commands are listed at the end (`N install commands failed. Everything else was placed.`), and `restore` and `update` exit 1 so a script still notices.
+- Fix: on Windows, Node 24 printed a `DEP0190` deprecation warning on every `claude plugin install` and every `lshed check`, because the `.cmd` wrapper was spawned through the shell with an argument array. lshed now builds the one-line command itself, quoting arguments the way CreateProcess reads them, and spawns that.
+- The `--yes` help said install commands are "shown, not run" without it, while plugin installs always run through Claude Code's own package manager; the text now says which commands the flag gates. The README's troubleshooting section says what to do when `restore --yes` reports a failed install on Windows (run it from Git Bash, and check the package's own requirements: gstack needs bun).
+
 ## 0.17.1 — 2026-09-09
 
 - Security: a shed you `restore` could reach outside the agent's own root. A component `id` or a package `into` of `../../.bashrc` passed the manifest check, because the id pattern allowed a `..` path segment and `into` only forbade a leading slash, so `restore` would overwrite files anywhere under the home directory (a login file, an SSH `authorized_keys`, an autostart entry). The manifest now rejects `.` and `..` path segments in ids and in `into`, and the git installer refuses a package path that resolves outside the agent root. Everything a shed places stays under the root it targets.

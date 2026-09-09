@@ -11,6 +11,7 @@ import { updatePackages } from "../src/core/packages.js";
 import { readLock } from "../src/lock.js";
 import { exists } from "../src/fsutil.js";
 import { git, head, lsRemote } from "../src/git.js";
+import { readState } from "../src/state.js";
 
 let tmp: string, remote: string, rootA: string, rootB: string, shed: string, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
@@ -106,6 +107,24 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     expect(await exists(marker)).toBe(true);
     expect(logs.join("\n")).toMatch(/= package toolkit\n {2}\$ \(skills\/toolkit\) \.\/setup/);
     expect(logs.join("\n")).not.toMatch(/was not run/);
+  });
+
+  // Windows 5차 검증: gstack 의 ./setup 이 cmd.exe 에서 죽자 부품 아홉이 하나도 안 놓이고 프로필도 안 남았다.
+  // `exit 3` 은 sh 와 cmd.exe 양쪽에서 같은 뜻이라 세 OS 에서 같은 시험이 된다.
+  it("--yes 의 install 이 실패해도 나머지는 놓이고 상태가 남으며, 실패는 끝에 모아 알린다", async () => {
+    const y = await r(path.join(shed, "lshed.yaml"));
+    await fs.writeFile(path.join(shed, "lshed.yaml"), y.replace("    install: ./setup", "    install: exit 3"));
+    const ctx = ctxFor(rootB);
+    const res = await restore(ctx, "default", { yes: true });
+    expect(res.failedInstalls).toEqual(["toolkit"]);
+    expect(res.placed).toEqual(["skills/mine"]);
+    expect(await exists(path.join(rootB, "skills/mine/SKILL.md"))).toBe(true);
+    expect(await exists(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe(true);
+    expect((await readState(ctx.adapter))?.profile).toBe("default");
+    const log = logs.join("\n");
+    expect(log).toMatch(/\$ \(skills\/toolkit\) exit 3\n {4}! install failed: command exited with 3: exit 3/);
+    expect(log).toMatch(/Profile "default" applied: placed 1[\s\S]*1 install command failed\. Everything else was placed\.[\s\S]*cd .*skills[\\/]toolkit && exit 3[\s\S]*lshed report/);
+    expect(log).not.toMatch(/was not run/);
   });
 
   it("이미 있으면 건드리지 않고, --dry-run 은 clone 하지 않는다", async () => {

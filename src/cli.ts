@@ -150,7 +150,7 @@ program
   .option("--no-link", "go back to copies on a machine that used --link")
   .option("--dry-run", "print what would change without touching anything")
   .option("--no-backup", "skip backing up files that get replaced or removed")
-  .option("--yes", "run package install commands (they are shown, not run, without this)")
+  .option("--yes", "run packages' install: shell commands (shown, not run, without this; plugin installs always run)")
   .action((profile: string | undefined, o: { pick?: boolean; link?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -158,17 +158,19 @@ program
     if (o.pick || (firstTime && tty)) {
       if (!tty) throw new Error("--pick needs an interactive terminal. Name the profile instead: lshed restore <profile>");
       if (firstTime && !o.pick) console.log("No profile applied yet, so opening the picker. To apply one directly: lshed restore <profile>\n");
-      await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
+      const picked = await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
+      if (picked?.restored?.failedInstalls.length) process.exitCode = 1;
       return;
     }
-    await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
+    const res = await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
+    if (res.failedInstalls.length) process.exitCode = 1;
   }));
 
 program
   .command("update [ids...]")
   .description("pull packages to their latest upstream and refresh lshed.lock")
   .option("--dry-run", "ask upstream what would change, without touching anything")
-  .option("--yes", "run package install commands after updating")
+  .option("--yes", "run packages' install: shell commands after updating")
   .action((ids: string[], o: { dryRun?: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     const state = await readState(ctx.adapter);
@@ -187,6 +189,7 @@ program
     if (!pkgs.length) { console.log("No packages to update."); return; }
     const res = await updatePackages(ctx, pkgs, { dryRun: o.dryRun, yes: o.yes });
     reportPending(ctx, res);
+    if (res.failedInstalls.length) process.exitCode = 1;
   }));
 
 program

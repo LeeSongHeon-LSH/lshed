@@ -174,7 +174,7 @@ Some entries need environment variables that are not set. Secrets never go in th
   mcp:notion: NOTION_AUTHORIZATION
 ```
 
-그 뒤 손이 가는 것은 둘입니다. 패키지의 `install:`은 clone해 온 저장소의 셸 명령이므로 `restore`는 보여 주고 멈춥니다. 직접 돌리거나 `--yes`로 다시 실행하세요. MCP 서버는 시크릿을 `${VAR}`로 참조하니 셸에서 export하면 Claude Code가 채웁니다. 이후로는 인자 없는 `lshed restore`가 마지막 프로필을 다시 적용하고, 창고 위치도 기억합니다.
+그 뒤 손이 가는 것은 둘입니다. 패키지의 `install:`은 clone해 온 저장소의 셸 명령이므로 `restore`는 보여 주고 멈춥니다. 직접 돌리거나 `--yes`로 다시 실행하세요. `--yes`로 돌린 명령이 실패해도 복원은 멈추지 않습니다. 부품은 그대로 놓이고, 실패는 끝에 모아 보여 주며, `restore`는 exit 1로 끝납니다. MCP 서버는 시크릿을 `${VAR}`로 참조하니 셸에서 export하면 Claude Code가 채웁니다. 이후로는 인자 없는 `lshed restore`가 마지막 프로필을 다시 적용하고, 창고 위치도 기억합니다.
 
 ### 프로필 이름 대신 골라서 넣기
 
@@ -570,6 +570,7 @@ lshed report [--open | --url]                   이슈에 붙여 넣을 이 설�
 - **`status`가 같은 새 항목을 계속 보여 준다** — 설치기 별칭이거나 임시 파일입니다. `lshed.yaml`의 `exclude:`에 넣으세요.
 - **restore가 MCP 변수가 없다고 한다** — 셸 프로필에서 export하고 Claude Code를 다시 시작하세요. `~/.claude.json`의 자리표시자는 맞게 들어간 것이고, Claude Code가 시작할 때 채웁니다.
 - **restore가 훅 경로를 엉뚱하게 썼다** — 창고는 홈 경로를 `${HOME}/…`로 담습니다. 이 기기에서 다른 곳을 가리켜야 하면 창고의 JSON을 `${HOME}`이나 다른 변수로 고치고 다시 `restore`하세요. 홈 밖의 경로(`D:\tools\x.exe`, `/opt/x`)는 쓴 그대로 옮겨지며, 휴대성은 사용자 몫입니다.
+- **Windows에서 `restore --yes`가 install 명령이 실패했다고 한다** — Windows에서 `install:`은 cmd.exe로 돌기 때문에 sh용으로 쓴 `./setup`은 시작조차 못 합니다(`'.' is not recognized`). 나머지는 다 놓였으니 Git Bash에서 그 명령을 직접 돌리고(`cd ~/.claude/skills/<패키지> && ./setup`), 패키지 자체의 요구 사항도 확인하세요(gstack은 bun이 필요합니다).
 - **Windows에서 `--link`가 파일을 복사했다** — 파일 하나짜리 링크는 개발자 모드가 필요합니다. 켜고 다시 `restore`하거나, 복사본을 그대로 두세요. 이후 `restore`는 그것을 `= … (copy; …)`로 알리고 건드리지 않으며, 편집은 `save`로 되가져옵니다.
 - **sync가 충돌로 멈췄다** — `cd <창고> && git pull --rebase`, 해결, `git rebase --continue`, 그리고 다시 `lshed sync`.
 

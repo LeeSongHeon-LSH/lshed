@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import type { AgentAdapter } from "../adapters/types.js";
+import { commandLine } from "../shell.js";
 
 /**
  * 조용한 실패를 소리 나게 하는 검사. lshed 가 성공했다고 해도 에이전트가 그 파일을 읽는지는 다른 문제다 —
@@ -59,7 +60,9 @@ export function ask(cli: string, prompt: string, opts: { cwd: string; timeoutMs:
   const c = askCommand(cli, prompt);
   return new Promise((resolve) => {
     let out = "", err = "", timedOut = false;
-    const p = spawn(c.cmd, c.args, { cwd: opts.cwd, env: { ...process.env, ...c.env }, stdio: ["ignore", "pipe", "pipe"], shell: process.platform === "win32", windowsHide: true });
+    const so = { cwd: opts.cwd, env: { ...process.env, ...c.env }, stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"], windowsHide: true };
+    // Windows 의 .cmd 래퍼는 셸이 필요하다. args 와 shell 을 함께 주면 Node 24 가 DEP0190 을 찍으므로 한 줄로 만든다.
+    const p = process.platform === "win32" ? spawn(commandLine(c.cmd, c.args), { ...so, shell: true }) : spawn(c.cmd, c.args, so);
     const t = setTimeout(() => { timedOut = true; p.kill(); }, opts.timeoutMs);
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (err += d));

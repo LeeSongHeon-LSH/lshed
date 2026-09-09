@@ -68,7 +68,8 @@ export async function packageStatus(ctx: Ctx, pkg: Package, lock: Lock): Promise
 }
 
 export type EnsureOptions = InstallOpts;
-export interface EnsureResult { installed: string[]; pendingInstalls: { id: string; dir: string; cmd: string }[]; lockChanged: boolean }
+export interface PendingInstall { id: string; dir: string; cmd: string }
+export interface EnsureResult { installed: string[]; pendingInstalls: PendingInstall[]; failedInstalls: (PendingInstall & { error: string })[]; lockChanged: boolean }
 
 const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
 
@@ -85,7 +86,7 @@ function ordered(ctx: Ctx, pkgs: Package[]): Package[] {
  */
 export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
-  const res: EnsureResult = { installed: [], pendingInstalls: [], lockChanged: false };
+  const res: EnsureResult = { installed: [], pendingInstalls: [], failedInstalls: [], lockChanged: false };
   for (const pkg of ordered(ctx, pkgs)) {
     const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);
@@ -116,17 +117,31 @@ export async function maybeInstall(ctx: Ctx, pkg: Package, dir: string, opts: In
   if (!pkg.install) return;
   if (opts.yes && !opts.dryRun) {
     ctx.log(`  $ (${path.relative(ctx.adapter.root, dir) || "."}) ${pkg.install}`);
-    await runShell(pkg.install, dir);
+    // 설치 명령 하나가 죽어도 복원은 계속한다. Windows 5차 검증에서 gstack 의 `./setup` 이 cmd.exe 에서 실패하자
+    // 부품 아홉이 하나도 놓이지 않고 프로필도 남지 않았다. 실패는 모아 두었다가 끝에 알리고 exit 1 로 나간다.
+    try {
+      await runShell(pkg.install, dir);
+    } catch (e) {
+      const error = (e as Error).message;
+      ctx.log(`    ! install failed: ${error}`);
+      res.failedInstalls.push({ id: pkg.id, dir, cmd: pkg.install, error });
+    }
   } else {
     res.pendingInstalls.push({ id: pkg.id, dir, cmd: pkg.install });
   }
 }
 
 export function reportPending(ctx: Ctx, res: EnsureResult): void {
-  if (!res.pendingInstalls.length) return;
-  const n = res.pendingInstalls.length;
-  ctx.log(`\n${n} install ${n === 1 ? "command was" : "commands were"} not run. Check ${n === 1 ? "it" : "them"}, then rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
-  for (const p of res.pendingInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
+  if (res.pendingInstalls.length) {
+    const n = res.pendingInstalls.length;
+    ctx.log(`\n${n} install ${n === 1 ? "command was" : "commands were"} not run. Check ${n === 1 ? "it" : "them"}, then rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
+    for (const p of res.pendingInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
+  }
+  if (res.failedInstalls.length) {
+    const n = res.failedInstalls.length;
+    ctx.log(`\n${n} install ${n === 1 ? "command" : "commands"} failed. Everything else was placed. Fix and rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
+    for (const p of res.failedInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
+  }
 }
 
 /** update --dry-run 의 한 줄: 업스트림을 읽기만 해서 = (최신) / ~ (옮겨질 거리) / ? (미리 알 수 없음·조회 실패) */
@@ -144,7 +159,7 @@ async function previewUpdate(ctx: Ctx, pkg: Package): Promise<void> {
 /** lshed update: 패키지를 최신으로 올리고 락을 갱신한다. */
 export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
-  const res: EnsureResult = { installed: [], pendingInstalls: [], lockChanged: false };
+  const res: EnsureResult = { installed: [], pendingInstalls: [], failedInstalls: [], lockChanged: false };
   for (const pkg of ordered(ctx, pkgs)) {
     const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);

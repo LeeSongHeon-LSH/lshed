@@ -25,6 +25,8 @@ export interface RestoreResult {
   backupDir: string | null;
   /** 배치한 항목이 참조하는데 지금 환경에 없는 변수 */
   missingEnv: { rel: string; vars: string[] }[];
+  /** --yes 로 돌렸는데 실패한 install: 명령의 패키지 id. 복원 자체는 끝났고, CLI 는 이것이 있으면 exit 1 */
+  failedInstalls: string[];
 }
 
 /**
@@ -181,7 +183,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     ctx.log(`\n(dry-run) nothing changed. Would place ${placed.length}, remove ${toRemove.length}, back up ${backedUp.length}`);
     reportPending(ctx, pkgRes);
     reportMissingEnv(ctx, missingEnv);
-    return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv };
+    return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv, failedInstalls: [] };
   }
 
   await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString(), ...(link ? { link } : {}) });
@@ -189,8 +191,8 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   ctx.log(`\nProfile "${profile}" applied${link ? " (link)" : ""}: placed ${placed.length}, removed ${toRemove.length}${pkgRes.installed.length ? `, installed ${pkgRes.installed.length} ${pkgRes.installed.length === 1 ? "package" : "packages"}` : ""}${bdir ? `, backed up ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
   reportMissingEnv(ctx, missingEnv);
-  if (notices + pkgRes.pendingInstalls.length + missingEnv.length) ctx.log(`\nIf any of the above is not what you expected: lshed report`);
-  return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv };
+  if (notices + pkgRes.pendingInstalls.length + pkgRes.failedInstalls.length + missingEnv.length) ctx.log(`\nIf any of the above is not what you expected: lshed report`);
+  return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv, failedInstalls: pkgRes.failedInstalls.map((f) => f.id) };
 }
 
 export function reportMissingEnv(ctx: Ctx, missing: { rel: string; vars: string[] }[]): void {

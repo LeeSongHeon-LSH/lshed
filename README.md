@@ -260,6 +260,12 @@ profiles:
 
 Inheritance only adds. The parent's parts come first, then the profile's own, and instructions keep that order in the generated `CLAUDE.md`. To get *less* than the parent, do not extend it; list what you want. A missing parent or a cycle is reported as a `lshed.yaml` error before anything is touched, and `lshed list` counts a part as used by every profile that inherits it.
 
+Three things are easy to confuse. They are separate on purpose:
+
+- **Stop using a part, keep it** — leave its id out of the profile. `restore` takes it off this machine (backed up); the part stays in the shed, another profile still uses it, and putting the id back and restoring brings it back. This is the reversible, everyday "remove", and nothing has to leave the shed for it.
+- **A smaller inherited set** — `extends` only adds, so you cannot inherit a profile and drop one part from it. List the smaller set outright, or split a shared base out and extend that. This is the only sense in which there is "no subtraction".
+- **Delete a part from the shed** — `lshed remove <id>` (it refuses while any profile still lists the part, so take it out of profiles first) or `lshed prune` for whatever no profile uses. This is the permanent one, and the only one that removes the file from the shed.
+
 ### Other agents, same shed
 
 Codex, Gemini CLI, Copilot CLI, Cursor and Google Antigravity (`agy`) all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all but Antigravity also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`. For Codex, skills go to `~/.agents/skills` because that is the location Codex documents, so use either `--agent codex` or `--agent agents` for skills on one machine, not both:

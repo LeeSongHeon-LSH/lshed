@@ -14,15 +14,22 @@ const base: Report = {
 
 describe("redact", () => {
   it("replaces the home directory with ~, in either separator", () => {
-    expect(redact("/home/me/.codex and /home/me/harness", "/home/me")).toBe("~/.codex and ~/harness");
-    expect(redact("C:\\Users\\me\\.codex or C:/Users/me/harness", "C:\\Users\\me")).toBe("~\\.codex or ~/harness");
+    expect(redact("/home/me/.codex and /home/me/harness", "/home/me", "linux")).toBe("~/.codex and ~/harness");
+    expect(redact("C:\\Users\\me\\.codex or C:/Users/me/harness", "C:\\Users\\me", "win32")).toBe("~\\.codex or ~/harness");
+  });
+  it("windows: an 8.3 short name or another case of the same profile folder is home too", () => {
+    expect(redact("C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\x and c:/users/RunnerAdmin/y", "C:\\Users\\runneradmin", "win32")).toBe("~\\AppData\\Local\\Temp\\x and ~/y");
+    expect(redact("D:\\Users\\me\\z stays", "C:\\Users\\me", "win32")).toBe("D:\\Users\\me\\z stays");
+  });
+  it("windows: a home outside \\Users is matched literally", () => {
+    expect(redact("D:\\home\\me\\x D:/home/me/y", "D:\\home\\me", "win32")).toBe("~\\x ~/y");
   });
   it("leaves paths outside home alone", () => {
-    expect(redact("/opt/x /home/other/y", "/home/me")).toBe("/opt/x /home/other/y");
+    expect(redact("/opt/x /home/other/y", "/home/me", "linux")).toBe("/opt/x /home/other/y");
   });
   it("does nothing for a home too short to be a real one", () => {
-    expect(redact("/a/b", "/")).toBe("/a/b");
-    expect(redact("C:\\x", "C:")).toBe("C:\\x");
+    expect(redact("/a/b", "/", "linux")).toBe("/a/b");
+    expect(redact("C:\\x", "C:", "win32")).toBe("C:\\x");
   });
 });
 

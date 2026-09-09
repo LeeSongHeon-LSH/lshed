@@ -127,9 +127,11 @@ r = run(B, ["report"]);
 const home = os.homedir(), homeFwd = home.replace(/\\/g, "/");
 check("report exit 0", r.code === 0);
 check("report: 버전·에이전트·프로필·창고 줄", r.out.includes("lshed      ") && r.out.includes("agent      claude-code") && r.out.includes("profile    minimal") && r.out.includes("profiles      default, minimal"));
-check("report: 홈 경로가 ~ 로 바뀜 (어느 구분자든)", !r.out.includes(home) && !r.out.includes(homeFwd) && !/EXA_API_KEY|sk-secret|on-B/.test(r.out));
+// Windows 러너의 TEMP 는 8.3 이름(C:\Users\RUNNER~1)이라 긴 홈 이름 검사만으로는 빠져나간다 — 사용자 폴더 패턴 자체를 본다
+const userDir = /[A-Za-z]:[\\/]Users[\\/](?!~)|\/home\/[^\/\s]+|\/Users\/[^\/\s]+/.test(r.out);
+check("report: 홈 경로가 ~ 로 바뀜 (어느 구분자·짧은 이름이든)", !r.out.includes(home) && !r.out.includes(homeFwd) && !userDir && !/EXA_API_KEY|sk-secret|on-B/.test(r.out));
 r = run(B, ["report", "--url"]);
-check("report --url: 이슈 폼 URL", r.code === 0 && r.out.startsWith("https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml&report=") && !r.out.includes(encodeURIComponent(homeFwd)));
+check("report --url: 이슈 폼 URL, 홈 없음", r.code === 0 && r.out.startsWith("https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml&report=") && !/Users%5C(?!~)|Users%2F(?!~)|%2Fhome%2F/i.test(r.out));
 r = run(B, ["restore", "no-such-profile"]);
 check("실패 뒤(비대화형): 힌트 한 줄, exit 1", r.code === 1 && r.out.includes("lshed report prints a summary"));
 r = run(B, ["restore", "no-such-profile"], { LSHED_REPORT: "0" });

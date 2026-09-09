@@ -39,19 +39,26 @@ export interface CollectOpts {
   error?: string;
   /** 테스트용: 홈 디렉터리와 CLI 버전 조회를 바꿔 끼운다. */
   home?: string;
+  platform?: NodeJS.Platform;
   toolVersion?: (bin: string) => Promise<string | undefined>;
 }
 
-/** 홈 디렉터리를 `~` 로. Windows 는 `\` 와 `/` 어느 쪽으로 쓰였든, 대소문자가 달라도 잡는다. */
-export function redact(text: string, home = os.homedir()): string {
+/**
+ * 홈 디렉터리를 `~` 로. Windows 는 `\` 와 `/` 어느 쪽으로 쓰였든, 대소문자가 달라도 잡는다.
+ * Windows 는 같은 폴더가 8.3 짧은 이름으로도 나타난다(`C:\Users\RUNNER~1` = `C:\Users\runneradmin`; TEMP 가 흔히 그렇다).
+ * 긴 이름만 보면 그런 경로가 사용자 이름째 남으므로, 홈이 `<드라이브>:\Users\<이름>` 꼴이면 그 드라이브의 `\Users\<무엇이든>` 을 전부 `~` 로 본다 —
+ * 다른 사용자의 폴더까지 가려지지만, 보고서에서는 덜 남기는 쪽이 맞다.
+ */
+export function redact(text: string, home = os.homedir(), platform: NodeJS.Platform = process.platform): string {
   if (!home || home.length < 3) return text;   // "/" 나 "C:" 같은 홈은 모든 경로에 걸린다 — 그럴 때는 그대로 둔다
-  const variants = new Set([home, home.replace(/\\/g, "/"), home.replace(/\//g, "\\")]);
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const win = platform === "win32";
+  const patterns: string[] = [];
+  const users = win ? /^([A-Za-z]:)[\\/]Users[\\/][^\\/]+$/.exec(home) : null;
+  if (users) patterns.push(`${esc(users[1])}[\\\\/]Users[\\\\/][^\\\\/]+`);
+  else for (const h of new Set([home, home.replace(/\\/g, "/"), home.replace(/\//g, "\\")])) patterns.push(esc(h));
   let out = text;
-  for (const h of variants) {
-    if (!h) continue;
-    const re = new RegExp(h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), process.platform === "win32" ? "gi" : "g");
-    out = out.replace(re, "~");
-  }
+  for (const p of patterns) out = out.replace(new RegExp(p, win ? "gi" : "g"), "~");
   return out;
 }
 
@@ -67,7 +74,7 @@ export function toolVersion(bin: string): Promise<string | undefined> {
 
 export async function collectReport(o: CollectOpts): Promise<Report> {
   const home = o.home ?? os.homedir();
-  const r = (s: string) => redact(s, home);
+  const r = (s: string) => redact(s, home, o.platform);
   const report: Report = {
     lshed: o.version,
     runtime: process.versions.bun ? `bun ${process.versions.bun} (standalone binary)` : `node ${process.version}`,

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- `lshed report --open` on Windows went through `cmd /c start`, which cuts the URL at its first `&` and expands `%…%` sequences, so the issue form would have opened without the summary. It now hands PowerShell an encoded command, which parses nothing. On Linux without `xdg-open` (WSL, most servers) `wslview` is tried next, and `lshed report --url` prints the prefilled link for a machine with no browser at all. The smoke suite, which CI runs on Ubuntu, macOS and Windows, now runs `report` and checks that the home directory does not appear in its output in either separator.
+- `lshed report --open` on Windows went through `cmd /c start`, which cuts the URL at its first `&` and expands `%…%` sequences, so the issue form would have opened without the summary. It now hands PowerShell an encoded command, which parses nothing. On Linux without `xdg-open` (WSL, most servers) `wslview` is tried next, and `lshed report --url` prints the prefilled link for a machine with no browser at all. On Windows the report also hides the profile folder when a path spells it with an 8.3 short name (`C:\Users\RUNNER~1\…` for `runneradmin`, which is how `TEMP` usually reads), by treating any `<drive>:\Users\<name>` on the home drive as `~`. The smoke suite, which CI runs on Ubuntu, macOS and Windows, now runs `report` and checks that no user directory appears in its output in any spelling.
 
 ## 0.16.0 — 2026-09-09
 

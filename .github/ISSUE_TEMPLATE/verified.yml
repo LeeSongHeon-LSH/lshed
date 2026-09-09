@@ -1,0 +1,49 @@
+name: Verification report
+description: It worked on your machine. Tell us where, so the README can say so.
+labels: [verified]
+title: "Verified: <agent> <version> on <OS>"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The README's "What has been verified" section lists only what the author could run. Each report here adds a row: a tool version, an OS, an lshed version, and what you actually exercised. Korean is fine.
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      multiple: true
+      options: [claude-code, codex, gemini, copilot, cursor, agy, agents]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Tool version(s) and OS
+      placeholder: "Codex 0.153.4, Windows 11 (PowerShell 7), Node 22"
+    validations:
+      required: true
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What you exercised
+      options:
+        - label: "`init` on a machine that already had a setup"
+        - label: "`restore` into a fresh machine"
+        - label: "`restore --link` (edits in the shed show up in the agent)"
+        - label: "a profile switch (the old profile's parts were removed and backed up)"
+        - label: "`add` / `diff` / `save` round trip"
+        - label: "`sync` with a remote"
+        - label: "MCP servers placed by lshed appear in the tool (`codex mcp list`, `gemini mcp list`, Claude Code `/mcp`, …)"
+        - label: "the tool actually reads a skill or instructions file that lshed placed (asked it, got the right answer)"
+        - label: "a second agent target reading the same shed"
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `lshed report`
+      description: Optional, but it pins the versions and the shed layout. `lshed report` prints it; paste it here.
+      render: text
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything that needed a workaround
+      description: Something you had to do that the README did not say, or output that looked odd but worked.

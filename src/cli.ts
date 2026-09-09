@@ -19,6 +19,7 @@ import { listRows, formatRows } from "./core/list.js";
 import { remove, prune } from "./core/remove.js";
 import { add } from "./core/add.js";
 import { sync } from "./core/sync.js";
+import { collectReport, formatReport, issueUrl, openUrl, ISSUES_URL } from "./core/report.js";
 
 /** 빌드 시점에 tsup 이 박는다 (tsup.config.ts). 실행파일 안에는 package.json 이 없다. */
 declare const __LSHED_VERSION__: string;
@@ -65,9 +66,39 @@ async function run(fn: () => Promise<unknown>): Promise<void> {
   try {
     await fn();
   } catch (e) {
-    console.error(`error: ${(e as Error).message}`);
+    const message = (e as Error).message;
+    console.error(`error: ${message}`);
     process.exitCode = 1;
+    await offerReport(message);
   }
+}
+
+/** 이 실행이 `lshed report` 자체이면 실패해도 다시 묻지 않는다. */
+let reporting = false;
+
+/**
+ * 실패한 뒤에 한 번 묻는다: 이 설정의 요약(값 없음, 홈은 ~)을 채운 GitHub 이슈를 열까.
+ * 터미널이 아니거나 LSHED_REPORT=0 이면 묻지 않고 한 줄만 남긴다. 어느 쪽이든 lshed 가 어딘가로 보내는 것은 없다 — 브라우저를 열 뿐이다.
+ */
+async function offerReport(error: string): Promise<void> {
+  if (reporting || process.env.LSHED_REPORT === "0") return;
+  const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  if (!tty) { console.error(`  (lshed report prints a summary you can paste into ${ISSUES_URL})`); return; }
+  const yes = await clack.confirm({ message: "Open a bug report on GitHub with a summary of this setup? (no values or secrets; nothing is sent until you submit it)", initialValue: false });
+  if (yes !== true) return;
+  reporting = true;
+  const r = await collectReport({ version, adapter: await adapterFromOpts(), shed: await shedIfKnown(), command: `lshed ${process.argv.slice(2).join(" ")}`, error });
+  const url = issueUrl(r);
+  console.error(`\n${formatReport(r)}\n\nOpening ${url.split("&report=")[0]}\n(if the browser does not open, paste the summary above into a new issue there)`);
+  openUrl(url);
+}
+
+/** report 용: 창고 위치를 알면 주고, 모르면 undefined. ctxFor 와 달리 던지지 않는다. */
+async function shedIfKnown(): Promise<string | undefined> {
+  const { shed } = program.opts<{ shed?: string }>();
+  const fromFlag = shed ?? process.env.LSHED_HOME;
+  if (fromFlag) return path.resolve(fromFlag);
+  try { return (await readState(await adapterFromOpts()))?.shed; } catch { return undefined; }
 }
 
 program
@@ -223,6 +254,18 @@ program
   .action((o: { yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     await prune(ctx, { yes: o.yes });
+  }));
+
+program
+  .command("report")
+  .description("print a summary of this setup (versions, agent, profile, shed contents by name; no values) to paste into a bug report")
+  .option("--open", "also open a GitHub issue form with the summary filled in")
+  .action((o: { open?: boolean }) => run(async () => {
+    reporting = true;
+    const r = await collectReport({ version, adapter: await adapterFromOpts(), shed: await shedIfKnown() });
+    console.log(formatReport(r));
+    if (o.open) { const url = issueUrl(r); console.error(`\nOpening ${url.split("&report=")[0]}`); openUrl(url); }
+    else console.error(`\nPaste this into ${ISSUES_URL}/new/choose  (or: lshed report --open)`);
   }));
 
 program

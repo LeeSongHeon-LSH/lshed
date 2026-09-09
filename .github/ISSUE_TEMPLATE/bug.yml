@@ -1,0 +1,44 @@
+name: Bug report
+description: Something lshed did (or refused to do) that looks wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. Four things are enough: what you ran, what you expected, what happened, and the output of `lshed report`.
+        `lshed report` prints versions, the agent and its root, the applied profile and the names of what is in the shed. It prints no values, no secrets, and replaces your home directory with `~`. Read it before pasting if you like. Korean is fine.
+  - type: textarea
+    id: what
+    attributes:
+      label: What you ran
+      placeholder: lshed restore tools --agent codex
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The full output, including the `error:` line if there was one.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Output of `lshed report`
+      description: Filled in for you when you come here from `lshed report --open` or from the prompt after a failure.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: A shed that reproduces it, a `--dry-run` that shows it, the `lshed/backups/<timestamp>/` that has the file it touched.

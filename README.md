@@ -474,6 +474,7 @@ lshed list [--unused]                           what is in the shed, and which p
 lshed remove <key>                              drop a component or package from the shed
 lshed prune [--yes]                             drop everything no profile uses
 lshed scan                                      list what the agent root holds, without writing anything
+lshed report [--open]                           summary of this setup to paste into an issue; --open prefills one on GitHub
 ```
 
 Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`. An id is the file or directory name the agent reads, in any script (`skills/논문리뷰` is fine); letters, digits, `.`, `_` and `-` are allowed, and `/` between segments for nested agents and commands.
@@ -534,6 +535,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 - On the Linux development machine the whole command set is exercised beyond CI: git and GitHub packages with `install:` through `restore` and `update`, `sync` against a real remote including a conflict, `remove`/`prune`, every `--agent` target, the environment-variable defaults, `restore --pick` through a real terminal, and the compiled Linux binary.
 - The other agents are checked against the tools themselves, not just their docs. `scripts/vm/probe.sh` restores a throwaway shed into a tool's real root and asks the tool, non-interactively, for a passphrase kept in a skill, a codeword kept in the instructions file, and the same skill again through a `--link` symlink. Codex 0.153.2 and Antigravity CLI 1.1.27 pass every check (last run 2026-09-08 with lshed 0.14.1); Gemini CLI, Copilot CLI and Cursor are verified for file placement and format so far. `scripts/vm/README.md` has the details and a cloud-init file for running the whole thing on a fresh VM.
 - One real shed is in daily use on the machine this is developed on: Claude Code, Codex and Antigravity all read it through `--link`, and `status` reports no drift for any of the three.
+- Everything above is one person's machines. If lshed works for you on a tool version or an OS not listed here, a [verification report](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=verified.yml) takes two minutes and becomes a line in this section. If it does not work, `lshed report` prints what a [bug report](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml) needs: versions, the agent and its root, the applied profile and the names of what the shed holds. No values, no secrets, and your home directory shows as `~`. After a failed command lshed asks whether to open that form with the summary filled in; it never sends anything by itself, and `LSHED_REPORT=0` turns the question off.
 
 ## Not in scope (yet)
 
@@ -543,6 +545,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 ## Troubleshooting
 
+- **Something else went wrong** — `lshed report` prints the summary a bug report needs (nothing secret; check it yourself), `lshed report --open` puts it into a new issue form. The same question is asked right after a failed command; answer no, or set `LSHED_REPORT=0`, and nothing happens.
 - **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** — do one of those. After one successful `restore`, lshed remembers it.
 - **restore replaced my `CLAUDE.md`** — it is in `~/.claude/lshed/backups/<timestamp>/CLAUDE.md`. Move its content into a fragment in the shed and add that fragment to your profile.
 - **I edited a skill locally and want to keep it** — `lshed diff` to see, `lshed save <id>` to push it into the shed, then `lshed sync`.

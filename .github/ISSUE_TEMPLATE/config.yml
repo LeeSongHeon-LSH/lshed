@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How the other agents are checked
+    url: https://github.com/LeeSongHeon-LSH/lshed/blob/main/scripts/vm/README.md
+    about: What "verified" means for Codex, Gemini CLI, Copilot CLI, Cursor and Antigravity, and how to run the same probe yourself.

@@ -1,0 +1,148 @@
+import os from "node:os";
+import { execFile, spawn } from "node:child_process";
+import type { AgentAdapter } from "../adapters/types.js";
+import { readState } from "../state.js";
+import { loadManifest, type Ctx } from "./context.js";
+
+export const ISSUES_URL = "https://github.com/LeeSongHeon-LSH/lshed/issues";
+
+/** 에이전트별 CLI: 버전만 묻는다. `agents` 는 공용 폴더라 특정 CLI 가 없다. */
+const CLI_OF: Record<string, string | undefined> = {
+  "claude-code": "claude", codex: "codex", gemini: "gemini", copilot: "copilot", cursor: "agent", agy: "agy",
+};
+
+/**
+ * 사용자가 이슈에 붙여 넣는 요약. 값은 담지 않는다: 환경변수 값도, 설정 내용도, 창고 파일도.
+ * 담는 것은 버전, OS, 어떤 에이전트의 어느 루트인지, 적용 프로필의 수치, 창고에 든 것의 이름과 개수, 실패한 명령과 메시지.
+ * 홈 경로는 `~` 로 바꾼다 (사용자 이름이 이슈에 남지 않게).
+ */
+export interface Report {
+  lshed: string;
+  runtime: string;
+  os: string;
+  agent: string;
+  root: string;
+  /** `<cli> <version>` 또는 `<cli>: not found`. CLI 가 없는 에이전트(agents)는 생략. */
+  tool?: string;
+  state: { profile: string; managed: number; appliedAt: string; placement: "links" | "copies" } | null | `unreadable: ${string}`;
+  shed?: { path: string; components: Record<string, string[]>; packages: string[]; profiles: string[] } | `unreadable: ${string}`;
+  command?: string;
+  error?: string;
+}
+
+export interface CollectOpts {
+  version: string;
+  adapter: AgentAdapter;
+  /** 알면 창고 위치 (--shed, LSHED_HOME, state). 모르면 창고 절이 빠진다. */
+  shed?: string;
+  command?: string;
+  error?: string;
+  /** 테스트용: 홈 디렉터리와 CLI 버전 조회를 바꿔 끼운다. */
+  home?: string;
+  toolVersion?: (bin: string) => Promise<string | undefined>;
+}
+
+/** 홈 디렉터리를 `~` 로. Windows 는 `\` 와 `/` 어느 쪽으로 쓰였든, 대소문자가 달라도 잡는다. */
+export function redact(text: string, home = os.homedir()): string {
+  if (!home) return text;
+  const variants = new Set([home, home.replace(/\\/g, "/"), home.replace(/\//g, "\\")]);
+  let out = text;
+  for (const h of variants) {
+    if (!h) continue;
+    const re = new RegExp(h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), process.platform === "win32" ? "gi" : "g");
+    out = out.replace(re, "~");
+  }
+  return out;
+}
+
+/** `<bin> --version` 의 첫 줄. 5초 안에 답이 없거나 실행파일이 없으면 undefined. 실패 원인은 보고서에 넣지 않는다. */
+export function toolVersion(bin: string): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    execFile(bin, ["--version"], { timeout: 5000, shell: process.platform === "win32", windowsHide: true }, (err, stdout) => {
+      const line = String(stdout ?? "").split(/\r?\n/).map((l) => l.trim()).find(Boolean);
+      resolve(err && !line ? undefined : line);
+    });
+  });
+}
+
+export async function collectReport(o: CollectOpts): Promise<Report> {
+  const home = o.home ?? os.homedir();
+  const r = (s: string) => redact(s, home);
+  const report: Report = {
+    lshed: o.version,
+    runtime: process.versions.bun ? `bun ${process.versions.bun} (standalone binary)` : `node ${process.version}`,
+    os: `${process.platform} ${os.release()} ${process.arch}`,
+    agent: o.adapter.name,
+    root: r(o.adapter.root),
+    state: null,
+  };
+  const cli = CLI_OF[o.adapter.name];
+  if (cli) {
+    const v = await (o.toolVersion ?? toolVersion)(cli);
+    report.tool = v ? `${cli} ${v}` : `${cli}: not found`;
+  }
+  try {
+    const s = await readState(o.adapter);
+    if (s) report.state = { profile: s.profile, managed: s.managed.length, appliedAt: s.appliedAt, placement: s.link ? "links" : "copies" };
+  } catch (e) {
+    report.state = `unreadable: ${r((e as Error).message)}`;
+  }
+  if (o.shed) {
+    try {
+      const ctx: Ctx = { adapter: o.adapter, shed: o.shed, log: () => {}, exec: async () => {} };
+      const m = await loadManifest(ctx);
+      const components: Record<string, string[]> = {};
+      for (const [cat, comps] of Object.entries(m.components)) if (comps.length) components[cat] = comps.map((c) => c.id);
+      report.shed = { path: r(o.shed), components, packages: m.packages.map((p) => p.id), profiles: Object.keys(m.profiles) };
+    } catch (e) {
+      report.shed = `unreadable: ${r((e as Error).message)}`;
+    }
+  }
+  if (o.command) report.command = r(o.command);
+  if (o.error) report.error = r(o.error);
+  return report;
+}
+
+/** 이슈에 붙여 넣는 형태. status 처럼 `이름  값` 줄이고, 창고 내용은 들여쓴 줄에 카테고리별로. */
+export function formatReport(r: Report): string {
+  const row = (label: string, text: string) => `${label.padEnd(9)}  ${text}`;
+  const lines = [
+    row("lshed", `${r.lshed} (${r.runtime})`),
+    row("os", r.os),
+    row("agent", `${r.agent} (${r.root})`),
+  ];
+  if (r.tool) lines.push(row("tool", r.tool));
+  if (r.state === null) lines.push(row("profile", "none applied"));
+  else if (typeof r.state === "string") lines.push(row("profile", r.state));
+  else lines.push(row("profile", `${r.state.profile}, ${r.state.managed} managed paths, ${r.state.placement}, applied ${r.state.appliedAt}`));
+  if (r.shed === undefined) lines.push(row("shed", "unknown"));
+  else if (typeof r.shed === "string") lines.push(row("shed", r.shed));
+  else {
+    lines.push(row("shed", r.shed.path));
+    for (const [cat, ids] of Object.entries(r.shed.components)) lines.push(`${" ".repeat(11)}${cat.padEnd(13)} ${ids.length}: ${ids.join(", ")}`);
+    lines.push(`${" ".repeat(11)}${"packages".padEnd(13)} ${r.shed.packages.length ? `${r.shed.packages.length}: ${r.shed.packages.join(", ")}` : "none"}`);
+    lines.push(`${" ".repeat(11)}${"profiles".padEnd(13)} ${r.shed.profiles.join(", ") || "none"}`);
+  }
+  if (r.command) lines.push(row("command", r.command));
+  if (r.error) lines.push(row("error", r.error));
+  return lines.join("\n");
+}
+
+/** 이슈 폼(.github/ISSUE_TEMPLATE/bug.yml)의 `report` 칸을 미리 채운 URL. 너무 길면 칸을 비우고 붙여 넣게 한다. */
+export function issueUrl(r: Report, kind: "bug" | "verified" = "bug"): string {
+  const base = `${ISSUES_URL}/new?template=${kind}.yml`;
+  const title = kind === "bug" && r.error ? `&title=${encodeURIComponent(r.error.split("\n")[0].slice(0, 80))}` : "";
+  const full = `${base}${title}&report=${encodeURIComponent(formatReport(r))}`;
+  return full.length <= 7000 ? full : `${base}${title}`;
+}
+
+/** 기본 브라우저로 연다. 열렸는지는 알 수 없으므로 URL 은 호출한 쪽이 따로 찍는다. */
+export function openUrl(url: string): void {
+  const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
+    : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
+  try {
+    const p = spawn(cmd, args, { stdio: "ignore", detached: true, windowsHide: true });
+    p.on("error", () => {});
+    p.unref();
+  } catch { /* 열 수 없으면 URL 만 남긴다 */ }
+}

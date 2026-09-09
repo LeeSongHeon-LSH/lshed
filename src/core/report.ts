@@ -44,7 +44,7 @@ export interface CollectOpts {
 
 /** 홈 디렉터리를 `~` 로. Windows 는 `\` 와 `/` 어느 쪽으로 쓰였든, 대소문자가 달라도 잡는다. */
 export function redact(text: string, home = os.homedir()): string {
-  if (!home) return text;
+  if (!home || home.length < 3) return text;   // "/" 나 "C:" 같은 홈은 모든 경로에 걸린다 — 그럴 때는 그대로 둔다
   const variants = new Set([home, home.replace(/\\/g, "/"), home.replace(/\//g, "\\")]);
   let out = text;
   for (const h of variants) {
@@ -136,13 +136,33 @@ export function issueUrl(r: Report, kind: "bug" | "verified" = "bug"): string {
   return full.length <= 7000 ? full : `${base}${title}`;
 }
 
-/** 기본 브라우저로 연다. 열렸는지는 알 수 없으므로 URL 은 호출한 쪽이 따로 찍는다. */
-export function openUrl(url: string): void {
-  const [cmd, args] = process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
-    : process.platform === "darwin" ? ["open", [url]] : ["xdg-open", [url]];
-  try {
-    const p = spawn(cmd, args, { stdio: "ignore", detached: true, windowsHide: true });
-    p.on("error", () => {});
-    p.unref();
-  } catch { /* 열 수 없으면 URL 만 남긴다 */ }
+/**
+ * 브라우저를 여는 명령. OS 마다 다르고 함정도 다르다:
+ *  - Windows: `cmd /c start` 는 URL 의 `&` 에서 명령을 끊고 `%xx%` 를 변수로 펼친다. PowerShell 에 base64 로 인코딩한 명령을 주면 아무것도 해석되지 않는다.
+ *  - macOS: `open`.
+ *  - 그 외(Linux, BSD): `xdg-open`. WSL 에는 보통 없고 `wslview`(wslu) 가 있으므로 그것도 후보에 둔다.
+ * 순서대로 시도하고, 첫 번째로 실행이 되는 것에서 멈춘다. 열렸는지는 알 수 없으므로 URL 은 호출한 쪽이 따로 찍는다.
+ */
+export function openCommands(url: string, platform: NodeJS.Platform = process.platform): { cmd: string; args: string[] }[] {
+  if (platform === "win32") {
+    const ps = `Start-Process -FilePath '${url.replace(/'/g, "''")}'`;
+    const encoded = Buffer.from(ps, "utf16le").toString("base64");
+    return [{ cmd: "powershell.exe", args: ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded] }];
+  }
+  if (platform === "darwin") return [{ cmd: "open", args: [url] }];
+  return [{ cmd: "xdg-open", args: [url] }, { cmd: "wslview", args: [url] }];
+}
+
+export function openUrl(url: string, platform: NodeJS.Platform = process.platform): void {
+  const candidates = openCommands(url, platform);
+  const tryNext = (i: number): void => {
+    const c = candidates[i];
+    if (!c) return;   // 열 수 없으면 URL 만 남는다
+    try {
+      const p = spawn(c.cmd, c.args, { stdio: "ignore", detached: platform !== "win32", windowsHide: true });
+      p.on("error", () => tryNext(i + 1));
+      p.unref();
+    } catch { tryNext(i + 1); }
+  };
+  tryNext(0);
 }

@@ -122,6 +122,19 @@ r = run(D, ["--agent", "codex", "status"]);
 check("codex: 자기 state", r.out.includes("codex:") && r.out.includes("drift      none"));
 check("B 의 state 는 그대로", JSON.parse(await fs.readFile(path.join(B, "lshed/state.json"), "utf8")).profile === "minimal");
 
+// report: 어느 OS 에서든 exit 0, 홈 경로는 어느 구분자로도 남지 않고, 창고의 이름만 나온다 (값은 없음)
+r = run(B, ["report"]);
+const home = os.homedir(), homeFwd = home.replace(/\\/g, "/");
+check("report exit 0", r.code === 0);
+check("report: 버전·에이전트·프로필·창고 줄", r.out.includes("lshed      ") && r.out.includes("agent      claude-code") && r.out.includes("profile    minimal") && r.out.includes("profiles      default, minimal"));
+check("report: 홈 경로가 ~ 로 바뀜 (어느 구분자든)", !r.out.includes(home) && !r.out.includes(homeFwd) && !/EXA_API_KEY|sk-secret|on-B/.test(r.out));
+r = run(B, ["report", "--url"]);
+check("report --url: 이슈 폼 URL", r.code === 0 && r.out.startsWith("https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml&report=") && !r.out.includes(encodeURIComponent(homeFwd)));
+r = run(B, ["restore", "no-such-profile"]);
+check("실패 뒤(비대화형): 힌트 한 줄, exit 1", r.code === 1 && r.out.includes("lshed report prints a summary"));
+r = run(B, ["restore", "no-such-profile"], { LSHED_REPORT: "0" });
+check("LSHED_REPORT=0: 힌트도 없음", r.code === 1 && !r.out.includes("lshed report"));
+
 // sync (원격 없음): 커밋만
 spawnSync("git", ["init", "-q"], { cwd: shed });
 spawnSync("git", ["config", "user.name", "smoke"], { cwd: shed });

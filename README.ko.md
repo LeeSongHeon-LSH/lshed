@@ -474,7 +474,7 @@ lshed list [--unused]                           창고의 내용과 그것을 �
 lshed remove <key>                              창고에서 부품이나 패키지 삭제
 lshed prune [--yes]                             어느 프로필도 안 쓰는 것 전부 삭제
 lshed scan                                      루트를 읽기만 하고 나열
-lshed report [--open]                           이슈에 붙여 넣을 이 설정의 요약, --open 은 GitHub 이슈 폼에 채워서 연다
+lshed report [--open | --url]                   이슈에 붙여 넣을 이 설정의 요약, --open 은 GitHub 이슈 폼에 채워서 열고 --url 은 그 링크만 찍는다
 ```
 
 키는 `카테고리/id`이고, 모호하지 않으면 `id`만 써도 됩니다: `skills/paper-review`, `mcp/exa`, `packages/gstack`. id는 에이전트가 읽는 파일·디렉터리 이름 그대로이며 어느 문자 체계든 됩니다(`skills/논문리뷰`). 글자, 숫자, `.`, `_`, `-`, 그리고 하위 폴더에 둔 에이전트·명령을 위한 구간 사이 `/`가 허용됩니다.
@@ -545,7 +545,7 @@ lshed report [--open]                           이슈에 붙여 넣을 이 설�
 
 ## 문제 해결
 
-- **다른 문제가 생겼다** — `lshed report` 가 버그 보고에 필요한 요약을 찍습니다(비밀은 없지만 직접 확인하세요). `lshed report --open` 은 그것을 새 이슈 폼에 채워 엽니다. 명령이 실패한 직후에도 같은 것을 묻는데, 아니오라고 하거나 `LSHED_REPORT=0` 을 두면 아무 일도 없습니다.
+- **다른 문제가 생겼다** — `lshed report` 가 버그 보고에 필요한 요약을 찍습니다(비밀은 없지만 직접 확인하세요). `lshed report --open` 은 그것을 새 이슈 폼에 채워 엽니다(브라우저가 없는 기기에서는 `--url` 이 링크만 찍습니다). 명령이 실패한 직후에도 같은 것을 묻는데, 아니오라고 하거나 `LSHED_REPORT=0` 을 두면 아무 일도 없습니다.
 - **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** (창고 위치를 모름) — `--shed <dir>`를 주거나 `LSHED_HOME`을 설정하세요. `restore`가 한 번 성공하면 기억합니다.
 - **restore가 내 `CLAUDE.md`를 바꿨다** — `~/.claude/lshed/backups/<시각>/CLAUDE.md`에 있습니다. 내용을 창고의 조각으로 옮기고 그 조각을 프로필에 넣으세요.
 - **로컬에서 고친 스킬을 지키고 싶다** — `lshed diff`로 보고, `lshed save <id>`로 창고에 넣고, `lshed sync`.

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `lshed report --open` on Windows went through `cmd /c start`, which cuts the URL at its first `&` and expands `%…%` sequences, so the issue form would have opened without the summary. It now hands PowerShell an encoded command, which parses nothing. On Linux without `xdg-open` (WSL, most servers) `wslview` is tried next, and `lshed report --url` prints the prefilled link for a machine with no browser at all. The smoke suite, which CI runs on Ubuntu, macOS and Windows, now runs `report` and checks that the home directory does not appear in its output in either separator.
+
 ## 0.16.0 — 2026-09-09
 
 - New `lshed report`: prints what a bug report needs and nothing else — lshed version and runtime, OS, the agent and its root, the agent CLI's version, the applied profile as numbers, and the names (not contents) of what the shed holds. Home directories show as `~`; no environment value, setting or shed file is included. `--open` puts the same text into the repository's issue form. After a failed command, in a terminal, lshed asks once whether to open that form; the default is no, `LSHED_REPORT=0` removes the question, and outside a terminal only a one-line hint is printed. lshed sends nothing by itself in any of these paths — it opens the browser on a URL and the user decides whether to submit.

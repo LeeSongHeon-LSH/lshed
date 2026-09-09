@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { collectReport, formatReport, issueUrl, redact, type Report } from "../src/core/report.js";
+import { collectReport, formatReport, issueUrl, openCommands, redact, type Report } from "../src/core/report.js";
 import { createAdapter } from "../src/adapters/registry.js";
 import { writeState } from "../src/state.js";
 
@@ -19,6 +19,27 @@ describe("redact", () => {
   });
   it("leaves paths outside home alone", () => {
     expect(redact("/opt/x /home/other/y", "/home/me")).toBe("/opt/x /home/other/y");
+  });
+  it("does nothing for a home too short to be a real one", () => {
+    expect(redact("/a/b", "/")).toBe("/a/b");
+    expect(redact("C:\\x", "C:")).toBe("C:\\x");
+  });
+});
+
+describe("openCommands", () => {
+  const url = "https://github.com/x/y/issues/new?template=bug.yml&title=Run%20'lshed%20init'&report=a%26b";
+  it("windows: hands PowerShell a base64 command, so & and % and quotes in the URL are never parsed by a shell", () => {
+    const [c] = openCommands(url, "win32");
+    expect(c.cmd).toBe("powershell.exe");
+    expect(c.args.slice(0, 5)).toEqual(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand"]);
+    const decoded = Buffer.from(c.args[5], "base64").toString("utf16le");
+    expect(decoded).toBe("Start-Process -FilePath 'https://github.com/x/y/issues/new?template=bug.yml&title=Run%20''lshed%20init''&report=a%26b'");
+    expect(openCommands(url, "win32")).toHaveLength(1);
+  });
+  it("macOS: open; elsewhere: xdg-open with wslview as the fallback for WSL", () => {
+    expect(openCommands(url, "darwin")).toEqual([{ cmd: "open", args: [url] }]);
+    expect(openCommands(url, "linux")).toEqual([{ cmd: "xdg-open", args: [url] }, { cmd: "wslview", args: [url] }]);
+    expect(openCommands(url, "freebsd")[0].cmd).toBe("xdg-open");
   });
 });
 

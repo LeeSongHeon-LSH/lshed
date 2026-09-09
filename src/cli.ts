@@ -260,9 +260,11 @@ program
   .command("report")
   .description("print a summary of this setup (versions, agent, profile, shed contents by name; no values) to paste into a bug report")
   .option("--open", "also open a GitHub issue form with the summary filled in")
-  .action((o: { open?: boolean }) => run(async () => {
+  .option("--url", "print the issue-form URL with the summary filled in instead of the summary (for a machine without a browser)")
+  .action((o: { open?: boolean; url?: boolean }) => run(async () => {
     reporting = true;
     const r = await collectReport({ version, adapter: await adapterFromOpts(), shed: await shedIfKnown() });
+    if (o.url) { console.log(issueUrl(r)); return; }
     console.log(formatReport(r));
     if (o.open) { const url = issueUrl(r); console.error(`\nOpening ${url.split("&report=")[0]}`); openUrl(url); }
     else console.error(`\nPaste this into ${ISSUES_URL}/new/choose  (or: lshed report --open)`);

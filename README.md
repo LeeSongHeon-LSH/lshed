@@ -474,7 +474,7 @@ lshed list [--unused]                           what is in the shed, and which p
 lshed remove <key>                              drop a component or package from the shed
 lshed prune [--yes]                             drop everything no profile uses
 lshed scan                                      list what the agent root holds, without writing anything
-lshed report [--open]                           summary of this setup to paste into an issue; --open prefills one on GitHub
+lshed report [--open | --url]                   summary of this setup to paste into an issue; --open prefills one on GitHub, --url prints that link
 ```
 
 Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`. An id is the file or directory name the agent reads, in any script (`skills/논문리뷰` is fine); letters, digits, `.`, `_` and `-` are allowed, and `/` between segments for nested agents and commands.
@@ -545,7 +545,7 @@ The shed is the source of truth for authored parts: `save` copies local edits ba
 
 ## Troubleshooting
 
-- **Something else went wrong** — `lshed report` prints the summary a bug report needs (nothing secret; check it yourself), `lshed report --open` puts it into a new issue form. The same question is asked right after a failed command; answer no, or set `LSHED_REPORT=0`, and nothing happens.
+- **Something else went wrong** — `lshed report` prints the summary a bug report needs (nothing secret; check it yourself), `lshed report --open` puts it into a new issue form (`--url` prints the link instead, for a machine without a browser). The same question is asked right after a failed command; answer no, or set `LSHED_REPORT=0`, and nothing happens.
 - **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** — do one of those. After one successful `restore`, lshed remembers it.
 - **restore replaced my `CLAUDE.md`** — it is in `~/.claude/lshed/backups/<timestamp>/CLAUDE.md`. Move its content into a fragment in the shed and add that fragment to your profile.
 - **I edited a skill locally and want to keep it** — `lshed diff` to see, `lshed save <id>` to push it into the shed, then `lshed sync`.

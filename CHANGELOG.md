@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.0 — 2026-09-09
 
 - New `lshed report`: prints what a bug report needs and nothing else — lshed version and runtime, OS, the agent and its root, the agent CLI's version, the applied profile as numbers, and the names (not contents) of what the shed holds. Home directories show as `~`; no environment value, setting or shed file is included. `--open` puts the same text into the repository's issue form. After a failed command, in a terminal, lshed asks once whether to open that form; the default is no, `LSHED_REPORT=0` removes the question, and outside a terminal only a one-line hint is printed. lshed sends nothing by itself in any of these paths — it opens the browser on a URL and the user decides whether to submit.
 - Issue templates: a bug report that asks for the command, the expectation, the output and `lshed report`, and a verification report for "it worked here, on this version of this tool and this OS" — those feed the README's "What has been verified" section, which so far lists only the author's machines.

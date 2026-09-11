@@ -14,6 +14,11 @@ import { exists } from "../src/fsutil.js";
 import { git, head, lsRemote } from "../src/git.js";
 import { readState } from "../src/state.js";
 
+// 이 파일은 전부 진짜 git 위에서 돈다: beforeEach 가 원격을 만들고(init·commit·clone --bare) 시험마다
+// clone·commit·push 가 더 붙는다. Windows 러너에서는 기본 5초를 넘기는 것이 드물지 않아 (0.17.4 CI 에서
+// windows-20 만 빨갛게 됐다) sync.test.ts 와 같은 여유를 둔다. 시험의 빠르기는 여기서 볼 것이 아니다.
+const SLOW = 30_000;
+
 let tmp: string, remote: string, rootA: string, rootB: string, shed: string, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
 const r = (p: string) => fs.readFile(p, "utf8");
@@ -44,10 +49,10 @@ beforeEach(async () => {
   await w(path.join(rootA, "skills/browse/SKILL.md"), "stub");
   await fs.symlink(path.join(rootA, "skills/toolkit/bin"), path.join(rootA, "skills/browse/bin"), "junction");
   await w(path.join(rootA, "skills/mine/SKILL.md"), "authored");
-});
-afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
+}, SLOW);
+afterEach(() => fs.rm(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }), SLOW);
 
-describe("init: 설치한 것 / 생성물 / 내가 쓴 것 을 가른다", () => {
+describe("init: 설치한 것 / 생성물 / 내가 쓴 것 을 가른다", { timeout: SLOW }, () => {
   it("끊어진 링크를 가진 스텁도 패키지 생성물로 본다", async () => {
     await fs.rm(path.join(rootA, "skills/toolkit/bin"), { recursive: true });
     const res = await init(ctxFor(rootA));
@@ -70,7 +75,7 @@ describe("init: 설치한 것 / 생성물 / 내가 쓴 것 을 가른다", () =>
   });
 });
 
-describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => {
+describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", { timeout: SLOW }, () => {
   beforeEach(async () => {
     await init(ctxFor(rootA));
     // 사용자가 install 명령을 채웠다
@@ -167,7 +172,7 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
   });
 });
 
-describe("update", () => {
+describe("update", { timeout: SLOW }, () => {
   it("--dry-run: 업스트림을 읽기만 해서 = / ~ 이전 → 최신 을 찍고 clone 과 락은 그대로", async () => {
     await init(ctxFor(rootA));
     const ctx = ctxFor(rootB);
@@ -241,8 +246,6 @@ describe("update", () => {
   });
 });
 
-// git 을 열 번 넘게 부르는 시험이라 Windows 러너에서 기본 5초를 넘긴다 (sync.test.ts 와 같은 처방)
-const SLOW = 30_000;
 describe("update: 하나가 실패해도 멈추지 않는다", { timeout: SLOW }, () => {
   // 0.17.3 까지는 하나가 실패하면 루프가 통째로 끊겼다. writeLock 은 루프 뒤에 있으므로 이미 올라간 패키지의
   // 락도 적히지 않아, 작업 트리는 새 리비전인데 락은 옛 것을 가리키는 상태가 남았다.
@@ -297,7 +300,7 @@ describe("reportPending", () => {
   });
 });
 
-describe("lsRemote", () => {
+describe("lsRemote", { timeout: SLOW }, () => {
   it("브랜치·태그·HEAD 를 clone 없이 읽고, 같은 이름이면 브랜치가 이긴다", async () => {
     const work = path.join(tmp, "upstream-work");
     const main = await head(work);

@@ -6,20 +6,24 @@
  * CommandLineToArgvW/CRT 가 인자를 나눈다. 그래서 두 파서가 따옴표 짝을 똑같이 세어야 한다:
  *  - 안쪽 큰따옴표는 `""` 로 적는다. `\"` 는 CreateProcess 규칙일 뿐 cmd 는 모르므로, cmd 는 거기서 따옴표가
  *    닫혔다고 보고 뒤에 오는 `&` 를 명령 구분자로 실행해 버린다. `""` 는 양쪽 파서가 모두 리터럴 따옴표로 읽는다.
- *  - cmd 의 메타문자(`& | < > ^ ( ) % !`)가 든 인자는 공백이 없어도 감싼다. 따옴표 안에서는 cmd 가 그것들을 글자로 본다.
- *  - 줄바꿈은 따옴표 안에서도 명령을 끊는다. 어떻게도 감쌀 수 없으므로 거부한다.
- * 남는 한계: `%VAR%` 는 따옴표 안에서도 cmd 가 펼친다. cmd 명령줄에서 `%` 를 막을 방법은 없다 —
- * 인자와 환경변수를 함께 쥔 쪽만 노릴 수 있는 자리라 여기서는 감싸기만 하고 그대로 둔다.
+ *  - cmd 의 메타문자(`& | < > ^ ( ) !`)가 든 인자는 공백이 없어도 감싼다. 따옴표 안에서는 cmd 가 그것들을 글자로 본다.
+ *  - 줄바꿈과 `%` 는 감쌀 수 없으므로 거부한다. 줄바꿈은 따옴표 안에서도 명령을 끊고, `%VAR%` 는 따옴표 안에서도
+ *    cmd 가 펼친 뒤 그 결과를 다시 읽는다 — cmd 명령줄에서 이 둘을 막는 표기는 없다. 정상적인 인자에는 없는
+ *    글자이기도 하다: 여기로 오는 것은 플러그인 이름(패키지 id 는 글자·숫자·._@-)과 고정된 검사 프롬프트뿐이다.
  */
 export function commandLine(cmd: string, args: string[]): string {
   return [cmd, ...args].map(quote).join(" ");
 }
 
 /** 감싸지 않아도 되는 인자: 두 파서 중 누구도 손대지 않는 글자만 있는 것 */
-const BARE = /^[^\s"&|<>^()%!]+$/;
+const BARE = /^[^\s"&|<>^()!]+$/;
+/** 감싸도 소용없는 글자. 싣는 대신 거부한다 (설명은 위 주석). */
+const UNQUOTABLE: [RegExp, string][] = [[/[\r\n]/, "a newline"], [/\0/, "a null byte"], [/%/, "a percent sign (cmd.exe expands %VAR% even inside quotes)"]];
 
 function quote(a: string): string {
-  if (/[\r\n\0]/.test(a)) throw new Error(`a command argument cannot contain a newline on Windows: ${JSON.stringify(a)}`);
+  for (const [re, what] of UNQUOTABLE) {
+    if (re.test(a)) throw new Error(`a command argument cannot contain ${what} on Windows: ${JSON.stringify(a)}`);
+  }
   if (BARE.test(a)) return a;
   // 따옴표 앞의 역슬래시는 두 배로, 닫는 따옴표 앞의 역슬래시도 두 배로 (CreateProcess 규칙)
   return `"${a.replace(/(\\*)"/g, '$1$1""').replace(/(\\+)$/, "$1$1")}"`;

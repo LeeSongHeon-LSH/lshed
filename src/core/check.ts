@@ -153,6 +153,29 @@ export function skillsDirOf(adapter: AgentAdapter): string {
   return path.join(adapter.root, ...cat.root.split("/"));
 }
 
+/** 검사용 임시 작업 폴더의 이름 앞자리. 치우지 못한 것을 다음에 알아보려면 이름이 규칙적이어야 한다. */
+const WORKDIR_PREFIX = "lshed-check-";
+/** 이보다 오래된 것만 치운다. 지금 돌고 있는 다른 검사의 폴더를 빼앗지 않기 위한 여유다. */
+const STALE_MS = 60 * 60 * 1000;
+
+/**
+ * 지난 검사가 남긴 임시 작업 폴더를 치운다. Windows 에서는 죽은 CLI 의 고아 손자가 폴더를 쥐고 있어
+ * 그 자리에서는 지울 수 없다 (7차 검증). 손자는 제 수명을 다하면 놓으므로, 다음 검사가 대신 치운다.
+ * 실패는 조용히 넘긴다 — 정리가 검사를 막을 이유는 없다.
+ */
+async function sweepOldWorkDirs(now = Date.now()): Promise<void> {
+  const tmp = os.tmpdir();
+  let names: string[];
+  try { names = await fs.readdir(tmp); } catch { return; }
+  for (const n of names.filter((x) => x.startsWith(WORKDIR_PREFIX))) {
+    const p = path.join(tmp, n);
+    try {
+      const st = await fs.stat(p);
+      if (st.isDirectory() && now - st.mtimeMs > STALE_MS) await fs.rm(p, { recursive: true, force: true });
+    } catch { /* 아직 쥐고 있거나 남이 치웠다. 다음에 */ }
+  }
+}
+
 export async function check(adapter: AgentAdapter, opts: CheckOpts = {}): Promise<CheckResult> {
   const attempts = opts.attempts ?? 2, timeoutMs = opts.timeoutMs ?? 120_000;
   const doAsk = opts.ask ?? ask, isInstalled = opts.installed ?? installed;
@@ -162,7 +185,8 @@ export async function check(adapter: AgentAdapter, opts: CheckOpts = {}): Promis
   // 사용자 것을 덮지 않는다. 지난 검사가 치우지 못한 것이라도 사용자가 보고 지우게 한다.
   if (await fs.stat(dir).then(() => true, () => false)) throw new Error(`${dir} already exists. Remove it and run the check again.`);
   await fs.mkdir(dir, { recursive: true });
-  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-check-"));   // 프로젝트 설정이 끼어들지 않는 빈 작업 폴더
+  await sweepOldWorkDirs();                                              // 지난번에 못 치운 것부터 (아래 주석 참고)
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), WORKDIR_PREFIX));  // 프로젝트 설정이 끼어들지 않는 빈 작업 폴더
   const leftovers: string[] = [];
   try {
     await fs.writeFile(path.join(dir, "SKILL.md"), [
@@ -216,8 +240,11 @@ export function formatCheck(r: CheckResult, homeAs = (s: string) => s): string {
   }
   // 남긴 것이 있으면 마지막에 말한다. 스킬 폴더가 남았다면 다음 검사가 거부되므로 그 사실까지 적는다.
   for (const p of r.leftovers) {
-    const blocks = p.endsWith(SKILL_ID) ? " The next check will refuse to start until it is gone." : "";
-    lines.push(`  ! could not remove ${homeAs(p)} — something still has it open.${blocks} Remove it yourself.`);
+    // 스킬 폴더는 lshed 가 임의로 지우지 않는다 (사용자 것일 수 있다). 임시 작업 폴더는 다음 검사가 치운다.
+    const tail = p.endsWith(SKILL_ID)
+      ? " The next check will refuse to start until it is gone, so remove it yourself."
+      : " A later check will clear it once nothing does.";
+    lines.push(`  ! could not remove ${homeAs(p)} — something still has it open.${tail}`);
   }
   return lines.join("\n");
 }

@@ -95,8 +95,8 @@ describe("formatCheck", () => {
       leftovers: ["/tmp/lshed-check-j5Xap3", "/home/me/.claude/skills/lshed-check"],
     }, (s) => s.replace("/home/me", "~"));
     expect(out).toContain("      attempt 1: (timed out) (no output)");   // 결과가 살아 있다
-    expect(out).toContain("  ! could not remove /tmp/lshed-check-j5Xap3 — something still has it open. Remove it yourself.");
-    expect(out).toContain("  ! could not remove ~/.claude/skills/lshed-check — something still has it open. The next check will refuse to start until it is gone. Remove it yourself.");
+    expect(out).toContain("  ! could not remove /tmp/lshed-check-j5Xap3 — something still has it open. A later check will clear it once nothing does.");
+    expect(out).toContain("  ! could not remove ~/.claude/skills/lshed-check — something still has it open. The next check will refuse to start until it is gone, so remove it yourself.");
   });
 });
 
@@ -119,8 +119,30 @@ describe.skipIf(process.platform === "win32" || process.getuid?.() === 0)("정�
     }
     expect(r.results[0].status).toBe("not-read");            // 결과가 살아 있다
     expect(r.leftovers).toEqual([path.join(skills, "lshed-check")]);
-    expect(formatCheck(r)).toContain("The next check will refuse to start until it is gone.");
+    expect(formatCheck(r)).toContain("The next check will refuse to start until it is gone, so remove it yourself.");
     await fs.rm(path.join(skills, "lshed-check"), { recursive: true, force: true });
+  });
+});
+
+// 고아 손자가 쥐고 있어 그 자리에서 못 지운 임시 폴더는 영영 남는 대신 다음 검사가 치운다 (Windows 7차).
+describe("지난 검사가 남긴 임시 폴더", () => {
+  const there = (p: string) => fs.stat(p).then(() => true, () => false);
+  it("오래된 것은 치우고, 지금 돌고 있을 수 있는 것은 놓아 둔다", async () => {
+    const stale = path.join(os.tmpdir(), `lshed-check-stale-${process.pid}`);
+    const fresh = path.join(os.tmpdir(), `lshed-check-fresh-${process.pid}`);
+    await fs.mkdir(stale, { recursive: true });
+    await fs.mkdir(fresh, { recursive: true });
+    const longAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    await fs.utimes(stale, longAgo, longAgo);
+    try {
+      const home = await tmpHome();
+      await check(createAdapter("claude-code", path.join(home, ".claude")), { attempts: 1, passphrase: "check-1", installed: async () => false });
+      expect(await there(stale)).toBe(false);
+      expect(await there(fresh)).toBe(true);      // 남의 검사를 빼앗지 않는다
+    } finally {
+      await fs.rm(stale, { recursive: true, force: true });
+      await fs.rm(fresh, { recursive: true, force: true });
+    }
   });
 });
 

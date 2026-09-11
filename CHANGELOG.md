@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.17.5 — 2026-09-11
+
+- Windows: an argument holding a `%` is now refused instead of being passed through. `cmd.exe` expands `%VAR%` even inside double quotes and then reads the result again, and there is no way to spell a literal `%` on a command line it parses — so 0.17.3's quoting wrapped it and hoped. Nothing lshed sends that way can legitimately contain one (a package id is letters, digits and `._@-`; the check prompt is fixed), while a shed's plugin source is free text, so refusing costs nothing and closes the last gap in the shell work.
+- `lshed check` clears the temporary folders it could not remove before. On Windows a CLI that leaves a child behind keeps its working directory open for that child's lifetime, so the removal fails at the time and the folder stays; the next check now sweeps any `lshed-check-*` older than an hour out of the temp directory before it starts. The age cut leaves a check that is running right now alone, and the message about a folder that is still held says it will be cleared later rather than asking for it to be removed by hand.
+- The package tests get the timeout the git-heavy blocks in `sync.test.ts` already use. They run on real repositories — the fixture clones a bare remote for every test, and each test adds its own clones, commits and pushes — and `windows-latest` on Node 20 went past the 5s default on a test that had taken 2.4s a run earlier. No behaviour changed; this only stops a slow runner from reading as a failure.
+
 ## 0.17.4 — 2026-09-11
 
 - An `install:` command that failed left no trace once the restore finished. The parts were placed, the profile was recorded, and the one mention of the failure scrolled past — `lshed status` then showed the machine as `packages 1 in sync`, `drift none`, exactly like a machine where everything worked. The failing package ids are now kept in the machine's state, `status` prints them under the package they belong to (`! gstack  install: failed at the last restore  → fix it, then lshed restore default --yes`), and `lshed report` names them. A later restore that succeeds clears the record.

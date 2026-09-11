@@ -20,7 +20,7 @@ describe("commandLine", () => {
 
   // 0.17.2 의 구멍: 공백이 없으면 감싸지 않아 cmd.exe 가 메타문자를 연산자로 읽었다.
   it("공백이 없어도 cmd.exe 메타문자가 들었으면 감싼다", () => {
-    for (const a of ["exa&calc.exe", "a|b", "a>b", "a<b", "a^b", "(x)", "%PATH%", "a!b"]) {
+    for (const a of ["exa&calc.exe", "a|b", "a>b", "a<b", "a^b", "(x)", "a!b"]) {
       expect(commandLine("x", [a])).toBe(`x "${a}"`);
     }
   });
@@ -31,9 +31,15 @@ describe("commandLine", () => {
     // cmd 가 세는 따옴표 개수가 짝수여야 & 가 따옴표 안에 있다
     expect((line.match(/"/g) ?? []).length % 2).toBe(0);
   });
+  // 감싸도 소용없는 것은 싣지 않는다. 정상적인 인자에는 없는 글자다 (플러그인 이름, 고정 프롬프트).
   it("줄바꿈은 따옴표 안에서도 명령을 끊으므로 거부한다", () => {
     expect(() => commandLine("x", ["a\nb"])).toThrow(/newline/);
     expect(() => commandLine("x", ["a\r\nb"])).toThrow(/newline/);
+  });
+  it("%VAR% 는 따옴표 안에서도 cmd 가 펼치므로 거부한다", () => {
+    expect(() => commandLine("x", ["%PATH%"])).toThrow(/percent sign/);
+    expect(() => commandLine("claude", ["plugin", "install", "evil%USERPROFILE%@m"])).toThrow(/percent sign/);
+    expect(commandLine("x", ["100 percent"])).toBe('x "100 percent"');   // 글자 자체가 아니라 % 만
   });
 });
 

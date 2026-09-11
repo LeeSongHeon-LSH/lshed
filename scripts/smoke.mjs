@@ -203,6 +203,11 @@ function runClosingStdout(root, args) {
 r = run2(E, ["restore", "default", "--yes"]);
 check("install 실패: 부품은 놓이고 상태가 남는다", await there(path.join(E, "skills/alpha/SKILL.md")) && await there(path.join(E, "lshed/state.json")));
 check("install 실패: 끝에 모아 알리고 exit 1", r.code === 1 && r.out.includes("1 install command failed"));
+// 실패는 한 번 지나가는 출력에만 있으면 안 된다: 다음에 status 를 열었을 때도 보여야 한다
+r = run2(E, ["status"]);
+check("install 실패가 status 에 남는다", r.out.includes("! toolkit  install: failed at the last restore"));
+r = run2(E, ["restore", "--help"]);
+check("--yes 도움말이 --dry-run 을 빠뜨리지 않는다", r.out.includes("--dry-run runs nothing at all"));
 const piped = await runClosingStdout(F, ["restore", "default", "--yes"]);
 check("읽는 쪽이 먼저 닫혀도 (EPIPE) 실패는 실패로 남는다: exit 1", piped === 1);
 check("EPIPE 여도 복원은 끝까지 간다", await there(path.join(F, "skills/alpha/SKILL.md")));

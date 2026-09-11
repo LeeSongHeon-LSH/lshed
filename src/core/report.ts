@@ -25,7 +25,7 @@ export interface Report {
   root: string;
   /** `<cli> <version>` 또는 `<cli>: not found`. CLI 가 없는 에이전트(agents)는 생략. */
   tool?: string;
-  state: { profile: string; managed: number; appliedAt: string; placement: "links" | "copies" } | null | `unreadable: ${string}`;
+  state: { profile: string; managed: number; appliedAt: string; placement: "links" | "copies"; failedInstalls?: string[] } | null | `unreadable: ${string}`;
   shed?: { path: string; components: Record<string, string[]>; packages: string[]; profiles: string[] } | `unreadable: ${string}`;
   command?: string;
   error?: string;
@@ -92,7 +92,7 @@ export async function collectReport(o: CollectOpts): Promise<Report> {
   }
   try {
     const s = await readState(o.adapter);
-    if (s) report.state = { profile: s.profile, managed: s.managed.length, appliedAt: s.appliedAt, placement: s.link ? "links" : "copies" };
+    if (s) report.state = { profile: s.profile, managed: s.managed.length, appliedAt: s.appliedAt, placement: s.link ? "links" : "copies", ...(s.failedInstalls?.length ? { failedInstalls: s.failedInstalls } : {}) };
   } catch (e) {
     report.state = `unreadable: ${r((e as Error).message)}`;
   }
@@ -123,7 +123,7 @@ export function formatReport(r: Report): string {
   if (r.tool) lines.push(row("tool", r.tool));
   if (r.state === null) lines.push(row("profile", "none applied"));
   else if (typeof r.state === "string") lines.push(row("profile", r.state));
-  else lines.push(row("profile", `${r.state.profile}, ${r.state.managed} managed paths, ${r.state.placement}, applied ${r.state.appliedAt}`));
+  else lines.push(row("profile", `${r.state.profile}, ${r.state.managed} managed paths, ${r.state.placement}, applied ${r.state.appliedAt}${r.state.failedInstalls?.length ? `, install failed: ${r.state.failedInstalls.join(", ")}` : ""}`));
   if (r.shed === undefined) lines.push(row("shed", "unknown"));
   else if (typeof r.shed === "string") lines.push(row("shed", r.shed));
   else {

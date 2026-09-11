@@ -7,7 +7,8 @@ import type { Ctx } from "../src/core/context.js";
 import { init } from "../src/core/init.js";
 import { restore } from "../src/core/restore.js";
 import { status } from "../src/core/status.js";
-import { updatePackages } from "../src/core/packages.js";
+import { updatePackages, reportPending, type EnsureResult } from "../src/core/packages.js";
+import type { Package } from "../src/manifest.js";
 import { readLock } from "../src/lock.js";
 import { exists } from "../src/fsutil.js";
 import { git, head, lsRemote } from "../src/git.js";
@@ -120,7 +121,13 @@ describe("restore: 새 기기에서 패키지를 락 커밋으로 clone", () => 
     expect(res.placed).toEqual(["skills/mine"]);
     expect(await exists(path.join(rootB, "skills/mine/SKILL.md"))).toBe(true);
     expect(await exists(path.join(rootB, "skills/toolkit/SKILL.md"))).toBe(true);
-    expect((await readState(ctx.adapter))?.profile).toBe("default");
+    const st = await readState(ctx.adapter);
+    expect(st?.profile).toBe("default");
+    expect(st?.failedInstalls).toEqual(["toolkit"]);   // 상태에 남아야 status 가 다음에 말해 준다
+    // 같은 프로필을 성공적으로 다시 놓으면 흔적은 사라진다
+    await fs.writeFile(path.join(shed, "lshed.yaml"), (await r(path.join(shed, "lshed.yaml"))).replace("    install: exit 3", "    install: exit 0"));
+    await restore(ctx, "default", { yes: true });
+    expect((await readState(ctx.adapter))?.failedInstalls).toBeUndefined();
     const log = logs.join("\n");
     expect(log).toMatch(/\$ \(skills[\\/]toolkit\) exit 3\n {4}! install failed: command exited with 3: exit 3/);   // Windows 는 skills\toolkit
     expect(log).toMatch(/Profile "default" applied: placed 1[\s\S]*1 install command failed\. Everything else was placed\.[\s\S]*cd .*skills[\\/]toolkit && exit 3[\s\S]*lshed report/);
@@ -231,6 +238,60 @@ describe("update", () => {
       expect(again.lockChanged).toBe(false);
       expect(await exists(path.join(rootB, "skills/toolkit/installed"))).toBe(true);
     }
+  });
+});
+
+describe("update: 하나가 실패해도 멈추지 않는다", () => {
+  // 0.17.3 까지는 하나가 실패하면 루프가 통째로 끊겼다. writeLock 은 루프 뒤에 있으므로 이미 올라간 패키지의
+  // 락도 적히지 않아, 작업 트리는 새 리비전인데 락은 옛 것을 가리키는 상태가 남았다.
+  it("하나가 실패해도 나머지는 올리고 락을 적는다", async () => {
+    await init(ctxFor(rootA));
+    const ctx = ctxFor(rootB);
+    await restore(ctx, "default");
+
+    // 두 번째 패키지: 같은 원격을 v1 에서 clone 해 둔다
+    const twin: Package = { id: "twin", source: `git:${remote}`, into: "skills/twin" };
+    await git(["clone", "-q", remote, path.join(rootB, "skills/twin")]);
+    // 원격이 없는 패키지: 제자리에 있어서 건너뛰지는 않지만 pull 이 실패한다
+    const bad: Package = { id: "bad", source: "git:/nope/nowhere", into: "skills/bad" };
+    const badDir = path.join(rootB, "skills/bad");
+    await w(path.join(badDir, "x.md"), "x");
+    await git(["init", "-q", "-b", "main", "."], badDir);
+    await git(["add", "-A"], badDir);
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v1"], badDir);
+    await git(["remote", "add", "origin", "/nope/nowhere"], badDir);
+
+    const work = path.join(tmp, "upstream-work");
+    await w(path.join(work, "SKILL.md"), "toolkit v2");
+    await git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-am", "v2"], work);
+    await git(["push", "-q", remote, "main"], work);
+    const tip = await head(work);
+
+    logs = [];
+    const res = await updatePackages(ctx, [bad, twin]);           // 실패하는 것이 먼저다
+    expect(res.failedPackages.map((f) => f.id)).toEqual(["bad"]);
+    expect(res.lockChanged).toBe(true);
+    expect(await head(path.join(rootB, "skills/twin"))).toBe(tip);
+    expect((await readLock(shed)).packages.twin.rev).toBe(tip);    // 뒤의 것이 락에 적혔다
+    expect(logs.join("\n")).toMatch(/! package failed: git pull failed: /);
+  });
+});
+
+describe("reportPending", () => {
+  const failed = (): EnsureResult => ({
+    installed: [], pendingInstalls: [], failedPackages: [], lockChanged: false,
+    failedInstalls: [{ id: "toolkit", dir: "/d", cmd: "./setup", error: "command exited with 3: ./setup" }],
+  });
+  // update 는 부품을 놓지 않는다 — restore 전용 문구를 함께 쓰고 있었다
+  it("restore 는 놓았다고, update 는 올렸다고 끝맺는다", () => {
+    const ctx = ctxFor(rootB);
+    logs = [];
+    reportPending(ctx, failed(), "restore");
+    expect(logs.join("\n")).toContain("1 install command failed. Everything else was placed.");
+    logs = [];
+    reportPending(ctx, failed(), "update");
+    expect(logs.join("\n")).toContain("1 install command failed. Everything else was updated.");
+    expect(logs.join("\n")).not.toContain("placed");
   });
 });
 

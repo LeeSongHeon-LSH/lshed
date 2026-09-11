@@ -57,16 +57,20 @@ export function formatStatus(s: Status, adapterRoot: string, agent = "claude-cod
   const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
   const inSync = s.packages.filter((p) => p.present && p.locked && p.rev === p.locked);
   const off = s.packages.filter((p) => !inSync.includes(p));
+  // 마지막 restore 에서 죽은 install: — 패키지는 제자리에 있으므로 위의 어느 줄도 이것을 말하지 않는다.
+  // 이 줄이 없으면 설치가 반쯤 된 기기가 멀쩡한 기기와 똑같아 보인다.
+  const failedInstalls = s.state.failedInstalls ?? [];
+  const w = Math.max(0, ...off.map((p) => p.pkg.id.length), ...failedInstalls.map((id) => id.length));
   if (!s.packages.length) lines.push(row("packages", "none"));
   else {
     const n = off.length ? `${inSync.length} of ${s.packages.length}` : `${s.packages.length}`;
     lines.push(row("packages", `${n} in sync${inSync.length ? `: ${inSync.map((p) => p.pkg.id).join(", ")}` : ""}`));
-    const w = Math.max(...off.map((p) => p.pkg.id.length));
     for (const p of off) {
       const what = !p.present ? "not installed  → lshed restore" : !p.locked ? `${short(p.rev)} (not in lock)` : `${short(p.rev)} ≠ lock ${short(p.locked)}  → lshed update`;
       lines.push(detail(p.pkg.id, w, what));
     }
   }
+  for (const id of failedInstalls) lines.push(detail(id, w, `install: failed at the last restore  → fix it, then lshed restore ${s.state.profile} --yes`));
   const nEnv = s.missingEnv.reduce((n, m) => n + m.vars.length, 0);
   lines.push(row("env", nEnv ? `${nEnv} not set` : "all set"));
   const wEnv = Math.max(0, ...s.missingEnv.map((m) => m.rel.length));

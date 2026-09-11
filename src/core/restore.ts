@@ -188,7 +188,12 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv, failedInstalls: [], failedPackages: [] };
   }
 
-  await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString(), ...(link ? { link } : {}) });
+  const failedInstalls = pkgRes.failedInstalls.map((f) => f.id);
+  await writeState(ctx.adapter, {
+    profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString(),
+    ...(link ? { link } : {}),
+    ...(failedInstalls.length ? { failedInstalls } : {}),
+  });
   const bdir = backup && backedUp.length ? backupDir : null;
   ctx.log(`\nProfile "${profile}" applied${link ? " (link)" : ""}: placed ${placed.length}, removed ${toRemove.length}${pkgRes.installed.length ? `, installed ${pkgRes.installed.length} ${pkgRes.installed.length === 1 ? "package" : "packages"}` : ""}${bdir ? `, backed up ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
@@ -196,7 +201,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   if (notices + pkgRes.pendingInstalls.length + pkgRes.failedInstalls.length + pkgRes.failedPackages.length + missingEnv.length) ctx.log(`\nIf any of the above is not what you expected: lshed report`);
   return {
     profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv,
-    failedInstalls: pkgRes.failedInstalls.map((f) => f.id),
+    failedInstalls,
     failedPackages: pkgRes.failedPackages.map((f) => f.id),
   };
 }

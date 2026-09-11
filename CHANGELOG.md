@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.4 — 2026-09-11
+
+- An `install:` command that failed left no trace once the restore finished. The parts were placed, the profile was recorded, and the one mention of the failure scrolled past — `lshed status` then showed the machine as `packages 1 in sync`, `drift none`, exactly like a machine where everything worked. The failing package ids are now kept in the machine's state, `status` prints them under the package they belong to (`! gstack  install: failed at the last restore  → fix it, then lshed restore default --yes`), and `lshed report` names them. A later restore that succeeds clears the record.
+- `lshed update` stopped at the first package it could not pull. Everything after it was left at its old revision, and because the lock is written after the loop, the packages that *had* been updated were not recorded either — the working tree moved and the lock still pointed at the previous commit. A package that cannot be updated is now reported and skipped, the rest are pulled, and the lock is written for them.
+- A failing git command said only `Command failed: git clone --quiet -- <url> <dir>`, which is the command, not the reason. The message now carries git's own `fatal:` line (`git clone failed: repository '…' does not exist`), picked out of stderr rather than taken from the end of it, since `git pull` appends two lines of generic advice after the real error.
+- The end of a failed restore said `Everything else was placed.` — including after `lshed update`, which places nothing. Each command now ends that sentence its own way.
+- The `--yes` help said plugin installs "always run", which is not true under `--dry-run`. It now says what the flag gates and that `--dry-run` runs nothing at all.
+- `lshed check` no longer retries a removal it cannot finish. 0.17.3 assumed the lock on its temporary folder was momentary and retried for a second and a half; the sixth Windows pass measured that retry succeeding zero times out of three, because what holds the folder is an orphaned grandchild of the CLI that keeps it for its own lifetime. Every failed check paid the delay for nothing. The leftover is reported as before.
+
 ## 0.17.3 — 2026-09-11
 
 - Fix: a failed `restore --yes` reported success whenever its output went through a pipe. `lshed restore prof --yes | head` (or into a pager you quit, or `| tee log` in CI) made the reader close first, stdout raised `EPIPE`, and the handler answered with `process.exit(0)` — which hard-set the status to 0 and threw away the `exit 1` that 0.17.2 had just made meaningful. lshed now drops the writes and keeps going, so the command finishes its work and exits with the code it earned.

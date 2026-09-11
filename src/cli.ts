@@ -157,7 +157,7 @@ program
   .option("--no-link", "go back to copies on a machine that used --link")
   .option("--dry-run", "print what would change without touching anything")
   .option("--no-backup", "skip backing up files that get replaced or removed")
-  .option("--yes", "run packages' install: shell commands (shown, not run, without this; plugin installs always run)")
+  .option("--yes", "run packages' install: shell commands (without this they are only shown; getting the packages themselves is not gated by --yes, and --dry-run runs nothing at all)")
   .action((profile: string | undefined, o: { pick?: boolean; link?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
     const ctx = await ctxFor("other");
     const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
@@ -195,7 +195,7 @@ program
     }
     if (!pkgs.length) { console.log("No packages to update."); return; }
     const res = await updatePackages(ctx, pkgs, { dryRun: o.dryRun, yes: o.yes });
-    reportPending(ctx, res);
+    reportPending(ctx, res, "update");
     exitIfFailed(res);
   }));
 

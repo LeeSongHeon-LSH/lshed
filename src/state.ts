@@ -12,6 +12,12 @@ export const StateSchema = z.object({
   appliedAt: z.string(),
   /** 파일 부품을 복사 대신 창고로 가는 링크로 놓았다 (restore --link). 다음 restore 도 같은 방식을 쓴다. */
   link: z.boolean().optional(),
+  /**
+   * 마지막 restore 에서 install: 이 실패한 패키지의 id. 복원 자체는 끝났으므로 이것 말고는 실패의 흔적이 없다 —
+   * 없으면 status 가 그 기기를 멀쩡한 기기와 구별하지 못한다. 다음 restore 가 성공하면 사라진다.
+   * (clone·플러그인 설치가 실패한 패키지는 여기 담지 않는다. 그쪽은 status 의 packages 가 "not installed" 로 이미 말한다.)
+   */
+  failedInstalls: z.array(z.string()).optional(),
 });
 export type State = z.infer<typeof StateSchema>;
 

@@ -6,8 +6,19 @@ import { exists } from "./fsutil.js";
 const x = promisify(execFile);
 
 export async function git(args: string[], cwd?: string): Promise<string> {
-  const { stdout } = await x("git", args, { cwd, maxBuffer: 1 << 24 });
-  return stdout.trim();
+  try {
+    const { stdout } = await x("git", args, { cwd, maxBuffer: 1 << 24 });
+    return stdout.trim();
+  } catch (e) {
+    // execFile 의 메시지는 "Command failed: git clone --quiet -- <url> <dir>" 뿐이라 왜 실패했는지가 빠진다.
+    // 이유는 stderr 의 `fatal:` 줄에 있다. 마지막 줄이 아니다 — `git pull` 은 그 뒤에 "Please make sure you have
+    // the correct access rights / and the repository exists." 같은 안내를 더 붙이므로 끝만 보면 쓸모없는 말이 나온다.
+    const err = e as { stderr?: string; message: string };
+    const lines = String(err.stderr ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+    const why = lines.find((l) => /^fatal:/i.test(l)) ?? lines.find((l) => /^error:/i.test(l)) ?? lines.at(-1);
+    if (!why) throw e;
+    throw new Error(`git ${args[0]} failed: ${why.replace(/^(fatal|error):\s*/i, "")}`);
+  }
 }
 
 export const isRepo = (dir: string) => exists(path.join(dir, ".git"));

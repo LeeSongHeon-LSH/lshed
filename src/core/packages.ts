@@ -152,7 +152,8 @@ export async function maybeInstall(ctx: Ctx, pkg: Package, dir: string, opts: In
   }
 }
 
-export function reportPending(ctx: Ctx, res: EnsureResult): void {
+/** `what` 은 이 결과를 만든 명령이다. restore 는 부품을 놓고 update 는 놓지 않으므로 끝맺음이 다르다. */
+export function reportPending(ctx: Ctx, res: EnsureResult, what: "restore" | "update" = "restore"): void {
   if (res.pendingInstalls.length) {
     const n = res.pendingInstalls.length;
     ctx.log(`\n${n} install ${n === 1 ? "command was" : "commands were"} not run. Check ${n === 1 ? "it" : "them"}, then rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
@@ -165,7 +166,8 @@ export function reportPending(ctx: Ctx, res: EnsureResult): void {
   }
   if (res.failedInstalls.length) {
     const n = res.failedInstalls.length;
-    ctx.log(`\n${n} install ${n === 1 ? "command" : "commands"} failed. Everything else was placed. Fix and rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
+    const rest = what === "restore" ? "Everything else was placed." : "Everything else was updated.";
+    ctx.log(`\n${n} install ${n === 1 ? "command" : "commands"} failed. ${rest} Fix and rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
     for (const p of res.failedInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
   }
 }
@@ -191,7 +193,17 @@ export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
     const st = await packageStatus(ctx, pkg, lock);
     if (!st.present) { ctx.log(`  ! package ${pkg.id}: not installed. Run restore first`); continue; }
     if (opts.dryRun) { await previewUpdate(ctx, pkg); continue; }
-    const now = await inst.update(ctx, pkg, opts);
+    // 하나가 실패해도 나머지는 올린다. 여기서 던지면 이미 올라간 패키지의 락도 못 적어(writeLock 은 루프 뒤에 있다)
+    // 작업 트리는 새 리비전인데 락은 옛 것을 가리키는 상태가 남았다.
+    let now: string;
+    try {
+      now = await inst.update(ctx, pkg, opts);
+    } catch (e) {
+      const error = (e as Error).message;
+      ctx.log(`    ! package failed: ${error.split("\n")[0]}`);
+      res.failedPackages.push({ id: pkg.id, source: pkg.source, error });
+      continue;
+    }
     const before = lock.packages[pkg.id]?.rev;
     if (now !== before) {
       lock.packages[pkg.id] = { source: pkg.source, rev: now };

@@ -184,10 +184,14 @@ export async function check(adapter: AgentAdapter, opts: CheckOpts = {}): Promis
     return { agent: adapter.name, skillsDir, passphrase, results, leftovers };
   } finally {
     // 정리는 검사 결과를 덮지 않는다 — 사용자가 보러 온 것은 그 결과다. 예전에는 여기서 던지면
-    // (timed out) 도 답 발췌도 사라지고 EBUSY 메시지만 남았다. 잠금은 대개 곧 풀리므로 몇 번 다시 해 보고,
-    // 그래도 남으면 무엇이 남았는지 알린다. 임시 폴더가 먼저 막혀도 스킬 폴더는 반드시 치운다 (그것이 다음 검사를 막는다).
+    // (timed out) 도 답 발췌도 사라지고 EBUSY 메시지만 남았다. 임시 폴더가 먼저 막혀도 스킬 폴더는 반드시
+    // 치운다 (그것이 다음 검사를 막는다), 그래도 남은 것은 무엇이 남았는지 알린다.
+    //
+    // 다시 시도하지는 않는다. 0.17.3 은 잠금이 일시적이라 보고 다섯 번 재시도했지만, Windows 7차 검증에서
+    // 0/3 으로 한 번도 풀리지 않았다 — 폴더를 쥔 것은 죽은 CLI 가 남긴 고아 손자라 제 수명을 다할 때까지
+    // 놓지 않는다. 실패하는 검사마다 1.5초를 그냥 기다리던 셈이었다.
     for (const p of [dir, cwd]) {
-      try { await fs.rm(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+      try { await fs.rm(p, { recursive: true, force: true }); }
       catch { leftovers.push(p); }
     }
   }

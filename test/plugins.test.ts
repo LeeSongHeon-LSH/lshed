@@ -9,6 +9,8 @@ import { restore } from "../src/core/restore.js";
 import { status } from "../src/core/status.js";
 import { updatePackages } from "../src/core/packages.js";
 import { readLock } from "../src/lock.js";
+import { readState } from "../src/state.js";
+import { exists } from "../src/fsutil.js";
 import { git, head } from "../src/git.js";
 
 let tmp: string, rootA: string, rootB: string, shed: string, logs: string[], calls: string[][];
@@ -126,10 +128,19 @@ describe("restore: 새 기기", () => {
     expect(calls).toEqual([]);
   });
 
-  it("claude CLI 가 없으면 분명한 오류", async () => {
+  // 0.17.2 는 install: 실패만 견뎠다. 설치기(clone·플러그인 설치)가 죽으면 여전히 배치 루프 앞에서 던져
+  // 부품이 하나도 놓이지 않고 상태도 남지 않았다 — Windows 5차에서 본 것과 같은 증상이 다른 문으로 들어온 셈이다.
+  it("claude CLI 가 없어도 나머지는 놓이고 상태가 남으며, 갖추지 못한 패키지를 분명히 알린다", async () => {
     const ctx = ctxFor(rootB);
     ctx.exec = async () => { const e = new Error("spawn claude ENOENT") as NodeJS.ErrnoException; e.code = "ENOENT"; throw e; };
-    await expect(restore(ctx, "default")).rejects.toThrow(/claude CLI not found/);
+    const res = await restore(ctx, "default");
+    expect(res.failedPackages.sort()).toEqual(["claude-plugins-official", "exa", "notion"]);
+    expect(res.placed).toContain("skills/mine");
+    expect(await exists(path.join(rootB, "skills/mine/SKILL.md"))).toBe(true);
+    expect((await readState(ctx.adapter))?.profile).toBe("default");
+    const log = logs.join("\n");
+    expect(log).toMatch(/! package failed: .*claude CLI not found/);
+    expect(log).toMatch(/3 packages could not be set up\./);
   });
 });
 

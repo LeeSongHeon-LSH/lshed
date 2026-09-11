@@ -27,9 +27,11 @@ import { agentsHere, agentByState, missingRootMessage } from "./core/detect.js";
 declare const __LSHED_VERSION__: string;
 const version = typeof __LSHED_VERSION__ === "string" ? __LSHED_VERSION__ : "0.0.0-dev";
 
-// `lshed status | head` 처럼 읽는 쪽이 먼저 닫으면 EPIPE 가 난다. 파이프의 정상적인 끝이므로 조용히 끝낸다.
+// `lshed status | head` 처럼 읽는 쪽이 먼저 닫으면 EPIPE 가 난다. 파이프의 정상적인 끝이므로 조용히 삼킨다.
+// 여기서 process.exit(0) 을 하면 아직 정해지지도 않은 종료 코드까지 0 으로 못박는다 — 설치가 실패한 restore 를
+// `| head` 로 받으면 exit 0, 즉 성공으로 보였다. 쓰기만 포기하고 하던 일은 끝까지 한다.
 for (const s of [process.stdout, process.stderr]) {
-  s.on("error", (e: NodeJS.ErrnoException) => { if (e.code === "EPIPE") process.exit(0); });
+  s.on("error", () => { /* 읽는 쪽이 닫혔다 (EPIPE). 출력은 버리고 계속한다 */ });
 }
 
 const program = new Command()
@@ -64,6 +66,11 @@ async function ctxFor(cmd: "init" | "other"): Promise<Ctx> {
   if (!shed && cmd === "init") shed = path.join(os.homedir(), "lshed");
   if (!shed) throw new Error("Shed location unknown. Pass --shed <dir> or set LSHED_HOME.");
   return { adapter, shed: path.resolve(shed), log: (l) => console.log(l), exec: spawnExec };
+}
+
+/** 복원·갱신은 끝까지 가되, 갖추지 못한 패키지나 실패한 install: 이 있으면 성공이 아니다 (세 명령이 같은 규칙을 쓴다). */
+function exitIfFailed(r: { failedInstalls: unknown[]; failedPackages: unknown[] } | null | undefined): void {
+  if (r && (r.failedInstalls.length || r.failedPackages.length)) process.exitCode = 1;
 }
 
 async function run(fn: () => Promise<unknown>): Promise<void> {
@@ -159,11 +166,11 @@ program
       if (!tty) throw new Error("--pick needs an interactive terminal. Name the profile instead: lshed restore <profile>");
       if (firstTime && !o.pick) console.log("No profile applied yet, so opening the picker. To apply one directly: lshed restore <profile>\n");
       const picked = await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
-      if (picked?.restored?.failedInstalls.length) process.exitCode = 1;
+      exitIfFailed(picked?.restored);
       return;
     }
     const res = await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
-    if (res.failedInstalls.length) process.exitCode = 1;
+    exitIfFailed(res);
   }));
 
 program
@@ -189,7 +196,7 @@ program
     if (!pkgs.length) { console.log("No packages to update."); return; }
     const res = await updatePackages(ctx, pkgs, { dryRun: o.dryRun, yes: o.yes });
     reportPending(ctx, res);
-    if (res.failedInstalls.length) process.exitCode = 1;
+    exitIfFailed(res);
   }));
 
 program

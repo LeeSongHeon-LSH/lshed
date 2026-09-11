@@ -27,6 +27,8 @@ export interface RestoreResult {
   missingEnv: { rel: string; vars: string[] }[];
   /** --yes 로 돌렸는데 실패한 install: 명령의 패키지 id. 복원 자체는 끝났고, CLI 는 이것이 있으면 exit 1 */
   failedInstalls: string[];
+  /** 설치기가 갖추지 못한 패키지의 id (clone·플러그인 설치 실패). 부품 배치는 그대로 끝났다. CLI 는 이것도 exit 1 */
+  failedPackages: string[];
 }
 
 /**
@@ -183,7 +185,7 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
     ctx.log(`\n(dry-run) nothing changed. Would place ${placed.length}, remove ${toRemove.length}, back up ${backedUp.length}`);
     reportPending(ctx, pkgRes);
     reportMissingEnv(ctx, missingEnv);
-    return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv, failedInstalls: [] };
+    return { profile, placed, removed: toRemove, backedUp, backupDir: null, missingEnv, failedInstalls: [], failedPackages: [] };
   }
 
   await writeState(ctx.adapter, { profile, shed: ctx.shed, managed: [...newManaged].sort(), appliedAt: new Date().toISOString(), ...(link ? { link } : {}) });
@@ -191,8 +193,12 @@ export async function restore(ctx: Ctx, profileArg: string | undefined, opts: Re
   ctx.log(`\nProfile "${profile}" applied${link ? " (link)" : ""}: placed ${placed.length}, removed ${toRemove.length}${pkgRes.installed.length ? `, installed ${pkgRes.installed.length} ${pkgRes.installed.length === 1 ? "package" : "packages"}` : ""}${bdir ? `, backed up ${backedUp.length} → ${bdir}` : ""}`);
   reportPending(ctx, pkgRes);
   reportMissingEnv(ctx, missingEnv);
-  if (notices + pkgRes.pendingInstalls.length + pkgRes.failedInstalls.length + missingEnv.length) ctx.log(`\nIf any of the above is not what you expected: lshed report`);
-  return { profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv, failedInstalls: pkgRes.failedInstalls.map((f) => f.id) };
+  if (notices + pkgRes.pendingInstalls.length + pkgRes.failedInstalls.length + pkgRes.failedPackages.length + missingEnv.length) ctx.log(`\nIf any of the above is not what you expected: lshed report`);
+  return {
+    profile, placed, removed: toRemove, backedUp, backupDir: bdir, missingEnv,
+    failedInstalls: pkgRes.failedInstalls.map((f) => f.id),
+    failedPackages: pkgRes.failedPackages.map((f) => f.id),
+  };
 }
 
 export function reportMissingEnv(ctx: Ctx, missing: { rel: string; vars: string[] }[]): void {

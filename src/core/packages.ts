@@ -69,7 +69,18 @@ export async function packageStatus(ctx: Ctx, pkg: Package, lock: Lock): Promise
 
 export type EnsureOptions = InstallOpts;
 export interface PendingInstall { id: string; dir: string; cmd: string }
-export interface EnsureResult { installed: string[]; pendingInstalls: PendingInstall[]; failedInstalls: (PendingInstall & { error: string })[]; lockChanged: boolean }
+/** 설치기가 갖추지 못한 패키지 (clone 실패, 플러그인 설치 실패 등). install: 명령과 달리 돌릴 셸 줄이 없다. */
+export interface FailedPackage { id: string; source: string; error: string }
+export interface EnsureResult {
+  installed: string[];
+  pendingInstalls: PendingInstall[];
+  failedInstalls: (PendingInstall & { error: string })[];
+  failedPackages: FailedPackage[];
+  lockChanged: boolean;
+}
+
+/** 빈 결과. ensurePackages 와 updatePackages 가 같은 것을 따로 적다가 필드를 놓치지 않도록 한 자리에 둔다. */
+const emptyEnsureResult = (): EnsureResult => ({ installed: [], pendingInstalls: [], failedInstalls: [], failedPackages: [], lockChanged: false });
 
 const short = (r?: string) => (r && /^[0-9a-f]{40}$/.test(r) ? r.slice(0, 7) : r);
 
@@ -86,7 +97,7 @@ function ordered(ctx: Ctx, pkgs: Package[]): Package[] {
  */
 export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
-  const res: EnsureResult = { installed: [], pendingInstalls: [], failedInstalls: [], lockChanged: false };
+  const res = emptyEnsureResult();
   for (const pkg of ordered(ctx, pkgs)) {
     const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);
@@ -100,7 +111,17 @@ export async function ensurePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOpti
     ctx.log(`  + package ${pkg.id}  (${inst.describe(pkg, st.locked)})`);
     // dry-run 은 clone 도 install 도 하지 않지만, 어떤 install 명령이 기다리는지는 보여 준다 — 그것이 dry-run 의 몫이다
     if (opts.dryRun) { await maybeInstall(ctx, pkg, inst.cwd(ctx, pkg), opts, res); continue; }
-    const rev = await inst.install(ctx, pkg, st.locked, opts);
+    // 설치기가 실패해도 나머지 패키지와 부품 배치는 계속한다. 여기서 던지면 restore 가 배치 루프에 닿기도 전에
+    // 끝나 부품이 하나도 놓이지 않고 상태도 남지 않는다 — 0.17.2 가 install: 에서 고친 바로 그 증상이다.
+    let rev: string;
+    try {
+      rev = await inst.install(ctx, pkg, st.locked, opts);
+    } catch (e) {
+      const error = (e as Error).message;
+      ctx.log(`    ! package failed: ${error.split("\n")[0]}`);
+      res.failedPackages.push({ id: pkg.id, source: pkg.source, error });
+      continue;
+    }
     if (rev !== st.locked) {
       if (st.locked) ctx.log(`    lock says ${short(st.locked)} but ${short(rev)} got installed; lock updated to match`);
       lock.packages[pkg.id] = { source: pkg.source, rev };
@@ -137,6 +158,11 @@ export function reportPending(ctx: Ctx, res: EnsureResult): void {
     ctx.log(`\n${n} install ${n === 1 ? "command was" : "commands were"} not run. Check ${n === 1 ? "it" : "them"}, then rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
     for (const p of res.pendingInstalls) ctx.log(`  cd ${p.dir} && ${p.cmd}`);
   }
+  if (res.failedPackages.length) {
+    const n = res.failedPackages.length;
+    ctx.log(`\n${n} ${n === 1 ? "package" : "packages"} could not be set up. Everything that does not depend on ${n === 1 ? "it" : "them"} was done. Fix the cause and run the command again:`);
+    for (const p of res.failedPackages) ctx.log(`  ${p.id} (${p.source}): ${p.error.split("\n")[0]}`);
+  }
   if (res.failedInstalls.length) {
     const n = res.failedInstalls.length;
     ctx.log(`\n${n} install ${n === 1 ? "command" : "commands"} failed. Everything else was placed. Fix and rerun with '--yes' or run ${n === 1 ? "it" : "them"} yourself:`);
@@ -159,7 +185,7 @@ async function previewUpdate(ctx: Ctx, pkg: Package): Promise<void> {
 /** lshed update: 패키지를 최신으로 올리고 락을 갱신한다. */
 export async function updatePackages(ctx: Ctx, pkgs: Package[], opts: EnsureOptions = {}): Promise<EnsureResult> {
   const lock = await readLock(ctx.shed);
-  const res: EnsureResult = { installed: [], pendingInstalls: [], failedInstalls: [], lockChanged: false };
+  const res = emptyEnsureResult();
   for (const pkg of ordered(ctx, pkgs)) {
     const inst = installerFor(ctx, pkg.source);
     const st = await packageStatus(ctx, pkg, lock);

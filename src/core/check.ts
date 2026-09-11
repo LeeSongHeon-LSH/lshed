@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import type { AgentAdapter } from "../adapters/types.js";
-import { commandLine } from "../shell.js";
+import { invocation } from "../shell.js";
 
 /**
  * 조용한 실패를 소리 나게 하는 검사. lshed 가 성공했다고 해도 에이전트가 그 파일을 읽는지는 다른 문제다 —
@@ -55,23 +55,68 @@ export async function installed(cli: string, env: NodeJS.ProcessEnv = process.en
 
 export interface Answer { out: string; err: string; code: number | null; timedOut: boolean }
 
-/** CLI 를 한 번 돌린다. stdin 은 닫힌 채(codex 는 파이프면 기다린다), 시간이 지나면 죽인다. */
-export function ask(cli: string, prompt: string, opts: { cwd: string; timeoutMs: number }): Promise<Answer> {
+/**
+ * 죽은 자식이 남긴 파이프를 언제까지 기다릴지. 'exit' 뒤 남은 출력은 곧바로 흘러나오므로 넉넉한 값이다.
+ * 이 유예가 없으면 손자가 파이프를 쥔 채 살아남았을 때 'close' 가 영영 오지 않는다.
+ */
+const PIPE_GRACE_MS = 2_000;
+
+/**
+ * 프로세스를 트리째 죽인다. win32 의 kill() 은 TerminateProcess 라 대상 하나만 끝낸다 —
+ * `cmd.exe /c claude.cmd …` 에서 죽는 것은 cmd.exe 뿐이고, 그 아래 node 는 살아서 우리 파이프를 쥐고 있다.
+ */
+function killTree(p: ReturnType<typeof spawn>): void {
+  if (process.platform === "win32" && p.pid !== undefined) {
+    // taskkill 이 없거나 이미 끝난 프로세스면 실패한다. 어느 쪽이든 아래 kill() 로 최소한 셸은 끝낸다.
+    spawn("taskkill", ["/pid", String(p.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on("error", () => { /* 아래 kill() */ });
+  }
+  p.kill();
+}
+
+/**
+ * CLI 를 한 번 돌린다. stdin 은 닫힌 채(codex 는 파이프면 기다린다), 시간이 지나면 죽인다.
+ *
+ * 이 함수는 어떤 경우에도 반드시 답을 돌려준다. 예전에는 'close' 에서만 끝냈는데, 'close' 는 파이프가 모두
+ * 닫혀야 오므로 (a) 죽인 프로세스의 자식이 그 파이프를 물려받아 살아 있거나 (b) CLI 가 종료 신호를 무시하면
+ * 영영 오지 않았다. Windows 의 kill() 은 cmd.exe 하나만 끝내므로 (a) 가 늘 걸릴 수 있는 자리였다.
+ * 그러면 lshed check 가 --timeout 을 지나도 멈춰 있고, check() 의 정리(finally)가 돌지 않아
+ * skills/lshed-check 가 남아 그다음 실행까지 "already exists" 로 막았다.
+ */
+export function ask(cli: string, prompt: string, opts: { cwd: string; timeoutMs: number; graceMs?: number }): Promise<Answer> {
   const c = askCommand(cli, prompt);
+  const graceMs = opts.graceMs ?? PIPE_GRACE_MS;
   return new Promise((resolve) => {
-    let out = "", err = "", timedOut = false;
+    let out = "", err = "", timedOut = false, settled = false, exited = false;
+    let grace: NodeJS.Timeout | undefined;
     const so = { cwd: opts.cwd, env: { ...process.env, ...c.env }, stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"], windowsHide: true };
     // Windows 의 .cmd 래퍼는 셸이 필요하다. args 와 shell 을 함께 주면 Node 24 가 DEP0190 을 찍으므로 한 줄로 만든다.
-    const p = process.platform === "win32" ? spawn(commandLine(c.cmd, c.args), { ...so, shell: true }) : spawn(c.cmd, c.args, so);
-    const t = setTimeout(() => { timedOut = true; p.kill(); }, opts.timeoutMs);
+    const iv = invocation(c.cmd, c.args);
+    const p = spawn(iv.file, iv.args, { ...so, shell: iv.shell });
+
+    const finish = (code: number | null, extraErr = ""): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(t);
+      if (grace) clearTimeout(grace);
+      if (c.json) { try { const j = JSON.parse(out) as { response?: string }; out = j.response ?? out; } catch { /* 그대로 */ } }
+      resolve({ out, err: err + extraErr, code, timedOut });
+    };
+    /** 유예 시간까지만 'close' 를 기다리고, 오지 않으면 남은 것을 끊고 끝낸다 */
+    const settleSoon = (code: number | null): void => {
+      if (settled || grace) return;
+      grace = setTimeout(() => {
+        if (!exited) p.kill("SIGKILL");   // 앞선 kill 을 무시한 프로세스의 마지막 수단. 이미 끝났으면 보내지 않는다 (그 PID 는 남의 것일 수 있다)
+        p.stdout.destroy(); p.stderr.destroy(); p.unref();   // 손자가 쥔 파이프를 놓아 준다 (안 그러면 lshed 가 못 끝난다)
+        finish(code);
+      }, graceMs);
+    };
+
+    const t = setTimeout(() => { timedOut = true; killTree(p); settleSoon(null); }, opts.timeoutMs);
     p.stdout.on("data", (d) => (out += d));
     p.stderr.on("data", (d) => (err += d));
-    p.on("error", (e) => { clearTimeout(t); resolve({ out, err: err + e.message, code: null, timedOut }); });
-    p.on("close", (code) => {
-      clearTimeout(t);
-      if (c.json) { try { const j = JSON.parse(out) as { response?: string }; out = j.response ?? out; } catch { /* 그대로 */ } }
-      resolve({ out, err, code, timedOut });
-    });
+    p.on("error", (e) => finish(null, e.message));
+    p.on("exit", (code) => { exited = true; settleSoon(code); });
+    p.on("close", (code) => finish(code));
   });
 }
 

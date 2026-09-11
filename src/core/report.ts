@@ -3,6 +3,7 @@ import { execFile, spawn } from "node:child_process";
 import type { AgentAdapter } from "../adapters/types.js";
 import { readState } from "../state.js";
 import { loadManifest, type Ctx } from "./context.js";
+import { invocation } from "../shell.js";
 
 export const ISSUES_URL = "https://github.com/LeeSongHeon-LSH/lshed/issues";
 
@@ -65,7 +66,8 @@ export function redact(text: string, home = os.homedir(), platform: NodeJS.Platf
 /** `<bin> --version` 의 첫 줄. 5초 안에 답이 없거나 실행파일이 없으면 undefined. 실패 원인은 보고서에 넣지 않는다. */
 export function toolVersion(bin: string): Promise<string | undefined> {
   return new Promise((resolve) => {
-    execFile(bin, ["--version"], { timeout: 5000, shell: process.platform === "win32", windowsHide: true }, (err, stdout) => {
+    const iv = invocation(bin, ["--version"]);
+    execFile(iv.file, iv.args, { timeout: 5000, shell: iv.shell, windowsHide: true }, (err, stdout) => {
       const line = String(stdout ?? "").split(/\r?\n/).map((l) => l.trim()).find(Boolean);
       resolve(err && !line ? undefined : line);
     });

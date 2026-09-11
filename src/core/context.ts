@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { commandLine } from "../shell.js";
+import { invocation } from "../shell.js";
 import type { Installer } from "../installers/types.js";
 import { gitInstaller } from "../installers/git.js";
 import { parseSource } from "../source.js";
@@ -23,12 +23,11 @@ export interface Ctx {
   ignore?: readonly string[];
 }
 
-/** 기본 exec: 자식 프로세스, stdio 상속. Windows 의 claude.cmd 같은 래퍼는 셸을 거쳐야 찾는다 (한 줄로 만들어 넘긴다, DEP0190). */
+/** 기본 exec: 자식 프로세스, stdio 상속. Windows 의 claude.cmd 같은 래퍼는 셸을 거쳐야 찾는다 (invocation 이 한 줄로 만든다, DEP0190). */
 export function spawnExec(cmd: string, args: string[], cwd?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const p = process.platform === "win32"
-      ? spawn(commandLine(cmd, args), { cwd, stdio: "inherit", shell: true })
-      : spawn(cmd, args, { cwd, stdio: "inherit" });
+    const iv = invocation(cmd, args);
+    const p = spawn(iv.file, iv.args, { cwd, stdio: "inherit", shell: iv.shell });
     p.on("error", reject);
     p.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} exited with ${code}`))));
   });

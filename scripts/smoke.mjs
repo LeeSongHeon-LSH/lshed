@@ -1,6 +1,6 @@
 // 빌드된 CLI 를 임시 디렉터리에서 끝까지 돌려 본다. 실제 ~/.claude 는 건드리지 않는다.
 // 사용: npm run build && npm run smoke   (다른 OS 에서 동작 확인용)
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -166,6 +166,46 @@ spawnSync("git", ["config", "user.email", "smoke@example.com"], { cwd: shed });
 spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "seed"], { cwd: shed });
 r = run(B, ["sync"]);
 check("sync exit 0 (origin 없음)", r.code === 0 && r.out.includes("no origin, pull/push skipped"));
+
+// 패키지의 install: 이 실패해도 부품은 놓이고 상태가 남으며 exit 1 이다 (Windows 5차에서 본 증상).
+// 그리고 그 exit 1 은 출력을 파이프로 받아도 살아 있어야 한다 — 읽는 쪽이 먼저 닫히면 EPIPE 가 나는데,
+// 0.17.2 까지는 그때 process.exit(0) 을 불러 실패가 성공으로 보였다 (`lshed restore --yes | head` 가 exit 0).
+// 다른 검사를 흔들지 않게 창고를 따로 하나 만든다. `exit 3` 은 sh 와 cmd.exe 에서 같은 뜻이다.
+const shed2 = path.join(tmp, "shed2"), E = path.join(tmp, "E"), F = path.join(tmp, "F");
+const pkgUp = path.join(tmp, "pkg-upstream");
+await w(path.join(pkgUp, "README.md"), "pkg\n");
+for (const a of [["init", "-q", "-b", "main"], ["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "v1"]]) spawnSync("git", a, { cwd: pkgUp });
+await w(path.join(shed2, "skills/alpha/SKILL.md"), "alpha\n");
+await w(path.join(shed2, "lshed.yaml"), [
+  "version: 1", "agent: claude-code",
+  "components:", "  skills:", "    - id: alpha",
+  "packages:", "  - id: toolkit", `    source: "git:${pkgUp.replace(/\\/g, "/")}"`, "    into: pkgs/toolkit", '    install: "exit 3"',
+  "profiles:", "  default:", "    skills: [alpha]", "    packages: [toolkit]", "",
+].join("\n"));
+const argvFor = (root, args) => ["--root", root, "--shed", shed2, ...args];
+function run2(root, args) {
+  const argv = argvFor(root, args);
+  const rr = bin ? spawnSync(bin, argv, { encoding: "utf8" }) : spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8" });
+  const out = (rr.stdout + rr.stderr).trim();
+  console.log(`\n$ lshed ${args.join(" ")}   (root=${path.basename(root)}, shed2)\n${out.replace(/^/gm, "  ")}`);
+  return { code: rr.status, out, stdout: rr.stdout, stderr: rr.stderr };
+}
+/** 읽는 쪽이 첫 줄만 받고 닫아 버린다 (`| head` 와 같은 상황). 종료 코드만 본다. */
+function runClosingStdout(root, args) {
+  const argv = argvFor(root, args);
+  return new Promise((resolve) => {
+    const p = bin ? spawn(bin, argv, { stdio: ["ignore", "pipe", "pipe"] }) : spawn(process.execPath, [cli, ...argv], { stdio: ["ignore", "pipe", "pipe"] });
+    p.stdout.once("data", () => p.stdout.destroy());
+    p.stderr.resume();
+    p.on("close", (code) => resolve(code));
+  });
+}
+r = run2(E, ["restore", "default", "--yes"]);
+check("install 실패: 부품은 놓이고 상태가 남는다", await there(path.join(E, "skills/alpha/SKILL.md")) && await there(path.join(E, "lshed/state.json")));
+check("install 실패: 끝에 모아 알리고 exit 1", r.code === 1 && r.out.includes("1 install command failed"));
+const piped = await runClosingStdout(F, ["restore", "default", "--yes"]);
+check("읽는 쪽이 먼저 닫혀도 (EPIPE) 실패는 실패로 남는다: exit 1", piped === 1);
+check("EPIPE 여도 복원은 끝까지 간다", await there(path.join(F, "skills/alpha/SKILL.md")));
 
 await fs.rm(tmp, { recursive: true, force: true });
 console.log(`\n${failed ? `✘ ${failed}개 실패` : "✔ 스모크 통과"}  (${process.platform} ${os.release()}, ${bin ? `binary ${path.basename(bin)}` : `node ${process.version}`})`);

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { check, formatCheck, askCommand, askersOf, installed, skillsDirOf, CHECK_PROMPT, type Answer } from "../src/core/check.js";
+import { check, formatCheck, askCommand, askersOf, installed, skillsDirOf, ask, CHECK_PROMPT, type Answer } from "../src/core/check.js";
 import { createAdapter } from "../src/adapters/registry.js";
 
 const tmpHome = () => fs.mkdtemp(path.join(os.tmpdir(), "lshed-check-t-"));
@@ -111,5 +111,41 @@ describe("plumbing", () => {
   it("skillsDirOf: the adapter's skills category, absolute", () => {
     expect(skillsDirOf(createAdapter("claude-code", "/r"))).toBe(path.join("/r", "skills"));
     expect(skillsDirOf(createAdapter("codex", "/h/.codex", "/h"))).toBe(path.join("/h", ".agents", "skills"));
+  });
+});
+
+// ask() 는 'close' 를 기다리는데, 'close' 는 파이프가 모두 닫혀야 온다. 자식이 남기고 간 손자가 그 파이프를
+// 쥐고 있거나 CLI 가 종료 신호를 무시하면 'close' 는 오지 않는다 — Windows 의 kill() 은 cmd.exe 하나만
+// 끝내므로 늘 걸릴 수 있는 자리였다. 멈추면 check() 의 정리도 돌지 않아 다음 실행까지 막힌다.
+describe.skipIf(process.platform === "win32")("ask 는 어떤 경우에도 답을 돌려준다", () => {
+  /** PATH 앞에 놓을 가짜 CLI. 이름은 askersOf 가 아는 것이어야 한다 */
+  async function fakeCli(name: string, body: string): Promise<string> {
+    const d = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-fakecli-"));
+    const f = path.join(d, name);
+    await fs.writeFile(f, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+    return d;
+  }
+  const withPath = async <T>(d: string, fn: () => Promise<T>): Promise<T> => {
+    const old = process.env.PATH;
+    process.env.PATH = `${d}:${old}`;
+    try { return await fn(); } finally { process.env.PATH = old; }
+  };
+
+  it("자식이 끝난 뒤 손자가 파이프를 쥐고 있어도 유예 시간 뒤에 끝난다", async () => {
+    // 손자(sleep)가 stdout 을 물려받은 채 산다 → 'exit' 은 오지만 'close' 는 오지 않는다
+    const d = await fakeCli("codex", 'sleep 30 &\necho "the passphrase"\nexit 0');
+    const t0 = Date.now();
+    const a = await withPath(d, () => ask("codex", "p", { cwd: d, timeoutMs: 60_000, graceMs: 150 }));
+    expect(a.out).toContain("the passphrase");   // 죽기 전에 낸 출력은 잃지 않는다
+    expect(a.timedOut).toBe(false);
+    expect(Date.now() - t0).toBeLessThan(10_000);   // 손자의 30초를 기다리지 않는다
+  });
+
+  it("종료 신호를 무시하는 CLI 도 --timeout 뒤에 끝난다", async () => {
+    const d = await fakeCli("codex", "trap '' TERM\nsleep 30");
+    const t0 = Date.now();
+    const a = await withPath(d, () => ask("codex", "p", { cwd: d, timeoutMs: 200, graceMs: 150 }));
+    expect(a.timedOut).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(10_000);
   });
 });

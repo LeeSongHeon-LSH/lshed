@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.17.5 — 2026-09-11
+## Unreleased
 
 - Windows: an argument holding a `%` is now refused instead of being passed through. `cmd.exe` expands `%VAR%` even inside double quotes and then reads the result again, and there is no way to spell a literal `%` on a command line it parses — so 0.17.3's quoting wrapped it and hoped. Nothing lshed sends that way can legitimately contain one (a package id is letters, digits and `._@-`; the check prompt is fixed), while a shed's plugin source is free text, so refusing costs nothing and closes the last gap in the shell work.
 - `lshed check` clears the temporary folders it could not remove before. On Windows a CLI that leaves a child behind keeps its working directory open for that child's lifetime, so the removal fails at the time and the folder stays; the next check now sweeps any `lshed-check-*` older than an hour out of the temp directory before it starts. The age cut leaves a check that is running right now alone, and the message about a folder that is still held says it will be cleared later rather than asking for it to be removed by hand.

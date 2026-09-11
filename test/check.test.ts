@@ -67,7 +67,7 @@ describe("check", () => {
 describe("formatCheck", () => {
   it("one line per CLI; failures show each attempt, the end of stderr, and point at report", () => {
     const out = formatCheck({
-      agent: "agents", skillsDir: "/home/me/.agents/skills", passphrase: "check-1",
+      agent: "agents", skillsDir: "/home/me/.agents/skills", passphrase: "check-1", leftovers: [],
       results: [
         { cli: "codex", status: "read", attempts: [answer("check-1")] },
         { cli: "gemini", status: "not-installed", attempts: [] },
@@ -84,6 +84,43 @@ describe("formatCheck", () => {
       "      attempt 2: (timed out) I cannot find that skill",
       "    If lshed placed the file where agent should read it, this is worth reporting: lshed report",
     ].join("\n"));
+  });
+
+  // Windows 6차: 죽은 CLI 의 자식이 작업 폴더를 쥐고 있으면 rmdir 가 EBUSY 로 막힌다.
+  // 그 실패가 검사 결과를 덮으면 안 되고, 무엇이 남았는지는 말해 주어야 한다.
+  it("치우지 못한 것은 결과를 덮지 않고 끝에 한 줄로 붙는다", () => {
+    const out = formatCheck({
+      agent: "claude-code", skillsDir: "/home/me/.claude/skills", passphrase: "check-1",
+      results: [{ cli: "claude", status: "not-read", attempts: [answer("", { timedOut: true, code: null })] }],
+      leftovers: ["/tmp/lshed-check-j5Xap3", "/home/me/.claude/skills/lshed-check"],
+    }, (s) => s.replace("/home/me", "~"));
+    expect(out).toContain("      attempt 1: (timed out) (no output)");   // 결과가 살아 있다
+    expect(out).toContain("  ! could not remove /tmp/lshed-check-j5Xap3 — something still has it open. Remove it yourself.");
+    expect(out).toContain("  ! could not remove ~/.claude/skills/lshed-check — something still has it open. The next check will refuse to start until it is gone. Remove it yourself.");
+  });
+});
+
+// 정리가 실패해도 check() 는 결과를 돌려준다. 예전에는 finally 의 rm 이 던져 (timed out) 도 답 발췌도
+// 사라지고 EBUSY 메시지만 남았다 (Windows 6차 검증). 여기서는 상위 폴더의 쓰기 권한을 뺏어 같은 상황을 만든다.
+describe.skipIf(process.platform === "win32" || process.getuid?.() === 0)("정리가 막혀도 결과는 살아 있다", () => {
+  it("지우지 못한 스킬 폴더는 leftovers 로 알리고, 검사 결과는 그대로 돌아온다", async () => {
+    const home = await tmpHome();
+    const adapter = createAdapter("claude-code", path.join(home, ".claude"));
+    const skills = path.join(home, ".claude", "skills");
+    await fs.mkdir(skills, { recursive: true });
+    let r;
+    try {
+      r = await check(adapter, {
+        attempts: 1, passphrase: "check-1", installed: async () => true,
+        ask: async () => { await fs.chmod(skills, 0o500); return answer("nope"); },   // 답한 직후 폴더를 잠근다
+      });
+    } finally {
+      await fs.chmod(skills, 0o700);
+    }
+    expect(r.results[0].status).toBe("not-read");            // 결과가 살아 있다
+    expect(r.leftovers).toEqual([path.join(skills, "lshed-check")]);
+    expect(formatCheck(r)).toContain("The next check will refuse to start until it is gone.");
+    await fs.rm(path.join(skills, "lshed-check"), { recursive: true, force: true });
   });
 });
 

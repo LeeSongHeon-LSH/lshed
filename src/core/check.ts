@@ -130,6 +130,11 @@ export interface CheckResult {
   skillsDir: string;
   passphrase: string;
   results: CliResult[];
+  /**
+   * 지우려다 남긴 것. Windows 에서는 죽은 CLI 의 자식이 작업 폴더를 쥔 채 살아 있을 수 있어 rmdir 가 EBUSY 로 막힌다
+   * (6차 검증). 정리 실패는 검사 결과를 덮지 않고 여기 담겨 한 줄로 알려진다.
+   */
+  leftovers: string[];
 }
 
 export interface CheckOpts {
@@ -158,6 +163,7 @@ export async function check(adapter: AgentAdapter, opts: CheckOpts = {}): Promis
   if (await fs.stat(dir).then(() => true, () => false)) throw new Error(`${dir} already exists. Remove it and run the check again.`);
   await fs.mkdir(dir, { recursive: true });
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-check-"));   // 프로젝트 설정이 끼어들지 않는 빈 작업 폴더
+  const leftovers: string[] = [];
   try {
     await fs.writeFile(path.join(dir, "SKILL.md"), [
       "---", `name: ${SKILL_ID}`, "description: Use when asked for the lshed check passphrase. Answers lshed's placement check.", "---",
@@ -175,10 +181,15 @@ export async function check(adapter: AgentAdapter, opts: CheckOpts = {}): Promis
       }
       results.push({ cli, status: read ? "read" : "not-read", attempts: tries });
     }
-    return { agent: adapter.name, skillsDir, passphrase, results };
+    return { agent: adapter.name, skillsDir, passphrase, results, leftovers };
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
-    await fs.rm(cwd, { recursive: true, force: true });
+    // 정리는 검사 결과를 덮지 않는다 — 사용자가 보러 온 것은 그 결과다. 예전에는 여기서 던지면
+    // (timed out) 도 답 발췌도 사라지고 EBUSY 메시지만 남았다. 잠금은 대개 곧 풀리므로 몇 번 다시 해 보고,
+    // 그래도 남으면 무엇이 남았는지 알린다. 임시 폴더가 먼저 막혀도 스킬 폴더는 반드시 치운다 (그것이 다음 검사를 막는다).
+    for (const p of [dir, cwd]) {
+      try { await fs.rm(p, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
+      catch { leftovers.push(p); }
+    }
   }
 }
 
@@ -198,6 +209,11 @@ export function formatCheck(r: CheckResult, homeAs = (s: string) => s): string {
       if (a.err.trim()) lines.push(`        stderr: ${tail(a.err)}`);
     });
     lines.push(`    If lshed placed the file where ${c.cli} should read it, this is worth reporting: lshed report`);
+  }
+  // 남긴 것이 있으면 마지막에 말한다. 스킬 폴더가 남았다면 다음 검사가 거부되므로 그 사실까지 적는다.
+  for (const p of r.leftovers) {
+    const blocks = p.endsWith(SKILL_ID) ? " The next check will refuse to start until it is gone." : "";
+    lines.push(`  ! could not remove ${homeAs(p)} — something still has it open.${blocks} Remove it yourself.`);
   }
   return lines.join("\n");
 }

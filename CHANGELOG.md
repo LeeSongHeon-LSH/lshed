@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.5 — 2026-09-18
 
 - README reorganized for the reader who wants to use lshed, not for the record of how it was built: install and quick start first, a shorter "Why not just git?", the walkthrough, then a reference section (commands, manifest, kinds, MCP, settings, what `restore` and `sync` do, where things live), trust, troubleshooting. The per-pass verification history, tool versions and what each pass found moved to `docs/VERIFICATION.md`, with a five-row summary table left in the README; adapter internals (which MCP field each tool gets, which Claude Code version a behaviour was checked against) were cut from the README. The Korean README follows the same structure.
 - `lshed check --agent cursor` (and the probe) now pass `--trust` to Cursor's `agent -p`. Without it Cursor prints a "Workspace Trust Required" notice for the temporary folder the question is asked from and gives no answer, so the check reported the skill as not read when the tool had simply not looked. Found on the first Cursor run with a key (agent 2026.09.15): every placement check had passed and every answer was empty.

@@ -17,4 +17,15 @@ describe("ClaudeCodeAdapter.scan (임시 루트 주입)", () => {
     expect(found.map((c) => `${c.category}/${c.id}`).sort()).toEqual(["agents/rev", "skills/a"]);
     await fs.rm(root, { recursive: true });
   });
+
+  it("skills/synced (Claude Code 가 계정 스킬을 내려받는 폴더) 는 스캔하지 않는다", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-"));
+    await fs.mkdir(path.join(root, "skills", "mine"), { recursive: true });
+    await fs.mkdir(path.join(root, "skills", "synced", "org_user", "docx"), { recursive: true });
+    await fs.mkdir(path.join(root, "agents", "synced"), { recursive: true }); // 다른 카테고리의 같은 이름은 평범한 폴더
+    await fs.writeFile(path.join(root, "agents", "synced", "rev.md"), "");
+    const found = await new ClaudeCodeAdapter(root).scan();
+    expect(found.map((c) => `${c.category}/${c.id}`).sort()).toEqual(["agents/synced/rev", "skills/mine"]);
+    await fs.rm(root, { recursive: true });
+  });
 });

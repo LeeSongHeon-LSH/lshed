@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import type { AgentAdapter } from "../adapters/types.js";
 import { adapterNames, createAdapter, DEFAULT_AGENT } from "../adapters/registry.js";
 import { statePath } from "../state.js";
+import { askersOf, installed } from "./check.js";
 
 export interface AgentHere { name: string; root: string; exists: boolean; hasState: boolean }
 
@@ -34,4 +35,17 @@ export function missingRootMessage(agent: AgentHere, list: AgentHere[]): string 
     ? `Found here: ${others.map((a) => `${a.name} (${a.root})`).join(", ")}.  Try: lshed init --agent ${others[0].name}`
     : `Pass --agent <${adapterNames().join("|")}> for the tool you use, or --root <dir> for its config folder.`;
   return `${agent.name}'s config root does not exist: ${agent.root}\n  ${hint}`;
+}
+
+/**
+ * `--agent installed`: 이 기기의 PATH 에 CLI 가 있는 에이전트 전부 (등록 순서). 컨테이너·dotfiles 부트스트랩이
+ * 에이전트 목록을 자기 손으로 들고 있지 않게. `agents` 는 폴더 규약이라 CLI 가 없고, Codex 가 그 폴더를 채우므로 빠진다.
+ */
+export async function installedAgents(isInstalled: (cli: string) => Promise<boolean> = (c) => installed(c)): Promise<string[]> {
+  const out: string[] = [];
+  for (const name of adapterNames()) {
+    if (name === "agents") continue;
+    for (const cli of askersOf(name)) if (await isInstalled(cli)) { out.push(name); break; }
+  }
+  return out;
 }

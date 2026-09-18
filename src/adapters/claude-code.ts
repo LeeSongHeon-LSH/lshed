@@ -7,6 +7,13 @@ import { JsonEntries } from "./json-entries.js";
 import { exists } from "../fsutil.js";
 import { expandHome } from "../core/entries.js";
 
+/**
+ * 카테고리 루트 바로 아래에서 Claude Code 자신이 만들고 관리하는 폴더. 스캔에서 뺀다.
+ * `skills/synced` 는 claude.ai 계정에서 동기화한 스킬이 `<org>_<user>` 버킷으로 내려오는 곳이다(2.1.x, `claude -p` 한 번에도 생긴다).
+ * 담으면 계정 스킬 사본이 창고에 들어가고, 안 담으면 `status` 가 매 기기에서 `outside 1: skills/synced` 를 낸다 — 둘 다 틀리다.
+ */
+const AGENT_OWNED: Readonly<Record<string, readonly string[]>> = { skills: ["synced"] };
+
 const CATEGORIES: readonly Category[] = [
   { name: "skills", root: "skills", kind: "dir" },
   { name: "agents", root: "agents", kind: "file" },
@@ -97,6 +104,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const e of entries) {
       if (e.name.startsWith(".")) continue;
+      if (!rel && AGENT_OWNED[cat.name]?.includes(e.name)) continue; // 에이전트가 관리하는 폴더 (예: skills/synced)
       const full = path.join(dir, e.name);
       // 매니페스트에 들어가는 id 는 NFC 로 고정한다. macOS 가 NFD 로 돌려준 이름을 그대로 적으면 Linux 창고에서 다른 이름이 된다.
       const id = (rel ? `${rel}/${e.name}` : e.name).normalize("NFC");

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { agentsHere, agentByState, missingRootMessage, type AgentHere } from "../src/core/detect.js";
+import { agentsHere, agentByState, missingRootMessage, installedAgents, type AgentHere } from "../src/core/detect.js";
 import { createAdapter } from "../src/adapters/registry.js";
 import { writeState } from "../src/state.js";
 
@@ -47,5 +47,15 @@ describe("missingRootMessage", () => {
   });
   it("with nothing found, lists the agent names", () => {
     expect(missingRootMessage(mk("codex", false), [mk("codex", false)])).toContain("--agent <claude-code|codex|gemini|copilot|cursor|agy|agents>");
+  });
+});
+
+describe("installedAgents (--agent installed)", () => {
+  it("names the agents whose CLI is on PATH, never the folder-only 'agents' target", async () => {
+    const have = new Set(["codex", "agy", "agent"]);   // agent = Cursor's CLI
+    expect(await installedAgents(async (cli) => have.has(cli))).toEqual(["codex", "cursor", "agy"]);
+  });
+  it("nothing installed → empty list", async () => {
+    expect(await installedAgents(async () => false)).toEqual([]);
   });
 });

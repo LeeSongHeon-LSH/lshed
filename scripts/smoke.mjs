@@ -122,6 +122,21 @@ r = run(D, ["--agent", "codex", "status"]);
 check("codex: 자기 state", r.out.includes("codex:") && r.out.includes("drift      none"));
 check("B 의 state 는 그대로", JSON.parse(await fs.readFile(path.join(B, "lshed/state.json"), "utf8")).profile === "minimal");
 
+// --fresh-only: 이미 복원된 루트는 그대로 두고 exit 0, 아직 없는 루트에만 적용 (컨테이너 시작마다 도는 부트스트랩용)
+const stD = JSON.parse(await fs.readFile(path.join(D, "lshed/state.json"), "utf8"));
+r = run(D, ["--agent", "codex", "restore", "default", "--fresh-only"]);
+check("--fresh-only: 적용된 기기는 건너뜀 (appliedAt 불변, exit 0)", r.code === 0 && r.out.includes("already applied") && JSON.parse(await fs.readFile(path.join(D, "lshed/state.json"), "utf8")).appliedAt === stD.appliedAt);
+const FR = path.join(tmp, "FR");
+r = run(FR, ["--agent", "codex", "restore", "default", "--fresh-only"]);
+check("--fresh-only: 새 루트에는 적용", r.code === 0 && (await there(path.join(FR, "lshed/state.json"))) && (await there(path.join(FR, "AGENTS.md"))));
+// --agent installed: PATH 에 에이전트 CLI 가 하나도 없으면 안내하고 exit 1 (--root 없이, PATH 를 빈 폴더로)
+{
+  const argv = ["--shed", shed, "--agent", "installed", "restore", "default"], env = { ...process.env, PATH: tmp, Path: tmp };
+  const rr = bin ? spawnSync(bin, argv, { encoding: "utf8", env }) : spawnSync(process.execPath, [cli, ...argv], { encoding: "utf8", env });
+  const out = (rr.stdout + rr.stderr);
+  check("--agent installed: CLI 없으면 exit 1 + 안내", rr.status === 1 && out.includes("No agent CLI found on PATH"));
+}
+
 // report: 어느 OS 에서든 exit 0, 홈 경로는 어느 구분자로도 남지 않고, 창고의 이름만 나온다 (값은 없음)
 r = run(B, ["report"]);
 const home = os.homedir(), homeFwd = home.replace(/\\/g, "/");

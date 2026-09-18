@@ -6,7 +6,7 @@ import { createAdapter, adapterNames, DEFAULT_AGENT } from "./adapters/registry.
 import type { AgentAdapter } from "./adapters/types.js";
 import { spawnExec, manifestAgent, installablePackages, schemeOf, MANIFEST_FILE, type Ctx } from "./core/context.js";
 import { init } from "./core/init.js";
-import { restore } from "./core/restore.js";
+import { restore, type RestoreResult } from "./core/restore.js";
 import { pick, type Prompter } from "./core/pick.js";
 import * as clack from "@clack/prompts";
 import { status, formatStatus } from "./core/status.js";
@@ -21,7 +21,7 @@ import { add } from "./core/add.js";
 import { sync } from "./core/sync.js";
 import { collectReport, formatReport, issueUrl, openUrl, redact, ISSUES_URL } from "./core/report.js";
 import { check, formatCheck } from "./core/check.js";
-import { agentsHere, agentByState, missingRootMessage } from "./core/detect.js";
+import { agentsHere, agentByState, missingRootMessage, installedAgents } from "./core/detect.js";
 
 /** 빌드 시점에 tsup 이 박는다 (tsup.config.ts). 실행파일 안에는 package.json 이 없다. */
 declare const __LSHED_VERSION__: string;
@@ -39,7 +39,7 @@ const program = new Command()
   .description("Keep your coding-agent harness (skills, agents, commands, instructions) in a shed and restore it anywhere by profile.")
   .version(version)
   .option("--shed <dir>", "shed directory (default: $LSHED_HOME, then the shed recorded by the last restore)")
-  .option("--agent <name>", `which agent to place into: ${adapterNames().join(", ")} (default: $LSHED_AGENT, then the shed's agent, then ${DEFAULT_AGENT})`)
+  .option("--agent <name>", `which agent to place into: ${adapterNames().join(", ")} (default: $LSHED_AGENT, then the shed's agent, then ${DEFAULT_AGENT}); for restore, "installed" means every agent whose CLI is on PATH`)
   .option("--root <dir>", "agent config root (default: the agent's own, e.g. ~/.claude or ~/.codex)");
 
 /**
@@ -158,20 +158,47 @@ program
   .option("--dry-run", "print what would change without touching anything")
   .option("--no-backup", "skip backing up files that get replaced or removed")
   .option("--yes", "run packages' install: shell commands (without this they are only shown; getting the packages themselves is not gated by --yes, and --dry-run runs nothing at all)")
-  .action((profile: string | undefined, o: { pick?: boolean; link?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean }) => run(async () => {
-    const ctx = await ctxFor("other");
-    const tty = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-    const firstTime = !profile && !(await readState(ctx.adapter));
-    if (o.pick || (firstTime && tty)) {
-      if (!tty) throw new Error("--pick needs an interactive terminal. Name the profile instead: lshed restore <profile>");
-      if (firstTime && !o.pick) console.log("No profile applied yet, so opening the picker. To apply one directly: lshed restore <profile>\n");
-      const picked = await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
-      exitIfFailed(picked?.restored);
-      return;
+  .option("--fresh-only", "only where nothing has been applied yet: a root that already has lshed state is left as it is (exit 0). For a bootstrap that runs on every start of a container or shell")
+  .action((profile: string | undefined, o: RestoreFlags) => run(async () => {
+    const { agent, root, shed } = program.opts<{ agent?: string; root?: string; shed?: string }>();
+    if (agent !== "installed") { exitIfFailed(await restoreOne(await ctxFor("other"), profile, o, true)); return; }
+    // --agent installed: 이 기기에 CLI 가 있는 에이전트 전부, 차례로. 상태가 아직 없는 기기가 대상이므로 창고는 밖에서 받아야 한다.
+    if (o.pick) throw new Error("--pick works on one agent at a time. Name it: --agent <name>");
+    if (root) throw new Error("--root names one agent's folder, so it cannot go with --agent installed. Name the agent: --agent <name> --root <dir>");
+    const shedDir = shed ?? process.env.LSHED_HOME;
+    if (!shedDir) throw new Error("--agent installed needs the shed: pass --shed <dir> or set LSHED_HOME.");
+    const names = await installedAgents();
+    if (!names.length) throw new Error(`No agent CLI found on PATH (looked for ${adapterNames().filter((n) => n !== "agents").join(", ")}). Name the agent instead: --agent <name>`);
+    console.log(`Agents with a CLI here: ${names.join(", ")}`);
+    let failed = false;
+    for (const name of names) {
+      console.log(`\n── ${name} ──`);
+      const ctx: Ctx = { adapter: createAdapter(name), shed: path.resolve(shedDir), log: (l) => console.log(l), exec: spawnExec };
+      const res = await restoreOne(ctx, profile, o, false);
+      if (res && (res.failedInstalls.length || res.failedPackages.length)) failed = true;
     }
-    const res = await restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
-    exitIfFailed(res);
+    if (failed) process.exitCode = 1;
   }));
+
+interface RestoreFlags { pick?: boolean; link?: boolean; dryRun?: boolean; backup: boolean; yes?: boolean; freshOnly?: boolean }
+
+/** 한 에이전트에 restore 를 적용한다. --fresh-only 로 건너뛰면 undefined, 피커를 열었으면 그 결과(취소는 undefined). */
+async function restoreOne(ctx: Ctx, profile: string | undefined, o: RestoreFlags, allowPick: boolean): Promise<RestoreResult | undefined> {
+  const state = await readState(ctx.adapter);
+  if (o.freshOnly && state) {
+    console.log(`${ctx.adapter.name}: profile "${state.profile}" is already applied here (${state.appliedAt}); --fresh-only leaves it alone. To reapply: lshed restore${profile ? ` ${profile}` : ""} --agent ${ctx.adapter.name}`);
+    return undefined;
+  }
+  const tty = allowPick && Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const firstTime = !profile && !state;
+  if (o.pick || (firstTime && tty)) {
+    if (!tty) throw new Error("--pick needs an interactive terminal. Name the profile instead: lshed restore <profile>");
+    if (firstTime && !o.pick) console.log("No profile applied yet, so opening the picker. To apply one directly: lshed restore <profile>\n");
+    const picked = await pick(ctx, terminalPrompter(), { base: profile, dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
+    return picked?.restored ?? undefined;
+  }
+  return restore(ctx, profile, { dryRun: o.dryRun, backup: o.backup, yes: o.yes, link: o.link });
+}
 
 program
   .command("update [ids...]")

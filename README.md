@@ -176,6 +176,25 @@ Some entries need environment variables that are not set. Secrets never go in th
 
 Two things need you afterwards. Package `install:` commands are shell commands from a repository you cloned, so `restore` shows them and stops; run them yourself or rerun with `--yes`. A command that fails under `--yes` does not stop the restore: the parts are still placed, the failure is listed at the end, and `restore` exits 1. MCP servers reference secrets as `${VAR}`; export the variables in your shell and Claude Code fills them in. From then on `lshed restore` with no arguments reapplies the last profile, and the shed location is remembered.
 
+For a bootstrap that runs on every start — a container entrypoint, a dotfiles `install.sh` — two flags keep it to one line. `--fresh-only` does nothing on a root that already has lshed state (exit 0, one line saying so), and `--agent installed` restores into every agent whose CLI is on `PATH`, one after another, each with its own state:
+
+```
+lshed restore default --shed ~/lshed --agent installed --fresh-only
+```
+
+```
+Agents with a CLI here: claude-code, codex, agy
+
+── claude-code ──
+  + package gstack  (clone https://github.com/garrytan/gstack.git @main → c8f0c4e)
+  …
+── codex ──
+  · codex does not handle settings, skipped
+  …
+```
+
+`installed` looks for `claude`, `codex`, `gemini`, `copilot`, `agent` (Cursor) and `agy`; the folder-only `agents` target is left out because Codex fills `~/.agents/skills` already. A fresh machine has no state to remember the shed from, so `--shed` or `LSHED_HOME` is required, and `installed` does not go with `--pick` or `--root`. The run exits 1 if any agent's restore did (a failed `install:` or package), after every agent has been tried.
+
 ### Picking instead of naming a profile
 
 You do not have to know the profile names, or edit `lshed.yaml`, to set up a machine. `restore --pick` walks the shed one category at a time and asks what this machine should get:
@@ -475,7 +494,7 @@ $ lshed add
 ```
 lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
 lshed add [keys...] [--all]                     put things that appeared since init into the shed
-lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes]   (--agent <name> to target another tool)
+lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes] [--fresh-only]   (--agent <name> to target another tool; --agent installed for every tool with a CLI here)
 lshed status                                    applied profile, drift, packages, missing env, new things
 lshed diff                                      files (or JSON keys) that differ between local and shed
 lshed save [ids...]                             copy local edits back into the shed

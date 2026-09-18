@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        The README's "What has been verified" section lists only what the author could run. Each report here adds a row: a tool version, an OS, an lshed version, and what you actually exercised. Korean is fine.
+        The verification record ([docs/VERIFICATION.md](https://github.com/LeeSongHeon-LSH/lshed/blob/main/docs/VERIFICATION.md), summarized in the README) lists only what the author could run. Each report here adds a row: a tool version, an OS, an lshed version, and what you actually exercised. Korean is fine.
   - type: dropdown
     id: agent
     attributes:

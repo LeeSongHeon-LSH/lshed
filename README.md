@@ -9,39 +9,9 @@ lshed init --shed ~/lshed          # scan ~/.claude into a shed + write lshed.ya
 lshed restore research             # apply a profile anywhere
 ```
 
-The shed is a plain directory. Put it in a git repo, Dropbox, whatever. `lshed sync` wraps the git part if you want it to. Works with Claude Code, and places the same shed into Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity and the shared `~/.agents/skills`.
+The shed is a plain directory. Put it in a git repo, Dropbox, whatever; `lshed sync` wraps the git part if you want it to. Works with Claude Code, and places the same shed into Codex, Gemini CLI, Copilot CLI, Cursor, Google Antigravity and the shared `~/.agents/skills`.
 
-## Why
-
-Every new laptop, server, container or WSL box means setting up `~/.claude` again. The obvious fix is to put `~/.claude` itself in git, and for many people that is the right answer.
-
-**When a plain git repository is enough.** You are one person, every machine gets the same setup, and everything in `~/.claude` is yours. Then make `~/.claude` itself a git repository and you should not install lshed. Git does the moving; the `.gitignore` only keeps machine state (sessions, caches) out of it:
-
-```
-cd ~/.claude && git init
-printf 'projects/\ncache/\nsessions/\nshell-snapshots/\nhistory.jsonl\n*.bak*\n' > .gitignore
-git add skills agents commands CLAUDE.md settings.json .gitignore && git commit -m init
-```
-
-No new concepts, no copy step: the directory you edit is the repository. `git push` here and `git clone <remote> ~/.claude` on the next machine is the whole restore.
-
-**Where that stops working.** The repository above starts to hurt as soon as `~/.claude` is not just yours:
-
-- **Toolkits you installed.** One cloned toolkit here is 1.6 GB and generated 53 alias skills next to the 4 you wrote. Raw git commits all of it, or you maintain the ignore list by hand.
-- **Secrets inside one JSON file.** MCP servers and their tokens live in `~/.claude.json` together with unrelated state. File-level ignore cannot split them, so you either commit tokens or leave MCP out.
-- **A machine that already has a setup.** `git clone` into a non-empty `~/.claude` is a merge you do by hand, and nothing tracks which files came from the repo and which were already there.
-- **Different subsets per machine.** A headless server wants no browser toolkit and no MCP. Branches or templates can fake this, but nothing removes the parts you no longer want when you switch.
-- **Choosing on the machine itself.** `git clone` is all or nothing. On a new box you want to look at what the shed has, category by category, and tick what this machine needs.
-
-lshed exists for those five cases. It keeps the shed as a plain directory in git, and adds three ideas on top:
-
-| Idea | What it gives you |
-|---|---|
-| **Components** | every skill / agent / command / instruction fragment / MCP server / settings key is one named part; toolkits you installed are recorded as a source and version, not copied. |
-| **Profiles** | named recipes — `research`, `work`, `minimal` — that pick a subset of parts; write them in `lshed.yaml`, or let `restore --pick` build one from a checklist. |
-| **Managed set** | lshed remembers what it placed, so switching profiles or restoring onto an existing machine removes only its own files and never touches yours. |
-
-The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed (or use `restore --link` on machines where you edit a lot, and skip the copy step), and lshed has to know each agent's layout, which the plain repository does not. If none of the five cases applies to you, the plain repository wins.
+**Contents:** [Install](#install) · [Quick start](#quick-start) · [Why not just git?](#why-not-just-git) · [How to use it](#how-to-use-it) · [Reference](#reference) · [Trust](#trust) · [Troubleshooting](#troubleshooting) · [What has been verified](#what-has-been-verified)
 
 ## Install
 
@@ -80,7 +50,35 @@ lshed restore --pick --shed ~/lshed         # or tick what this machine gets, ca
 lshed check                                 # optional: ask the agent whether it reads what was placed
 ```
 
-If the other machine runs a different agent, add `--agent` to `restore` there; skills, the instructions file and MCP servers carry over, the rest is announced and skipped ([details](#other-agents-same-shed)).
+If the other machine runs a different agent, add `--agent` to `restore` there; skills, the instructions file and MCP servers carry over, the rest is announced and skipped ([details](#other-agents-same-shed)). For a container or a dotfiles script that runs on every start, see [a new machine](#a-new-machine).
+
+## Why not just git?
+
+If you are one person, every machine gets the same setup, and everything in `~/.claude` is yours, make `~/.claude` itself a git repository and skip lshed:
+
+```
+cd ~/.claude && git init
+printf 'projects/\ncache/\nsessions/\nshell-snapshots/\nhistory.jsonl\n*.bak*\n' > .gitignore
+git add skills agents commands CLAUDE.md settings.json .gitignore && git commit -m init
+```
+
+That stops working as soon as `~/.claude` is not just yours:
+
+- **Toolkits you installed** — one cloned toolkit here is 1.6 GB and generated 53 alias skills next to the 4 you wrote. Raw git commits all of it, or you maintain the ignore list by hand.
+- **Secrets inside one JSON file** — MCP servers and their tokens live in `~/.claude.json` together with unrelated state. You either commit tokens or leave MCP out.
+- **A machine that already has a setup** — `git clone` into a non-empty `~/.claude` is a merge you do by hand, and nothing tracks which files came from the repo.
+- **Different subsets per machine** — a headless server wants no browser toolkit and no MCP, and nothing removes the parts you no longer want when you switch.
+- **Choosing on the machine itself** — `git clone` is all or nothing.
+
+lshed keeps the shed as a plain directory in git and adds three ideas:
+
+| Idea | What it gives you |
+|---|---|
+| **Components** | every skill / agent / command / instruction fragment / MCP server / settings key is one named part; toolkits you installed are recorded as a source and version, not copied. |
+| **Profiles** | named recipes — `research`, `work`, `minimal` — that pick a subset of parts; write them in `lshed.yaml`, or let `restore --pick` build one from a checklist. |
+| **Managed set** | lshed remembers what it placed, so switching profiles or restoring onto an existing machine removes only its own files and never touches yours. |
+
+The trade: you edit in `~/.claude` and run `lshed save` to copy changes into the shed (or use `restore --link` where you edit a lot and skip the copy step).
 
 ## How to use it
 
@@ -114,7 +112,7 @@ lshed sync
 
 ### The loop: edit, save, sync
 
-You edit skills where the agent reads them, in its own folder (`~/.claude`, `~/.codex`, `~/.gemini`, …). The shed does not change by itself.
+You edit skills where the agent reads them, in its own folder. The shed does not change by itself.
 
 ```
 lshed status          # what profile is applied, what drifted, what is new
@@ -123,7 +121,7 @@ lshed save            # copy local edits into the shed (or: lshed save skills/ad
 lshed sync            # commit the shed, pull, push
 ```
 
-None of these need `--agent`: on a machine where only one agent has lshed state, they find it; where several do, they ask you to say which. `save` is the only path from the agent folder to the shed, and it only works for parts the shed owns (`file:` sources). `sync` warns if you have unsaved edits so you do not push a shed that is behind your machine.
+None of these need `--agent`: on a machine where only one agent has lshed state, they find it; where several do, they ask you to say which. `save` is the only path from the agent folder to the shed, and it only works for parts the shed owns. `sync` warns if you have unsaved edits so you do not push a shed that is behind your machine.
 
 ### A machine that already has a setup
 
@@ -146,7 +144,7 @@ lshed add windows-only mcp/my-local-server
 lshed sync
 ```
 
-Do not run `init` on such a machine just to look around. `init` claims what it finds as lshed-managed, so a later `restore` from your real shed would treat those parts as removable (backed up, but removed). Use `lshed scan`, which only prints. If you do it anyway, `restore` warns you before removing anything and `lshed add` is the way out.
+Do not run `init` on such a machine just to look around: `init` claims what it finds as lshed-managed, so a later `restore` from your real shed would treat those parts as removable (backed up, but removed). Use `lshed scan`, which only prints.
 
 ### A new machine
 
@@ -174,9 +172,9 @@ Some entries need environment variables that are not set. Secrets never go in th
   mcp:notion: NOTION_AUTHORIZATION
 ```
 
-Two things need you afterwards. Package `install:` commands are shell commands from a repository you cloned, so `restore` shows them and stops; run them yourself or rerun with `--yes`. A command that fails under `--yes` does not stop the restore: the parts are still placed, the failure is listed at the end, and `restore` exits 1. MCP servers reference secrets as `${VAR}`; export the variables in your shell and Claude Code fills them in. From then on `lshed restore` with no arguments reapplies the last profile, and the shed location is remembered.
+Two things need you afterwards. Package `install:` commands are shell commands from a repository you cloned, so `restore` shows them and stops; run them yourself or rerun with `--yes` (a command that fails under `--yes` does not stop the restore: the parts are placed, the failure is listed at the end, and `restore` exits 1). MCP servers reference secrets as `${VAR}`; export the variables in your shell and the agent fills them in. From then on `lshed restore` with no arguments reapplies the last profile, and the shed location is remembered.
 
-For a bootstrap that runs on every start — a container entrypoint, a dotfiles `install.sh` — two flags keep it to one line. `--fresh-only` does nothing on a root that already has lshed state (exit 0, one line saying so), and `--agent installed` restores into every agent whose CLI is on `PATH`, one after another, each with its own state:
+**Containers and dotfiles scripts.** For a bootstrap that runs on every start, two flags keep it to one line. `--fresh-only` does nothing on a root that already has lshed state (exit 0, one line saying so), and `--agent installed` restores into every agent whose CLI is on `PATH`, one after another, each with its own state:
 
 ```
 lshed restore default --shed ~/lshed --agent installed --fresh-only
@@ -193,7 +191,7 @@ Agents with a CLI here: claude-code, codex, agy
   …
 ```
 
-`installed` looks for `claude`, `codex`, `gemini`, `copilot`, `agent` (Cursor) and `agy`; the folder-only `agents` target is left out because Codex fills `~/.agents/skills` already. A fresh machine has no state to remember the shed from, so `--shed` or `LSHED_HOME` is required, and `installed` does not go with `--pick` or `--root`. The run exits 1 if any agent's restore did (a failed `install:` or package), after every agent has been tried.
+`installed` looks for `claude`, `codex`, `gemini`, `copilot`, `agent` (Cursor) and `agy`; the folder-only `agents` target is left out because Codex fills `~/.agents/skills` already. A fresh machine has no state to remember the shed from, so `--shed` or `LSHED_HOME` is required, and `installed` does not go with `--pick` or `--root`. The run exits 1 if any agent's restore did, after every agent has been tried. A devcontainer that does exactly this — image with the agents and lshed, shed mounted at `/shed`, this command in the entrypoint — is at [agent-box](https://github.com/LeeSongHeon-LSH/agent-box).
 
 ### Picking instead of naming a profile
 
@@ -229,9 +227,9 @@ Profile "lab-box" saved to lshed.yaml. To use it on other machines, push it with
 Profile "lab-box" applied: placed 4, removed 0, installed 1 package
 ```
 
-Categories the shed has nothing in (here `agents`, `commands`, `settings`) are skipped, not shown empty. The choice is always saved as a profile, named after the machine unless you type another name: that is what makes the next bare `lshed restore` reapply it, and what `lshed sync` carries to your other machines. If the shed already has a profile with that name, lshed asks before overwriting it.
+Categories the shed has nothing in are skipped, not shown empty. The choice is always saved as a profile, named after the machine unless you type another name: that is what makes the next bare `lshed restore` reapply it, and what `lshed sync` carries to your other machines. If the shed already has a profile with that name, lshed asks before overwriting it.
 
-`lshed restore default --pick` starts with `default`'s parts checked, so you can trim a profile for this machine instead of starting from nothing. With no argument the last applied profile is the starting point. `--dry-run` shows the plan and writes neither `lshed.yaml` nor `~/.claude`. Ctrl+C at any screen leaves everything untouched. On a machine with no applied profile, a bare `lshed restore --shed ~/lshed` in a terminal opens the picker by itself. In a script or a pipe it asks for a profile name instead.
+`lshed restore default --pick` starts with `default`'s parts checked, so you can trim a profile for this machine instead of starting from nothing. `--dry-run` shows the plan and writes neither `lshed.yaml` nor the agent folder. Ctrl+C at any screen leaves everything untouched. On a machine with no applied profile, a bare `lshed restore --shed ~/lshed` in a terminal opens the picker by itself; in a script or a pipe it asks for a profile name instead.
 
 ### Profiles
 
@@ -259,7 +257,7 @@ lshed restore server
   + lshed/instructions/server-rules.md
 ```
 
-Switching removes only what the previous profile placed (`-`), keeps what both use (`=`), and rewrites what changed (`~`). Everything removed or overwritten goes to `~/.claude/lshed/backups/<timestamp>/` first. Packages are additive: a profile that does not list `gstack` leaves the clone alone. `--dry-run` prints this plan without touching anything. Instructions fragments are ordered. `restore` writes a `CLAUDE.md` that `@`-imports each fragment, so editing a fragment in the shed shows up on the next `restore` and there is nothing to merge.
+Switching removes only what the previous profile placed (`-`), keeps what both use (`=`), and rewrites what changed (`~`). Everything removed or overwritten goes to `~/.claude/lshed/backups/<timestamp>/` first. Packages are additive: a profile that does not list `gstack` leaves the clone alone. Instructions fragments are ordered; `restore` writes a `CLAUDE.md` that `@`-imports each fragment, so editing a fragment in the shed shows up on the next `restore` and there is nothing to merge.
 
 A profile can build on another one with `extends`, so a machine-specific profile lists only what is different:
 
@@ -277,17 +275,17 @@ profiles:
     instructions: [lab-rules]   # comes after default's `main`
 ```
 
-Inheritance only adds. The parent's parts come first, then the profile's own, and instructions keep that order in the generated `CLAUDE.md`. To get *less* than the parent, do not extend it; list what you want. A missing parent or a cycle is reported as a `lshed.yaml` error before anything is touched, and `lshed list` counts a part as used by every profile that inherits it.
+Inheritance only adds. The parent's parts come first, then the profile's own. To get *less* than the parent, do not extend it; list what you want. A missing parent or a cycle is reported as a `lshed.yaml` error before anything is touched.
 
-Three things are easy to confuse. They are separate on purpose:
+Three things are easy to confuse, and they are separate on purpose:
 
-- **Stop using a part, keep it** — leave its id out of the profile. `restore` takes it off this machine (backed up); the part stays in the shed, another profile still uses it, and putting the id back and restoring brings it back. This is the reversible, everyday "remove", and nothing has to leave the shed for it.
-- **A smaller inherited set** — `extends` only adds, so you cannot inherit a profile and drop one part from it. List the smaller set outright, or split a shared base out and extend that. This is the only sense in which there is "no subtraction".
-- **Delete a part from the shed** — `lshed remove <id>` (it refuses while any profile still lists the part, so take it out of profiles first) or `lshed prune` for whatever no profile uses. This is the permanent one, and the only one that removes the file from the shed.
+- **Stop using a part, keep it** — leave its id out of the profile. `restore` takes it off this machine (backed up); the part stays in the shed and comes back when you list it again. This is the everyday, reversible "remove".
+- **A smaller inherited set** — `extends` only adds, so you cannot inherit a profile and drop one part from it. List the smaller set outright, or split a shared base out and extend that.
+- **Delete a part from the shed** — `lshed remove <id>` (refused while any profile still lists it) or `lshed prune` for whatever no profile uses. This is the permanent one.
 
 ### Other agents, same shed
 
-Codex, Gemini CLI, Copilot CLI, Cursor and Google Antigravity (`agy`) all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and all but Antigravity also read the shared `~/.agents/skills/`. So one shed can serve them all. Pick the target with `--agent`. For Codex, skills go to `~/.agents/skills` because that is the location Codex documents, so use either `--agent codex` or `--agent agents` for skills on one machine, not both:
+Codex, Gemini CLI, Copilot CLI, Cursor and Google Antigravity (`agy`) all read skills from `<their config dir>/skills/<name>/SKILL.md`, the same layout Claude Code uses, and most also read the shared `~/.agents/skills/`. So one shed serves them all; pick the target with `--agent`. For Codex, skills go to `~/.agents/skills` because that is the location Codex documents, so use either `--agent codex` or `--agent agents` for skills on one machine, not both:
 
 ```
 lshed restore --agent agents            # ~/.agents/skills: every tool that follows the convention reads it
@@ -299,20 +297,20 @@ lshed restore --agent agy               # ~/.gemini/config/skills + ~/.gemini/AG
 | `--agent` | root | skills | instructions file | MCP servers |
 |---|---|---|---|---|
 | `claude-code` (default) | `~/.claude` or `$CLAUDE_CONFIG_DIR` | yes, plus agents, commands, settings | `CLAUDE.md`, `@`-imports fragments | `~/.claude.json` |
-| `codex` | `~/.codex` or `$CODEX_HOME` | yes, in `~/.agents/skills` (Codex's documented location; `~/.codex/skills` is deprecated) | `AGENTS.md`, fragments concatenated | `config.toml` `[mcp_servers.*]` |
+| `codex` | `~/.codex` or `$CODEX_HOME` | yes, in `~/.agents/skills` | `AGENTS.md`, fragments concatenated | `config.toml` `[mcp_servers.*]` |
 | `gemini` | `~/.gemini` | yes | `GEMINI.md`, concatenated | `settings.json` |
 | `copilot` | `~/.copilot` or `$COPILOT_HOME` | yes | `copilot-instructions.md`, concatenated | `mcp-config.json` |
 | `cursor` | `~/.cursor` | yes | none (Cursor's user rules live in its settings UI) | `mcp.json` |
-| `agy` | `~/.gemini/config` | yes | `../AGENTS.md`, concatenated (agy reads `GEMINI.md` too, but Gemini CLI owns that one) | `mcp_config.json` |
+| `agy` | `~/.gemini/config` | yes | `../AGENTS.md`, concatenated | `mcp_config.json` |
 | `agents` | `~/.agents` | yes | none | none |
 
-MCP entries are stored in the shed in Claude Code's shape and translated on the way out: Gemini gets `httpUrl` and no `type`, Antigravity gets `serverUrl`, Copilot gets `type: local` and `tools: ["*"]`, Cursor gets `${env:VAR}` placeholders and Codex gets `env_vars` / `bearer_token_env_var` / `env_http_headers` with the variable *names*, so for those two the secret values never touch the config file. Gemini, Antigravity and Copilot do not expand placeholders, so lshed fills them from your shell at `restore`. Codex's `config.toml` is edited table by table; your comments and other settings stay as they are. `lshed init --agent gemini` reads the same files back into the shed shape, secrets masked.
+MCP entries are stored in the shed in Claude Code's shape and translated into each tool's own format on the way out. For Codex and Cursor the config carries the variable *names*, so secret values never touch the file; Gemini, Antigravity and Copilot do not expand placeholders, so lshed fills them from your shell at `restore`. Codex's `config.toml` is edited table by table; your comments and other settings stay.
 
-Each agent root keeps its own `lshed/state.json`, so restoring into `~/.codex` never touches what lshed placed in `~/.claude`, and each can use a different profile or `--link` choice. Parts the target does not understand are announced and skipped: a profile with settings keys restores into Codex without them, with a line saying `codex 은 settings 를 다루지 않아 건너뜁니다`. Claude plugin packages are skipped the same way; `github:`/`git:` packages are cloned into every agent root that restores the profile, so give the other agents a profile without them if that is not what you want. `lshed init --agent codex` works too, and a shed made from Codex restores into Claude Code with `CLAUDE.md` generated from the same fragments. The shed's `agent:` is only a default for `--agent` (`$LSHED_AGENT` also works).
+Each agent root keeps its own `lshed/state.json`, so restoring into `~/.codex` never touches what lshed placed in `~/.claude`, and each can use a different profile or `--link` choice. Parts the target does not understand are announced and skipped (settings and Claude plugins for the other agents); `github:`/`git:` packages are cloned into every agent root that restores the profile, so give the other agents a profile without them if that is not what you want. `lshed init --agent codex` works too, and a shed made from Codex restores into Claude Code with `CLAUDE.md` generated from the same fragments. The shed's `agent:` is only a default for `--agent` (`$LSHED_AGENT` also works).
 
 ### Links instead of copies
 
-On the machine where you do most of your editing, `restore --link` places skills, agents, commands and instruction fragments as links into the shed instead of copies. Edits in `~/.claude` land in the shed directly, `diff` has nothing to report, and `save` has nothing to do; `lshed sync` is the whole loop.
+On the machine where you do most of your editing, `restore --link` places skills, agents, commands and instruction fragments as links into the shed instead of copies. Edits land in the shed directly, `diff` has nothing to report, and `save` has nothing to do; `lshed sync` is the whole loop.
 
 ```
 $ lshed restore --link
@@ -324,7 +322,7 @@ $ lshed restore --link
 Profile "default" applied (link): placed 4, removed 0
 ```
 
-The choice is per machine and remembered: later `lshed restore` calls on that machine keep linking, `lshed status` shows `placement  links`, and `restore --no-link` goes back to copies. Other machines are not affected. MCP entries and settings keys are JSON values, not files, so they are always written. Switching profiles removes the links, never the shed behind them. On Windows, directories become junctions with no special permission; single-file parts (agents, commands, fragments) need Developer Mode for a link, and without it lshed copies the file, says so, and treats it like any other copy (`save` still works for it).
+The choice is per machine and remembered: later `lshed restore` calls on that machine keep linking, `lshed status` shows `placement  links`, and `restore --no-link` goes back to copies. MCP entries and settings keys are JSON values, not files, so they are always written. Switching profiles removes the links, never the shed behind them. On Windows, directories become junctions with no special permission; single-file parts need Developer Mode for a link, and without it lshed copies the file, says so, and treats it like any other copy.
 
 ### Adding things later
 
@@ -345,7 +343,7 @@ $ lshed add paper-review mcp/linear
 2 added to the shed and to profile "default". Commit the shed: /home/me/lshed
 ```
 
-`add` classifies exactly like `init`, appends to `lshed.yaml` without disturbing your comments, adds the parts to the current profile and to the managed set. Without keys it only lists. `status` shows the count on its `outside` row. To put a part that is already in the shed into another profile, edit `profiles:` by hand; `add` tells you when that is the case.
+`add` classifies exactly like `init`, appends to `lshed.yaml` without disturbing your comments, and adds the parts to the current profile. Without keys it only lists. `status` shows the count on its `outside` row. To put a part that is already in the shed into another profile, edit `profiles:` by hand.
 
 ### Keeping packages current
 
@@ -356,9 +354,7 @@ lshed update                # fast-forward every package in the profile, refresh
 lshed update gstack --yes   # one package, and run its install: afterwards
 ```
 
-Git packages are pinned by commit in `lshed.lock`; a new machine gets exactly that commit. Plugins cannot be pinned, so the lock records what got installed and `status` says when it differs from the machine you came from.
-
-`update --dry-run` reads upstream without changing anything: `= (최신)` (up to date) when the clone already sits on the remote tip, `~ 0d1bd56 → 0530392` when a pull would move it, `?` when that cannot be known in advance. Git packages and marketplaces Claude Code cloned with git can be checked; Claude plugins and the official marketplace (not a git clone) cannot, so they show `?` and only a real `update` tells.
+Git packages are pinned by commit in `lshed.lock`; a new machine gets exactly that commit. Plugins cannot be pinned, so the lock records what got installed and `status` says when it differs. `update --dry-run` can check git packages; Claude plugins show `?` and only a real `update` tells. A package that cannot be updated is reported and skipped, the rest are pulled.
 
 ### Housekeeping
 
@@ -380,13 +376,38 @@ lshed prune --yes           # delete everything unused
 | `~` | existed with different content, replaced (backed up) |
 | `-` | removed (backed up) or excluded |
 | `≡` | package: recorded by source, not copied |
-| `·` | generated by an installer, skipped |
+| `·` | generated by an installer, or not handled by this agent: skipped |
 | `!` | needs your attention |
 | `↑` `↓` | pushed / pulled (sync), updated (update) |
 
 Errors go to stderr with exit code 1. Everything else is on stdout.
 
-## The manifest
+## Reference
+
+### Commands
+
+```
+lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
+lshed add [keys...] [--all]                     put things that appeared since init into the shed
+lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes] [--fresh-only]
+lshed status                                    applied profile, drift, packages, missing env, new things
+lshed diff                                      files (or JSON keys) that differ between local and shed
+lshed save [ids...]                             copy local edits back into the shed
+lshed sync [-m <msg>] [--no-push] [--dry-run]   commit the shed, pull --rebase, push
+lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh lshed.lock; --dry-run asks upstream only
+lshed list [--unused]                           what is in the shed, and which profiles use it
+lshed remove <key>                              drop a component or package from the shed
+lshed prune [--yes]                             drop everything no profile uses
+lshed scan                                      list what the agent root holds, without writing anything
+lshed check [--attempts <n>] [--timeout <s>]    ask the agent's CLI whether it reads a skill lshed just placed (one or two small model calls)
+lshed report [--open | --url]                   summary of this setup to paste into an issue; --open prefills one on GitHub, --url prints that link
+```
+
+Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`. An id is the file or directory name the agent reads, in any script (`skills/논문리뷰` is fine); letters, digits, `.`, `_` and `-` are allowed, and `/` between segments for nested agents and commands.
+
+Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed remembers it), `--agent <name>` (or `LSHED_AGENT`; default is the shed's `agent:`, then `claude-code`; `installed` with `restore` means every agent whose CLI is on PATH), `--root <dir>` (agent config root, default is the agent's own).
+
+### The manifest
 
 `lshed.yaml` lives at the root of the shed. `init` generates it; edit it by hand from then on. `add` and `remove` edit it for you and keep your comments.
 
@@ -434,31 +455,31 @@ profiles:
 ```
 
 - Component `source` accepts `file:<path relative to the shed>`. Package `source` accepts `github:owner/repo@ref`, `git:<url>#ref`, `claude-marketplace:<owner/repo>`, `claude-plugin:<name>@<marketplace>`.
-- Category names come from the adapter. For Claude Code: `skills`, `agents`, `commands`, `instructions`, `mcp`, `settings`. Other agents have `skills`, and `instructions` / `mcp` where the table above says so.
+- Categories for Claude Code: `skills`, `agents`, `commands`, `instructions`, `mcp`, `settings`. Other agents have `skills`, and `instructions` / `mcp` where the [table above](#other-agents-same-shed) says so.
 - `ignore:` adds to the built-in list of things never copied: `node_modules`, `.git`, `__pycache__`, `.venv`, cache directories, `*.log`. Build output like `dist/` is not ignored by default, since some skills ship it.
 - `exclude:` lists parts that exist locally but must not enter the shed. `init --exclude` writes it.
 
-## Three kinds of things
+### Three kinds of things
 
 A real `~/.claude` mixes three kinds of content, and they need different handling:
 
 | Kind | Example | What lshed does |
 |---|---|---|
-| **Authored** | a skill you wrote, your `CLAUDE.md`, an MCP server you added | copies it into the shed |
-| **Installed** | a toolkit you `git clone`d, a plugin | records source + commit; `restore` clones or installs it back |
+| **Authored** | a skill you wrote, your `CLAUDE.md`, an MCP server you added | copies it into the shed; `save` copies edits back |
+| **Installed** | a toolkit you `git clone`d, a plugin | records source + commit; `restore` clones or installs it back; `update` pulls it |
 | **Generated** | stub skills an installer wrote for you | skips them; they return when the installer runs |
 
 A directory with a `.git` and a remote becomes a **package**. A skill whose symlink points inside a package is treated as generated and skipped. Everything else is authored and copied. The rules that keep this safe:
 
-- A package that is already present is never touched by `restore`. Your local checkout is yours. The one exception is `--yes`, which runs the package's `install:` again, so "rerun with `--yes`" after a first restore does what it says.
-- `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`. Plugin installs go through Claude Code's own package manager and run without it; `--yes` is forwarded as `-y` for plugins that declare an install command.
+- A package that is already present is never touched by `restore`. Your local checkout is yours. The one exception is `--yes`, which runs the package's `install:` again.
+- `install:` is a shell command. `restore` and `update` **print it and stop** unless you pass `--yes`. Plugin installs go through Claude Code's own package manager and run without it.
 - Packages are not part of the managed set. Switching profiles never deletes a clone.
 
 Claude Code plugins are packages with their own scheme. `init` finds user-scope ones in `~/.claude/plugins`; `restore` adds the marketplace first, then runs `claude plugin install`. Project-scope plugins belong to their project and are not recorded.
 
-## MCP servers and secrets
+### MCP servers and secrets
 
-User-scope MCP servers live in `~/.claude.json`, next to machine IDs and session state. lshed treats each server as a component of category `mcp`: the shed holds `mcp/<name>.json`, and `restore` edits only the `mcpServers.<name>` key of `~/.claude.json`, leaving everything else in that file alone.
+User-scope MCP servers live in `~/.claude.json`, next to machine IDs and session state. lshed treats each server as a component of category `mcp`: the shed holds `mcp/<name>.json`, and `restore` edits only the `mcpServers.<name>` key, leaving everything else in that file alone.
 
 **No secret value enters the shed.** `init` and `add` replace values under `env` and `headers` whose key contains a secret-looking word (`key`, `token`, `secret`, `password`, `auth`, `authorization`, `credential`, `cookie`, `session` — whole words, so `MAX_OUTPUT_TOKENS` is left alone) with a `${VAR}` placeholder:
 
@@ -469,57 +490,26 @@ User-scope MCP servers live in `~/.claude.json`, next to machine IDs and session
   "headers": { "Authorization": "Bearer ${NOTION_AUTHORIZATION}" } }
 ```
 
-`restore` writes the placeholder as is. Claude Code expands `${VAR}` from the environment when it starts the server, so the value only ever lives in your shell. The one exception is `${HOME}`, which lshed fills itself: Claude Code only expands variables that exist in its environment, Windows has no `HOME`, and with it missing Claude Code reports "Missing environment variables: HOME" and does not start the server (checked against 2.1.265) (`export EXA_API_KEY=...` in `~/.zshrc`, or however you manage secrets). `restore` and `status` list the variables the profile needs that are not set. The heuristic is a suggestion: edit the JSON in the shed to add or remove placeholders, and `init` warns when something in `args` or `url` looks like a token. `save` keeps existing placeholders and masks new secret-looking keys, so a rotated key never leaks into the shed by accident. `diff` compares with placeholders as wildcards, so a machine holding real values is not drift.
+`restore` writes the placeholder as is; Claude Code expands `${VAR}` from the environment when it starts the server, so the value only ever lives in your shell (`export EXA_API_KEY=...` in `~/.zshrc`, or however you manage secrets). The one exception is `${HOME}`, which lshed fills itself because Windows has no `HOME`. `restore` and `status` list the variables the profile needs that are not set. The heuristic is a suggestion: edit the JSON in the shed to add or remove placeholders. `save` keeps existing placeholders and masks new secret-looking keys, so a rotated key never leaks into the shed by accident, and `diff` treats placeholders as wildcards, so a machine holding real values is not drift.
 
-## Settings
+### Settings
 
 `~/.claude/settings.json` holds hooks, permissions, `env`, the model, the theme, and some state Claude Code writes for itself. lshed does not merge it. Each **top-level key is one component** of category `settings`: the shed holds `settings/permissions.json`, `settings/hooks.json`, and so on, and `restore` writes exactly those keys, leaving the rest of the file alone. A profile can carry `permissions` and `hooks` and leave `model` to each machine.
 
-```
-$ lshed add
-3 outside the shed:
-    settings/hooks  ! points into package gstack. If that install created it, exclude it: settings/hooks
-    settings/model
-    settings/theme
-```
-
 - `enabledPlugins` and `extraKnownMarketplaces` are never taken: the plugin and marketplace packages own them, and `restore` rebuilds them by installing those.
-- Absolute paths under your home directory become `${HOME}/…` in the shed, so a hook command written on one machine works on another. The shed always uses `/` after `${HOME}`, whether the path was written as `C:\Users\me\.claude\hooks\x` or `/home/me/.claude/hooks/x`, so one shed serves Windows, WSL, macOS and Linux; on Windows `restore` writes it back as `C:/Users/me/.claude/hooks/x`, which Node, PowerShell, cmd and Git Bash all accept. Claude Code does not expand variables in `settings.json`, so `restore` fills `${HOME}` and any `${VAR}` itself from your shell; unset variables are reported and left as placeholders.
-- `env` is treated as a secret map: keys that look secret are masked, the rest (`CLAUDE_CODE_MAX_OUTPUT_TOKENS`, …) travel as they are.
+- Absolute paths under your home directory become `${HOME}/…` in the shed, always with `/`, so a hook command written on one machine works on another; on Windows `restore` writes it back as `C:/Users/me/…`, which Node, PowerShell, cmd and Git Bash all accept. Claude Code does not expand variables in `settings.json`, so `restore` fills `${HOME}` and any `${VAR}` itself from your shell.
+- `env` is treated as a secret map: keys that look secret are masked, the rest travel as they are.
 - A value pointing inside a package (a hook a toolkit's installer wrote) is flagged. If the installer recreates it, put it in `exclude:` and let `restore --yes` bring it back.
 - Since the shed owns the whole key, extra permissions you grant locally show up in `diff` and go into the shed with `save`, like any other edit.
-
-## Commands
-
-```
-lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]
-lshed add [keys...] [--all]                     put things that appeared since init into the shed
-lshed restore [profile] [--pick] [--link | --no-link] [--dry-run] [--no-backup] [--yes] [--fresh-only]   (--agent <name> to target another tool; --agent installed for every tool with a CLI here)
-lshed status                                    applied profile, drift, packages, missing env, new things
-lshed diff                                      files (or JSON keys) that differ between local and shed
-lshed save [ids...]                             copy local edits back into the shed
-lshed sync [-m <msg>] [--no-push] [--dry-run]   commit the shed, pull --rebase, push
-lshed update [ids...] [--dry-run] [--yes]       pull packages forward, refresh lshed.lock; --dry-run asks upstream only
-lshed list [--unused]                           what is in the shed, and which profiles use it
-lshed remove <key>                              drop a component or package from the shed
-lshed prune [--yes]                             drop everything no profile uses
-lshed scan                                      list what the agent root holds, without writing anything
-lshed check [--attempts <n>] [--timeout <s>]    ask the agent's CLI whether it reads a skill lshed just placed (one or two small model calls)
-lshed report [--open | --url]                   summary of this setup to paste into an issue; --open prefills one on GitHub, --url prints that link
-```
-
-Keys are `category/id`, or just `id` when unambiguous: `skills/paper-review`, `mcp/exa`, `packages/gstack`. An id is the file or directory name the agent reads, in any script (`skills/논문리뷰` is fine); letters, digits, `.`, `_` and `-` are allowed, and `/` between segments for nested agents and commands.
-
-Global options: `--shed <dir>` (or `LSHED_HOME`; after the first restore lshed remembers it), `--agent <name>` (or `LSHED_AGENT`; default is the shed's `agent:`, then `claude-code`), `--root <dir>` (agent config root, default is the agent's own, e.g. `~/.claude` or `~/.codex`).
 
 ### What `restore` does
 
 0. Installs any package in the profile that is missing, at the version in `lshed.lock`.
 1. Removes paths that the **previous** profile placed and the new one doesn't need.
-2. Copies every part of the new profile into place (or links it into the shed, with `--link` or on a machine that used it before); writes MCP entries into `~/.claude.json` and settings keys into `settings.json`.
+2. Copies every part of the new profile into place (or links it, with `--link` or on a machine that used it before); writes MCP entries and settings keys.
 3. Regenerates the instructions file.
 
-Anything it overwrites or removes is backed up first under `~/.claude/lshed/backups/<timestamp>/`, unless you pass `--no-backup`. Files lshed never placed are left alone. `--dry-run` prints the plan and writes nothing. With `--pick`, a checklist per non-empty category comes first (packages, skills, agents, commands, instructions, MCP servers, settings keys). `[profile]` pre-checks that profile's parts. The result is written to `lshed.yaml` as a profile, and then steps 0–3 run for it.
+Anything it overwrites or removes is backed up first under `<root>/lshed/backups/<timestamp>/`, unless you pass `--no-backup`. Files lshed never placed are left alone. `--dry-run` prints the plan and writes nothing. With `--pick`, a checklist per non-empty category comes first and the result is saved to `lshed.yaml` as a profile before steps 0–3 run.
 
 ### What `sync` does
 
@@ -530,15 +520,7 @@ Anything it overwrites or removes is backed up first under `~/.claude/lshed/back
 
 On a conflict it aborts the rebase, leaves the shed clean with your commit intact, and tells you to resolve with git. Without a remote it only commits. It never runs `save` for you.
 
-### Ownership
-
-The shed is the source of truth for authored parts: `save` copies local edits back for `file:` components, and a linked part is the shed. Packages are owned by their upstream: `update` pulls them, `save` ignores them.
-
-### Trust
-
-A shed is executable, not just data. `restore` places files into your agent's config, fills `${VAR}` from your shell into the configs it writes, and with `--yes` runs each package's `install:` shell command. So restore only a shed you trust as much as your own dotfiles, and keep yours private (a private git repo). Restoring someone else's shed is close to handing them your machine: its manifest can carry an `install:` command, and a config it writes can point an MCP server at a URL that then receives one of your secrets. lshed confines what it places to the agent's own root and rejects a package source that could smuggle a git option, but it cannot vouch for what a shed's `install:` runs or where a config sends a secret. Treat a shed you did not write like any other code you are about to run.
-
-## Where things live
+### Where things live
 
 ```
 <shed>/
@@ -557,43 +539,50 @@ A shed is executable, not just data. `restore` places files into your agent's co
 ~/.claude.json  mcpServers.<id>                 ← one key per mcp component; the rest of the file is untouched
 
 ~/.codex/  ~/.gemini/  ~/.copilot/  ~/.cursor/  ~/.gemini/config/  ~/.agents/
-  skills/  <instructions file>  <mcp file>      ← the same, per --agent (see the table above; codex skills live in ~/.agents/skills)
+  skills/  <instructions file>  <mcp file>      ← the same, per --agent (codex skills live in ~/.agents/skills)
   lshed/state.json  lshed/backups/              ← each root keeps its own
 ```
 
 `state.json` is per machine and is not part of the shed. If `CLAUDE_CONFIG_DIR` is set, lshed uses it as the root and writes `.claude.json` inside it, as Claude Code does.
 
+## Trust
+
+A shed is executable, not just data. `restore` places files into your agent's config, fills `${VAR}` from your shell into the configs it writes, and with `--yes` runs each package's `install:` shell command. So restore only a shed you trust as much as your own dotfiles, and keep yours private. Restoring someone else's shed is close to handing them your machine: its manifest can carry an `install:` command, and a config it writes can point an MCP server at a URL that then receives one of your secrets. lshed confines what it places to the agent's own root and rejects a package source that could smuggle a git option, but it cannot vouch for what a shed's `install:` runs or where a config sends a secret. Treat a shed you did not write like any other code you are about to run.
+
+## Troubleshooting
+
+- **restore said everything is in place, but the agent does not see it** — `lshed check`. It puts a throwaway skill holding a random passphrase into the agent's skills folder, asks the agent's CLI for the passphrase the way a user would (`claude -p`, `codex exec`, `gemini -p`, `copilot -p`, `agent -p`, `agy -p`), and removes the skill. A ✔ means the location and format are right and the problem is elsewhere; a ✘ shows the agent's actual answer and is exactly what a bug report needs. It costs one or two small model calls and needs that CLI on this machine.
+- **Something else went wrong** — `lshed report` prints the summary a bug report needs (nothing secret; check it yourself), `lshed report --open` puts it into a new issue form (`--url` prints the link instead). The same question is asked right after a failed command; answer no, or set `LSHED_REPORT=0`, and nothing happens.
+- **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** — do one of those. After one successful `restore`, lshed remembers it.
+- **restore replaced my `CLAUDE.md`** — it is in `~/.claude/lshed/backups/<timestamp>/CLAUDE.md`. Move its content into a fragment in the shed and add that fragment to your profile.
+- **I edited a skill locally and want to keep it** — `lshed diff` to see, `lshed save <id>` to push it into the shed, then `lshed sync`.
+- **`status` says a package differs from the lock** — something updated the clone or plugin behind lshed's back (Claude Code auto-updates plugins). `lshed update` records the new version.
+- **`status` keeps listing the same new things** — they are installer aliases or scratch. Add them to `exclude:` in `lshed.yaml`.
+- **`status` shows `! <package>  install: failed at the last restore`** — the parts are placed; only that package's `install:` did not finish. Fix whatever it needs and `lshed restore <profile> --yes`, or run the command it printed yourself.
+- **restore says an MCP variable is missing** — export it in your shell profile and restart the agent. The placeholder in the config is correct; the agent (or lshed, for tools that do not expand) fills it.
+- **restore wrote a hook with the wrong path** — the shed stores home paths as `${HOME}/…`. If a command points elsewhere on this machine, edit the JSON in the shed to use `${HOME}` or another variable and `restore` again. Paths outside your home directory are copied as written and are your job to keep portable.
+- **`restore --yes` says an install command failed on Windows** — `install:` runs in cmd.exe there, so a `./setup` written for sh cannot start (`'.' is not recognized`). Everything else is placed; run the command from Git Bash (`cd ~/.claude/skills/<package> && ./setup`) and check the package's own requirements (gstack needs bun).
+- **`--link` copied a file on Windows** — single-file links need Developer Mode. Turn it on and `restore` again, or keep the copy: later restores report it as `= … (copy; …)` and leave it alone, and `save` brings edits back from it.
+- **sync stopped on a conflict** — `cd <shed> && git pull --rebase`, resolve, `git rebase --continue`, then `lshed sync` again.
+- **A bootstrap script runs `restore` on every start** — add `--fresh-only`; see [a new machine](#a-new-machine).
+
 ## What has been verified
 
-- Tests, a CLI smoke run and the standalone binaries run on every push on **Ubuntu, macOS and Windows** (Node 20 and 22). Windows uses junctions for `--link` and `claude.cmd` for plugin installs. The smoke run includes a skill with a Korean name, so a filename-normalization difference on macOS or a code-page problem on Windows would fail there, not on a user's machine.
-- On a real Windows 11 PC without Developer Mode (PowerShell 7 and cmd.exe, Node 24, paths with spaces and Korean) the same walk passed with lshed 0.15.1 from npm: `init`, `restore` next to an existing setup, `--link` (junctions for skills, copies with a notice for single files), `add`/`diff`/`save`, a profile switch, the `codex` and `agents` targets, `sync` without a remote, and the smoke suite. Two follow-up passes on the same PC confirmed 0.15.2 (a shed made there restores with `/home/…/` paths inside WSL, an older shed is normalized by one `save`) and 0.15.3 (link mode settles on `=` for the file parts it had to copy, and re-copies them only when the shed changes).
-- A fifth pass on the same PC (Windows PowerShell 5.1, Node 24, git 2.55, lshed 0.17.1 from npm) started from nothing: a private shed cloned over HTTPS, `restore default` fetched every package at the revision in the lock (a gstack update made on the Linux machine arrived at the same commit), `status` reported all nine packages in sync, `lshed check` got the passphrase back from Claude Code on the first attempt, and `report` showed the home directory as `~`. The pass found that `restore --yes` stopped at the first failing `install:` (gstack's `./setup` cannot start under cmd.exe) before placing anything; 0.17.2 fixed that and the same PC confirmed the fix: the failure is printed, the nine parts are placed, and the failed command is listed at the end.
-- A sixth pass on the same PC (Windows PowerShell, Node 24, lshed 0.17.3 built from source) checked what the 0.17.2 review had turned up: nine arguments holding `&`, `|`, `(`, `^`, a quote and a trailing backslash came back from a real child process through `cmd.exe` unchanged, `lshed report` printed no `DEP0190` warning even under `--throw-deprecation`, `check` got the passphrase back on the first attempt and left no skill behind, a package whose clone cannot succeed no longer stops the restore, and `check` against a CLI that leaves a child holding the pipes returned in 2.2 seconds instead of hanging. It found that the cleanup after such a run hit `EBUSY` from inside a `finally` and replaced the whole result with that error; the fix in this release retries, keeps the result, and names whatever is left over.
-- On the Linux development machine the whole command set is exercised beyond CI: git and GitHub packages with `install:` through `restore` and `update`, `sync` against a real remote including a conflict, `remove`/`prune`, every `--agent` target, the environment-variable defaults, `restore --pick` through a real terminal, and the compiled Linux binary.
-- The other agents are checked against the tools themselves, not just their docs. `scripts/vm/probe.sh` restores a throwaway shed into a tool's real root and asks the tool, non-interactively, for a passphrase kept in a skill, a codeword kept in the instructions file, and the same skill again through a `--link` symlink. Codex 0.153.4 and Antigravity CLI 1.1.27 pass every check (last run 2026-09-09 with lshed 0.15.5); Gemini CLI, Copilot CLI and Cursor are verified for file placement and format so far. `scripts/vm/README.md` has the details and a cloud-init file for running the whole thing on a fresh VM.
-- One real shed is in daily use on the machine this is developed on: Claude Code, Codex and Antigravity all read it through `--link`, and `status` reports no drift for any of the three.
-- Everything above is one person's machines. If lshed works for you on a tool version or an OS not listed here, a [verification report](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=verified.yml) takes two minutes and becomes a line in this section. If it does not work, `lshed report` prints what a [bug report](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml) needs: versions, the agent and its root, the applied profile and the names of what the shed holds. No values, no secrets, and your home directory shows as `~`. After a failed command lshed asks whether to open that form with the summary filled in; it never sends anything by itself, and `LSHED_REPORT=0` turns the question off. For the failure that makes no noise, an agent that simply does not read what was placed, `lshed check` asks the agent itself.
+| Where | What |
+|---|---|
+| Ubuntu, macOS, Windows (CI, every push) | unit tests, a CLI smoke run of the whole walk (Korean skill name included), the standalone binaries |
+| Windows 11 PC, no Developer Mode | six passes by hand with npm and source builds: `init`, `restore` next to an existing setup, `--link` (junctions), profile switch, `codex`/`agents` targets, `check`, `report`, `sync` |
+| Linux (daily use) | one real shed read by Claude Code, Codex and Antigravity through `--link`; every command beyond CI, including `sync` conflicts and `--pick` |
+| The agents themselves | a probe restores a throwaway shed and asks each tool for a passphrase kept in a skill, a codeword in the instructions file, and the skill again through a `--link`. Claude Code, Codex, Gemini CLI, Cursor and Antigravity answer; Copilot CLI is verified for placement and format so far. A weekly workflow repeats the placement part against the current CLIs |
+| A brand-new machine | a devcontainer started from empty state restores into three agents on its entrypoint and passes `status`, `check` and `mcp list` for each, and skips the restore on restart |
+
+Dates, versions and what each pass found are in [docs/VERIFICATION.md](https://github.com/LeeSongHeon-LSH/lshed/blob/main/docs/VERIFICATION.md). Everything there is one person's machines: if lshed works for you on a tool version or an OS not listed, a [verification report](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=verified.yml) takes two minutes; if it does not, `lshed report` prints what a [bug report](https://github.com/LeeSongHeon-LSH/lshed/issues/new?template=bug.yml) needs, with no values, no secrets, and your home shown as `~`.
 
 ## Not in scope (yet)
 
 - Secrets beyond "name the variable". Encrypted values, `op://` references and OS keychains are possible later; today lshed is deliberately no better than dotfiles here.
 - Project-scope MCP servers (`.mcp.json`, `~/.claude.json` `projects.*`) and project-scope plugins. They belong to the project.
 - For the other agents, only skills, the instructions file and MCP servers travel. Their own settings files, rules folders and plugins stay where they are.
-
-## Troubleshooting
-
-- **restore said everything is in place, but the agent does not see it** — `lshed check`. It puts a throwaway skill holding a random passphrase into the agent's skills folder, asks the agent's CLI for the passphrase the way a user would (`claude -p`, `codex exec`, `gemini -p`, `copilot -p`, `agent -p`, `agy -p`), and removes the skill. A ✔ means the location and format are right and the problem is elsewhere; a ✘ shows the agent's actual answer and is exactly what a bug report needs. It costs one or two small model calls and needs that CLI on this machine.
-- **Something else went wrong** — `lshed report` prints the summary a bug report needs (nothing secret; check it yourself), `lshed report --open` puts it into a new issue form (`--url` prints the link instead, for a machine without a browser). The same question is asked right after a failed command; answer no, or set `LSHED_REPORT=0`, and nothing happens.
-- **"Shed location unknown. Pass --shed <dir> or set LSHED_HOME."** — do one of those. After one successful `restore`, lshed remembers it.
-- **restore replaced my `CLAUDE.md`** — it is in `~/.claude/lshed/backups/<timestamp>/CLAUDE.md`. Move its content into a fragment in the shed and add that fragment to your profile.
-- **I edited a skill locally and want to keep it** — `lshed diff` to see, `lshed save <id>` to push it into the shed, then `lshed sync`.
-- **`status` says a package differs from the lock** — something updated the clone or plugin behind lshed's back (Claude Code auto-updates plugins). `lshed update` records the new version.
-- **`status` keeps listing the same new things** — they are installer aliases or scratch. Add them to `exclude:` in `lshed.yaml`.
-- **restore says an MCP variable is missing** — export it in your shell profile and restart Claude Code. The placeholder in `~/.claude.json` is correct; Claude Code fills it at startup.
-- **restore wrote a hook with the wrong path** — the shed stores home paths as `${HOME}/…`. If a command points elsewhere on this machine, edit the JSON in the shed to use `${HOME}` or another variable and `restore` again. Paths outside your home directory (`D:\tools\x.exe`, `/opt/x`) are copied as written and are your job to keep portable.
-- **`restore --yes` says an install command failed on Windows** — `install:` runs in cmd.exe there, so a `./setup` written for sh cannot start (`'.' is not recognized`). Everything else is placed; run the command from Git Bash (`cd ~/.claude/skills/<package> && ./setup`) and check the package's own requirements (gstack needs bun).
-- **`--link` copied a file on Windows** — single-file links need Developer Mode. Turn it on and `restore` again, or keep the copy: later restores report it as `= … (copy; …)` and leave it alone, and `save` brings edits back from it.
-- **sync stopped on a conflict** — `cd <shed> && git pull --rebase`, resolve, `git rebase --continue`, then `lshed sync` again.
 
 ## License
 

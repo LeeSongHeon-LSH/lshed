@@ -37,7 +37,8 @@ export function askCommand(cli: string, prompt: string): { cmd: string; args: st
     case "codex": return { cmd: "codex", args: ["exec", "--skip-git-repo-check", "--ephemeral", prompt] };
     case "gemini": return { cmd: "gemini", args: ["-p", prompt, "--approval-mode", "yolo", "--output-format", "json"], env: { GEMINI_CLI_TRUST_WORKSPACE: "true" }, json: true };
     case "copilot": return { cmd: "copilot", args: ["-p", prompt, "-s", "--allow-all-tools"] };
-    case "agent": return { cmd: "agent", args: ["-p", prompt, "--output-format", "text"] };
+    // --trust: without it Cursor prints "Workspace Trust Required" for the scratch folder and answers nothing (seen 2026-09-18, agent 2026.09.15)
+    case "agent": return { cmd: "agent", args: ["-p", prompt, "--output-format", "text", "--trust"] };
     case "agy": return { cmd: "agy", args: ["-p", prompt, "--output-format", "text", "--dangerously-skip-permissions"] };
     default: throw new Error(`no way to ask ${cli}`);
   }

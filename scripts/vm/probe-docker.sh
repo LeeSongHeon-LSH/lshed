@@ -7,11 +7,19 @@
 #   PROBE_OUT=/tmp/x scripts/vm/probe-docker.sh copilot cursor
 #
 # Keys are passed through from the environment when set: GEMINI_API_KEY, COPILOT_GITHUB_TOKEN,
-# CURSOR_API_KEY, OPENAI_API_KEY. With none of them set the run is model-free (LSHED_PROBE_ASK=0):
-# file placement, formats and each tool's own `mcp list` / `debug prompt-input` parser are still checked.
+# CURSOR_API_KEY, OPENAI_API_KEY. A key file is read first when it exists — PROBE_KEYS, default
+# ~/.config/lshed-probe.env, one VAR=value per line, keep it chmod 600 and outside any repository —
+# so nothing has to be exported in the shell. With no key at all the run is model-free
+# (LSHED_PROBE_ASK=0): file placement, formats and each tool's own `mcp list` / `debug prompt-input`
+# parser are still checked.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")/../.."
 IMAGE=${PROBE_IMAGE:-lshed-probe}
+KEYS=${PROBE_KEYS:-$HOME/.config/lshed-probe.env}
+if [ -f "$KEYS" ]; then
+  set -a; . "$KEYS"; set +a
+  echo "keys read from $KEYS: $(grep -oE '^(export )?[A-Z_]+=' "$KEYS" | sed 's/export //; s/=//' | tr '\n' ' ')" >&2
+fi
 
 if [ "${1:-}" = build ]; then
   shift

@@ -89,7 +89,7 @@ ask() { # ask <cli> <prompt>  → answer on stdout
       gemini) GEMINI_CLI_TRUST_WORKSPACE=true $DETACH timeout 120 gemini -p "$prompt" --approval-mode yolo --output-format json \
                 | { if command -v jq >/dev/null; then jq -r '.response // empty'; else cat; fi; } ;;
       copilot) $DETACH timeout 120 copilot -p "$prompt" -s --allow-all-tools ;;
-      agent)  $DETACH timeout 120 agent -p "$prompt" --output-format text ;;
+      agent)  $DETACH timeout 120 agent -p "$prompt" --output-format text --trust ;;   # else Cursor prints a "Workspace Trust Required" notice and no answer
       agy)    $DETACH timeout 120 agy -p "$prompt" --output-format text --dangerously-skip-permissions ;;
       claude) $DETACH timeout 120 claude -p "$prompt" --model haiku ;;
     esac

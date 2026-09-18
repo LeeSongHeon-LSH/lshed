@@ -205,7 +205,8 @@ EOF
     local lister=""
     case $tool in codex) lister=codex ;; gemini) lister=gemini ;; agy) lister=agy ;; claude-code) lister=claude ;; esac
     if [ -n "$lister" ] && command -v "$lister" >/dev/null; then
-      r=$(cd "$PROBE_DIR/cwd" && timeout 120 "$lister" mcp list 2>&1)
+      # gemini lists user-level servers only in a trusted folder; the probe's scratch cwd is not one (same variable ask() uses)
+      r=$(cd "$PROBE_DIR/cwd" && GEMINI_CLI_TRUST_WORKSPACE=true timeout 120 "$lister" mcp list 2>&1)
       check "mcp: '$lister mcp list' shows the server" "$(printf '%s' "$r" | grep -q lshed-probe-http && echo 0 || echo 1)" "$(excerpt "$r")"
     elif [ -n "$lister" ]; then
       skip "mcp: '$lister mcp list'" "not installed"

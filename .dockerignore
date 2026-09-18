@@ -1,0 +1,6 @@
+# build context for scripts/vm/Dockerfile.probe: the checkout without its heavy, regenerable parts
+node_modules
+dist
+build
+.git
+**/*.tgz

@@ -6,6 +6,9 @@
 #   LSHED_FROM=npm       (default) npm install -g lshed@latest — the published package
 #   LSHED_FROM=release   standalone binary from the latest GitHub release (a machine without Node)
 #   LSHED_FROM=<path>    a local checkout: npm ci && npm run build && npm link
+#
+# The same script bakes the docker image (scripts/vm/Dockerfile.probe, run through probe-docker.sh),
+# so a VM and a container get the identical tool set.
 set -euo pipefail
 FROM=${LSHED_FROM:-npm}
 
@@ -34,8 +37,13 @@ case $FROM in
   *) (cd "$FROM" && npm ci && npm run build && sudo npm link) ;;
 esac
 
-# the probe itself, from the repo, so the image can run it without a checkout at boot
-sudo git clone --depth 1 https://github.com/LeeSongHeon-LSH/lshed /opt/lshed 2>/dev/null || sudo git -C /opt/lshed pull -q
+# the probe itself, from the repo, so the image can run it without a checkout at boot.
+# Dockerfile.probe copies the checkout to /opt/lshed before running this; leave that copy alone.
+if [ -f /opt/lshed/scripts/vm/probe.sh ] && [ ! -d /opt/lshed/.git ]; then
+  echo "using the checkout already at /opt/lshed"
+else
+  sudo git clone --depth 1 https://github.com/LeeSongHeon-LSH/lshed /opt/lshed 2>/dev/null || sudo git -C /opt/lshed pull -q
+fi
 sudo chmod +x /opt/lshed/scripts/vm/probe.sh
 
 echo

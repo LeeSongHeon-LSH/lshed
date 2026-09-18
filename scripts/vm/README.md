@@ -20,7 +20,22 @@ This directory checks it against the tools themselves, on a throwaway VM, withou
 Passphrases are random per run, so a stale copy from an earlier run cannot produce a false pass.
 Results: `<probe dir>/results/<tool>-<timestamp>.md` plus the tools' stderr next to it.
 
-## Running it
+## Running it in a container (no VM needed)
+
+`Dockerfile.probe` bakes the same image with the unchanged `install-tools.sh`, from this checkout, and `probe-docker.sh` runs `probe.sh` in it:
+
+```
+scripts/vm/probe-docker.sh build                                   # ~2 min after the first time; lshed comes from this checkout
+export GEMINI_API_KEY=... COPILOT_GITHUB_TOKEN=... CURSOR_API_KEY=... # whichever you have; none → model-free run
+scripts/vm/probe-docker.sh gemini copilot cursor                   # or: all
+ls probe-results/<date>/results/                                   # <tool>-<timestamp>.md + .stderr
+```
+
+Keys are passed through only when set in the environment. Codex's read-only sandbox cannot create user namespaces inside an unprivileged container (`unshare -Ur` fails), so its questions rely on `--sandbox danger-full-access` as on the VM — the container is disposable, so that is fine, but do not mount a shed you care about.
+
+**First container run (2026-09-18, lshed 0.17.5, Ubuntu 24.04 image, Node 22.23.2, Gemini CLI 0.60.0, Copilot CLI 1.0.86, Cursor agent 2026.09.15-d2fe57e, agy 1.2.6, Codex 0.155.0), no keys:** gemini, copilot and cursor passed every placement, format, link and cleanup check; `gemini mcp list` parsed lshed's `settings.json`. The same day, from the agent-box devcontainer (Claude Code 2.1.275, Codex 0.155.0, agy 1.2.5, signed in): **agy 16/16 and claude-code 16/16 with the model questions — the first time Claude Code itself answered the three questions**, every one on the first attempt; codex and agents passed model-free (the stored OpenAI key is still 401). What is still unverified: Gemini, Copilot and Cursor actually *answering* — that needs the three keys, nothing else.
+
+## Running it on a VM
 
 On the VM (image baked with `install-tools.sh`):
 

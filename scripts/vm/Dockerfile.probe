@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1.7
+# The VM probe image, as a container: every agent CLI lshed can place into (Codex, Gemini CLI,
+# Copilot CLI, Cursor CLI, Antigravity CLI) plus lshed built from THIS checkout.
+# Build context is the repository root (see .dockerignore). Run it through scripts/vm/probe-docker.sh.
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      sudo curl git jq ca-certificates unzip xz-utils procps util-linux coreutils \
+    && rm -rf /var/lib/apt/lists/*
+# a sudo-capable user with the host's usual uid, exactly like the cloud image's `ubuntu`
+RUN userdel -r ubuntu 2>/dev/null || true; \
+    useradd -m -u 1000 -s /bin/bash probe && echo 'probe ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/probe
+COPY --chown=probe:probe . /opt/lshed
+USER probe
+WORKDIR /home/probe
+ENV PATH=/home/probe/.local/bin:$PATH
+# the runbook's step 1, unchanged: Node 22, codex, gemini, copilot, agent (Cursor), agy, and lshed from /opt/lshed
+RUN LSHED_FROM=/opt/lshed bash /opt/lshed/scripts/vm/install-tools.sh
+ENV LSHED_PROBE_DIR=/home/probe/lshed-probe
+ENTRYPOINT ["bash", "/opt/lshed/scripts/vm/probe.sh"]
+CMD ["all"]

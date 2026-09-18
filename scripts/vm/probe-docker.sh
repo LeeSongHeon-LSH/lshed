@@ -30,6 +30,9 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "no image '$IMAGE' — r
 
 OUT=${PROBE_OUT:-$PWD/probe-results/$(date +%F-%H%M)}
 mkdir -p "$OUT"
+# The container runs as uid 1000; the host user may not be (GitHub runners are 1001). The directory is
+# throwaway, so open it up rather than juggling uids. Results come back world-readable either way.
+chmod 777 "$OUT" 2>/dev/null || true
 keys=(); for k in GEMINI_API_KEY COPILOT_GITHUB_TOKEN CURSOR_API_KEY OPENAI_API_KEY; do [ -n "${!k:-}" ] && keys+=(-e "$k"); done
 if [ ${#keys[@]} = 0 ] && [ -z "${LSHED_PROBE_ASK:-}" ]; then
   echo "no agent key in the environment → LSHED_PROBE_ASK=0 (no model questions)" >&2

@@ -1,0 +1,29 @@
+name: probe
+# The VM probe (scripts/vm/README.md) in a container, against the real agent CLIs: does each tool's own
+# parser accept what lshed writes (codex/gemini/agy mcp list, codex debug prompt-input), and do the
+# placement, link and cleanup steps hold for every --agent target. Model questions run only for the
+# tools whose key is set as a repository secret; without keys the run is model-free (LSHED_PROBE_ASK=0).
+# Installing five CLIs takes a few minutes, so this is not part of ci.yml: weekly, and on demand.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"   # Mondays 03:00 UTC
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/vm/probe-docker.sh build
+      - env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PROBE_OUT: ${{ github.workspace }}/probe-results
+        run: scripts/vm/probe-docker.sh codex gemini copilot cursor agy agents
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-results
+          path: probe-results/results/

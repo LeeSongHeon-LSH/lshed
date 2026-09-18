@@ -35,6 +35,8 @@ Keys are passed through only when set in the environment. Codex's read-only sand
 
 **First container run (2026-09-18, lshed 0.17.5, Ubuntu 24.04 image, Node 22.23.2, Gemini CLI 0.60.0, Copilot CLI 1.0.86, Cursor agent 2026.09.15-d2fe57e, agy 1.2.6, Codex 0.155.0), no keys:** gemini, copilot and cursor passed every placement, format, link and cleanup check; `gemini mcp list` parsed lshed's `settings.json`. The same day, from the agent-box devcontainer (Claude Code 2.1.275, Codex 0.155.0, agy 1.2.5, signed in): **agy 16/16 and claude-code 16/16 with the model questions — the first time Claude Code itself answered the three questions**, every one on the first attempt; codex and agents passed model-free (the stored OpenAI key is still 401). What is still unverified: Gemini, Copilot and Cursor actually *answering* — that needs the three keys, nothing else.
 
+The `probe` GitHub workflow (`.github/workflows/probe.yml`, Mondays and `workflow_dispatch`) does the same on a runner for the six Linux targets and uploads `results/` as an artifact; set `GEMINI_API_KEY`, `COPILOT_GITHUB_TOKEN`, `CURSOR_API_KEY`, `OPENAI_API_KEY` as repository secrets to get the model questions there too.
+
 ## Running it on a VM
 
 On the VM (image baked with `install-tools.sh`):

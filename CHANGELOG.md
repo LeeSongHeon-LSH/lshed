@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A part's source must now be `file:`, and a `github:`/`git:` source on a part is refused when `lshed.yaml` is read, with a hint to put that code under `packages:`. Before, the manifest accepted it and `restore`, `status` and `diff` failed later, because parts have never had a remote resolver.
+- A `github:` package source with a `#subpath` is refused when `lshed.yaml` is read. The installer clones the whole repository, so the subpath was silently ignored.
+- `probe-docker.sh` makes the results directory writable for a container user with another uid (GitHub runners are uid 1001).
+- Docs: `overview.md`, both READMEs, `docs/VERIFICATION.md` and the probe runbook brought in line with the code; new `CONTRIBUTING.md` for the development scripts and the release steps.
+
 ## 0.17.5 — 2026-09-18
 
 - README reorganized for the reader who wants to use lshed, not for the record of how it was built: install and quick start first, a shorter "Why not just git?", the walkthrough, then a reference section (commands, manifest, kinds, MCP, settings, what `restore` and `sync` do, where things live), trust, troubleshooting. The per-pass verification history, tool versions and what each pass found moved to `docs/VERIFICATION.md`, with a five-row summary table left in the README; adapter internals (which MCP field each tool gets, which Claude Code version a behaviour was checked against) were cut from the README. The Korean README follows the same structure.
@@ -97,7 +104,7 @@ Every message lshed prints is now English. Nothing else changed in behaviour.
 
 `lshed update --dry-run` now asks upstream instead of guessing.
 
-- It printed `~ package X (… update)` for every installed package without looking anywhere, so on a real shed nine packages all looked stale while `status` said `= lock` for each. Now each installer that can look does: git packages run `git ls-remote` against the source branch (or tag) and compare with the clone's HEAD; marketplaces Claude Code cloned with git (`installLocation` is a repository) compare with their origin. The line reads `= 0d1bd56 (최신)`, `~ 0d1bd56 → 0530392`, or `? …` when it cannot be known (Claude plugins, and the official marketplace, which is not a git clone). A lookup failure is reported on that line and does not stop the others. Nothing is written in either case.
+- It printed `~ package X (… update)` for every installed package without looking anywhere, so on a real shed nine packages all looked stale while `status` said `= lock` for each. Now each installer that can look does: git packages run `git ls-remote` against the source branch (or tag) and compare with the clone's HEAD; marketplaces Claude Code cloned with git (`installLocation` is a repository) compare with their origin. The line reads `= 0d1bd56 (최신)` (since 0.15.0: `(latest)`), `~ 0d1bd56 → 0530392`, or `? …` when it cannot be known (Claude plugins, and the official marketplace, which is not a git clone). A lookup failure is reported on that line and does not stop the others. Nothing is written in either case.
 - Installer interface: optional `upstream(ctx, pkg)` returning `{ current, latest }`; `git.ts` gains `lsRemote(url, ref?)`, which names `refs/heads/<ref>`, `refs/tags/<ref>^{}` and `refs/tags/<ref>` explicitly so an annotated tag resolves to its commit and a branch wins over a tag of the same name.
 
 Also in this release (2026-09-08):
@@ -146,7 +153,7 @@ MCP servers follow the shed into the other agents.
 - Codex's `config.toml` is edited one table at a time. Comments, ordering and unrelated tables are left untouched.
 - `lshed init --agent gemini` (or any of the others) reads that tool's MCP servers into the shed, masked the same way as Claude Code's. `diff` and `save` work across the translation.
 
- — 2026-09-04
+## 0.11.0 — 2026-09-04
 
 One shed, several agents.
 
@@ -155,16 +162,16 @@ One shed, several agents.
 - `lshed init --agent codex` builds a shed from a Codex machine; a shed made by one agent restores into any other. The shed's `agent:` field is now only the default for `--agent`; `$LSHED_AGENT` also works.
 - `lshed status` names the agent next to the root.
 
- — 2026-09-04
+## 0.10.0 — 2026-09-04
 
 Link instead of copy, on the machines where you edit.
 
 - `lshed restore --link` places skills, agents, commands and instruction fragments as links into the shed. Edits in `~/.claude` land in the shed directly; `diff` and `save` have nothing to do and `lshed sync` is the whole loop. MCP entries, settings keys and the generated `CLAUDE.md` are still written as before.
-- The choice is per machine and remembered in `state.json`: later bare `lshed restore` calls keep linking, `lshed status` shows `배치 link`, and `restore --no-link` goes back to copies. Other machines keep copying.
+- The choice is per machine and remembered in `state.json`: later bare `lshed restore` calls keep linking, `lshed status` shows `배치 link` (since 0.15.0: `placement  links`), and `restore --no-link` goes back to copies. Other machines keep copying.
 - Turning a copy into a link backs the copy up only if it differs from the shed (an unsaved edit); turning a link back into a copy backs up nothing. Switching profiles removes the links and never touches the shed behind them.
 - Windows: directories become junctions and need no permission. Single-file parts need Developer Mode for a link; without it the file is copied, the log says so, and it behaves like any other copy.
 
- — 2026-09-04
+## 0.9.0 — 2026-09-04
 
 Profiles can build on each other.
 
@@ -258,7 +265,7 @@ Groundwork for running on Windows and macOS. Not yet verified on a real machine.
 `init` was a one-shot. Anything you made afterwards had to be copied into the shed and typed into `lshed.yaml` by hand.
 
 - `lshed add [keys...] [--all]` scans the agent root the way `init` does and lists what the shed lacks: authored skills, agents, commands, MCP servers, and git clones or plugins that should be packages. Without keys it only lists. Chosen items are copied (or recorded with a lock entry for packages), appended to `lshed.yaml` with your comments intact, added to the current profile, and added to the managed set.
-- `status` reports things outside the shed as `창고 밖 N개 → lshed add`.
+- `status` reports things outside the shed as `창고 밖 N개 → lshed add` (since 0.15.0: `outside N: … → lshed add`).
 - `init --exclude` is now remembered as `exclude:` in the manifest, so `add` and `status` do not keep proposing the aliases you left out.
 - `init` and `add` share one classification path (`discover`) and one ingest path, so they cannot drift apart. `init` now edits a YAML document instead of serialising an object; output is unchanged.
 
@@ -321,4 +328,4 @@ First working release. Claude Code only.
 - `restore <profile>` with managed-set semantics, backups on by default, `--dry-run`
 - `status`, `diff`, `save`
 - Instructions are assembled as an `@`-import list, not merged
-- `file:` sources only; `github:` is parsed but rejected until 0.2
+- `file:` sources only; `github:` is parsed but rejected until 0.2 (for parts it still is: remote code became `packages:` in 0.2)

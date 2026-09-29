@@ -8,7 +8,7 @@ components:
   skills:
     - id: paper-review
     - id: superpowers
-      source: github:obra/superpowers@v2.1
+      source: file:./skills/superpowers-v2
   instructions:
     - id: base
       source: file:./instructions/base.md
@@ -44,7 +44,7 @@ describe("parseManifest", () => {
     expect(() => parseManifest(GOOD + "  x:\n    skills: [nope]\n")).toThrow(/"nope" is not in components/);
   });
   it("id 중복", () => {
-    const dup = GOOD.replace("- id: superpowers\n      source: github:obra/superpowers@v2.1", "- id: paper-review");
+    const dup = GOOD.replace("- id: superpowers\n      source: file:./skills/superpowers-v2", "- id: paper-review");
     expect(() => parseManifest(dup)).toThrow(/duplicate/);
   });
   it("스킴 없는 source 거부", () => {
@@ -150,6 +150,14 @@ profiles:
   it("github: 패키지는 into 가 필요하고, 부품은 어댑터 스킴을 쓸 수 없다", () => {
     expect(() => parseManifest(P.replace("    into: skills/gstack\n", ""))).toThrow(/needs into/);
     expect(() => parseManifest("version: 1\ncomponents:\n  skills:\n    - id: x\n      source: claude-plugin:x@m\n")).toThrow(/a part's source must be file:/);
+  });
+  it("부품의 원격 출처는 읽을 때 거부하고 packages 를 안내한다", () => {
+    for (const src of ["github:obra/superpowers@v2.1", "git:https://gitlab.com/a/b.git"]) {
+      expect(() => parseManifest(`version: 1\ncomponents:\n  skills:\n    - id: x\n      source: ${src}\n`)).toThrow(/must be file: \(put github:\/git: code under packages:\)/);
+    }
+  });
+  it("패키지 source 의 #subpath 는 거부한다", () => {
+    expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "github:garrytan/gstack@main#skills/x"))).toThrow(/#subpath is not supported/);
   });
   it("설치기가 없는 스킴은 거부", () => {
     expect(() => parseManifest(P.replace("github:garrytan/gstack@main", "registry:foo"), undefined, ["github", "git"])).toThrow(/no installer handles/);

@@ -45,9 +45,9 @@ export function parseSource(raw: string): Source {
   }
 }
 
-/** 부품(components)에 허용되는 스킴인지 */
+/** 부품(components)에 허용되는 스킴인지. 부품의 원격 출처는 없다. 원격 코드는 packages 로 담는다 (§3.7). */
 export function isComponentSource(s: Source): boolean {
-  return s.scheme === "file" || s.scheme === "github" || s.scheme === "git";
+  return s.scheme === "file";
 }
 
 export function formatSource(s: Source): string {

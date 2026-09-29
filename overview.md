@@ -1,11 +1,11 @@
 # lshed — 하네스 휴대 도구 설계 문서 (v0.1)
 
-> **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13) · 2026-09-05 (0.14.1 기준으로 상태 갱신) · 2026-09-08 (전수 테스트 결과와 알려진 문제 둘, §10.3; CLI 출력 전면 영어화, 0.15.0; Linux 전수 검증에서 찾은 둘 수정, 0.15.1; 실제 Windows 기기 검증과 창고 경로 구분자 통일, 0.15.2; 2차 Windows 검증이 잡은 링크 모드 재복사 수정, 0.15.3; Claude Code MCP 의 ${HOME} 을 lshed 가 채움, 0.15.4; 옛 버전이 남긴 ${HOME} 로컬을 다시 씀, 0.15.5) · 2026-09-09 (`lshed report`·이슈 템플릿·실패 후 질문, 0.16.0; Codex probe 를 Lumen 경유로 17/17; report 의 Windows `--open`·8.3 이름 가림·`--url`·3 OS 스모크, 0.16.1; `lshed check`·조용한 실패 대책·에이전트 자동 감지·README 를 어느 에이전트든 따라 할 수 있게, 0.17.0; restore 의 쓰기 범위를 에이전트 루트로 한정·`git:` 소스의 옵션 주입 차단·항목 파일 모드 보존, 0.17.1; Windows 5차가 잡은 restore --yes 의 install 실패 시 전체 중단 수정·DEP0190·--yes 문구, 0.17.2)
+> **작성일**: 2026-08-31 · **개정**: 2026-09-02 (비판적 검토 반영, 개정 요지는 §13) · 2026-09-05~09-18 (릴리스마다 상태 갱신 — 버전별 요지는 `CHANGELOG.md`) · 2026-09-29 (문서-코드 일치 점검 반영: 구현되지 않은 설계를 사실처럼 적은 곳을 현재 구현에 맞추고, 헤더를 줄이고, 검증 기록은 `docs/VERIFICATION.md` 로 넘김)
 > **프로젝트명**: `lshed` (읽기: 엘셰드 / *el-shed*)
 > **성격**: 오픈소스 CLI 도구 / 개인 취미 프로젝트로 시작
-> **상태 (2026-09-09)**: 0.17.2. Windows 5차 검증(사용자가 기대 화면과 대조하며 직접 실행, FAIL 0)이 잡은 것 셋을 고쳤다: `restore --yes` 가 첫 `install:` 실패에서 부품을 하나도 놓지 않고 프로필도 남기지 않은 채 exit 1 로 끝나던 것(gstack 의 `./setup` 이 cmd.exe 에서 `'.' is not recognized`) → 실패를 모아 끝에 알리고 나머지는 다 놓은 뒤 exit 1; Windows 에서 `.cmd` 래퍼를 args 배열 + shell 로 띄워 Node 24 가 DEP0190 을 찍던 것 → 명령줄을 한 줄로 만들어 띄움(`src/shell.ts`); `--yes` 도움말이 플러그인 설치는 항상 도는 것과 어긋나던 것. 같은 검증에서 lock 전파(gstack 1.84.0.0)와 `lshed check` ✔ 를 확인했고, 내장 security-review 의 git 오류는 `origin/HEAD` 유무(git 2.48+ 는 fetch 가 만듦)의 문제로 lshed 와 무관함을 재확인했다. 0.17.1: 보안 수정 셋: 부품 id 와 패키지 `into` 의 `.`/`..` 세그먼트를 거부하고 git 패키지 경로가 에이전트 루트 안에 있는지 확인해 창고가 `../../.bashrc` 같은 곳을 쓰지 못하게 했고, `-` 로 시작하는 `git:` URL 을 거부하고 `--` 뒤에 넘겨 `git:--upload-pack=<cmd>` 가 restore 중 명령을 실행하지 못하게 했고, 항목 파일(`~/.claude.json`, Codex `config.toml`)을 다시 쓸 때 기존 모드를 보존한다(새 파일은 600). README 에 **Trust** 절을 두었다: 창고는 데이터가 아니라 실행물이므로 dotfiles 만큼 믿는 창고만 복원할 것. 0.17.0: 조용한 실패에 대한 답: `lshed check` 가 임의 암호어 스킬을 에이전트 스킬 폴더에 놓고 그 CLI 에 비대화형으로 물은 뒤 치운다(probe.sh 의 스킬 질문을 사용자용으로; agy ✔, Codex 는 키 401 로 ✘ 형식 확인). 매 실행 고지 대신 `--help` 끝 두 줄과, restore 가 안내 줄을 냈을 때만 붙는 "If any of the above is not what you expected: lshed report". Claude 가 아닌 사용자가 빠른 시작을 그대로 따라 하면 걸리던 함정 둘을 실측으로 찾아 고쳤다: `init` 이 없는 ~/.claude 를 훑어 빈 창고를 쓰던 것(루트 없으면 거부하고 있는 루트를 들어 --agent 권유), 다른 기기에서 restore --agent codex 뒤 플래그 없는 status/diff/save 가 ~/.claude 를 보던 것(상태가 있는 유일한 에이전트를 자동 선택, claude-code 우선, 둘 이상이면 --agent 요구). README 빠른 시작·초기화·반복 절을 에이전트 무관하게 다시 썼고 스모크가 ~/.codex 만 있는 홈에서 그 절차를 돈다. 0.16.1: 0.16.0 의 `report --open` 이 Windows 에서 `cmd /c start` 를 써 URL 이 `&` 에서 잘리던 것과, TEMP 의 8.3 이름(`C:\Users\RUNNER~1`)이 홈 치환을 빠져나가던 것을 Windows CI 스모크로 잡아 고쳤다(PowerShell `-EncodedCommand`, 홈 드라이브의 `\Users\<무엇이든>`→`~`, WSL 은 wslview, `--url`). 스모크가 3 OS 에서 report 를 돌려 사용자 폴더가 어느 철자로도 안 남는지 본다. 0.16.0: 사용자 보고 경로를 넣었다: `lshed report` 는 버전·OS·에이전트와 루트·CLI 버전·적용 프로필 수치·창고 부품 이름만 찍고(값·시크릿 없음, 홈은 `~`), `--open` 은 그것을 채운 GitHub 이슈 폼을 연다. 명령이 실패하면 터미널에서 한 번 묻는다(기본 아니오, `LSHED_REPORT=0` 이면 안 묻고, 비대화형은 한 줄 힌트). 텔레메트리는 없다 — 어느 경로도 lshed 가 스스로 보내지 않는다. 이슈 템플릿 둘(bug, verified)을 두어 사용자의 "이 도구 이 버전 이 OS 에서 됐다" 보고가 README 검증 절로 쌓이게 했다. 같은 날 Codex probe 의 모델 질문 셋을 OpenAI 키 대신 Lumen(OpenAI 호환, chat completions 만) 경유로 돌려 17/17 통과했다 — Codex 0.153 이 chat wire 를 거부해 로컬 LiteLLM 프록시가 responses→chat 을 변환했고, agy 도 16/16 (둘 다 lshed 0.15.5). 0.15.5: Windows 4차 검증이 0.15.4 의 빈틈을 잡았다: 0.15.2·0.15.3 이 `${HOME}` 을 그대로 놓아 둔 기기에서는 restore 가 글자 같음으로 `=` 를 내 고쳐지지 않았다 → 로컬에 `${HOME}` 이 남아 있으면 stale 로 보고 다시 쓴다(Cursor 의 `${userHome}` 만 예외, `homeStaysPlaceholder`). 0.15.4: Claude Code 가 MCP 항목의 `${VAR}` 를 프로세스 환경에서만 채우고 Windows 에는 HOME 이 없어, 창고의 `${HOME}/…` MCP 항목이 Windows 에서 동작하지 않던 것을 실측(§7.4)으로 확인하고 lshed 가 `${HOME}` 만 채우도록 바꿨다. 0.15.3: Windows 2차 검증(개발자 모드 OFF)이 0.15.2 의 F2·B+ 통과를 확인하고, 링크 모드에서 복사로 폴백한 파일 부품을 restore 가 매번 다시 놓던 것을 잡아 고쳤다(파일 링크 가능 여부를 한 번 재 보고, 불가하면 같은 내용의 복사본을 `=` 로). 0.15.2: 사용자의 실제 Windows 11 기기(개발자 모드 OFF, 공백·한글 경로)에서 npm 설치본 0.15.1 로 전 절차가 통과했다(§10.1 닫힘). 그 검증이 찾은 것 셋을 고쳤다: `restore --dry-run` 이 `install:` 명령을 보여 주지 않던 것, `--link` 테스트가 파일 심볼릭 링크 권한을 전제하던 것, 그리고 창고가 만든 기기의 경로 구분자를 담아 Windows 창고를 Linux/WSL 에 복원하면 깨지던 것 — 이제 홈 경로는 `${HOME}/…` 한 표기로 담고 Windows 복원은 `C:/Users/me/…` 로 채운다(§7.6). 0.15.1 은 Linux 에서 전 명령을 다시 돌려(§11) 비ASCII id 거부와 `restore --yes` 가 있는 패키지의 `install:` 을 건너뛰던 것을 고쳤고, 스모크에 한글 스킬을 넣었다. CLI 가 출력하는 모든 메시지(로그·오류·`--pick` 프롬프트)는 영어이고, `status` 는 행 집합이 고정된 한 틀로 찍는다(정상은 한 줄에 쉼표, 예외만 `!` 로 들여씀). 코드 주석과 테스트 이름은 한국어 그대로다. 개발 항목은 §12 기준으로 모두 닫혔다 — 부품·프로필·관리 집합, 패키지(git·Claude 플러그인)·락, MCP·settings 항목형, add/sync, `--pick`, `extends`, `--link`, 다른 에이전트(`--agent codex|gemini|copilot|cursor|agy|agents`)와 MCP 형식 변환, 단독 실행파일 5종, 3 OS CI. 2026-09-08 에 이 기기에서 할 수 있는 검사를 전부 다시 돌렸다(§10.3): 단위 147·스모크·바이너리·`--pick`·실환경 dry-run·Codex/agy probe 전부 통과. 전수 테스트가 찾은 문제 둘(CI Windows 잡의 sync 테스트 타임아웃 플레이크, `update --dry-run` 이 업스트림을 안 봄)은 같은 날 고쳤다(§11, 0.14.2). 남은 검증 하나: Gemini CLI·Copilot CLI·Cursor 의 VM probe(§10.2, 런북은 `scripts/vm/README.md`). 0.15.2 의 구분자 통일은 Windows 2차 검증(2026-09-09)에서, 0.15.3 의 링크 모드 수정은 3차 검증(같은 날, FAIL 0)에서 확인됐다. Windows 실기기 검증은 닫힘. 열린 질문: Windows 에는 HOME 변수가 없어 Claude Code 용 MCP 항목의 `${HOME}` 자리표시자가 채워지는지 미확인. 이 기기는 Claude Code·Codex·Antigravity 가 모두 실제 창고 `~/harness` 를 링크로 쓴다.
-> **배포**: GitHub `LeeSongHeon-LSH/lshed`(public), npm `lshed`(latest 0.17.1; 0.17.2 는 태그 후 사용자가 발행; 0.15.2 는 npm 미발행), 릴리스마다 실행파일 5종 + SHA256SUMS (v0.17.2 까지 release 워크플로가 게시)
-> **배경 기록**(비용·수익·연구 연결·폐기 대안): `notes/background.md`
+> **상태 (2026-09-29)**: 0.17.5 (2026-09-18). 버전별로 무엇이 바뀌었는지는 `CHANGELOG.md`, 어느 OS·도구에서 무엇을 확인했는지는 `docs/VERIFICATION.md` 가 기준이다. 열린 것: Copilot CLI 의 모델 질문 probe(COPILOT_GITHUB_TOKEN 대기), Codex 모델 질문은 OpenAI 키가 401 이라 게이트웨이 경유로만 확인됨, `status` 의 placement 문구와 applied 시각(UTC) 표기 다듬기.
+> **배포**: GitHub `LeeSongHeon-LSH/lshed`(public), npm `lshed`(latest 0.17.5; 발행은 태그 뒤 사용자가 수동으로, OTP), 릴리스마다 실행파일 5종 + SHA256SUMS (`v*` 태그 push 때 `release.yml` 이 게시, v0.17.5 까지)
+> **배경 기록**(비용·수익·연구 연결·폐기 대안): 작성자의 비공개 로컬 노트 `notes/background.md` — `notes/` 는 `.gitignore` 대상이라 저장소에는 없다
 
 ---
 
@@ -102,8 +102,9 @@ dotfiles 관리 도구(chezmoi, GNU Stow, yadm 등)가 사실상 표준이다.
 | `mcp` | `~/.claude.json`의 `mcpServers` 키 | JSON 항목, 시크릿은 `${VAR}` | v0.4 구현 (§7.4) |
 | `settings` | `~/.claude/settings.json`의 최상위 키 | 키 하나 = 항목 하나, 병합 없음 | v0.7 구현 (§7.6) |
 
-> **플러그인**(`~/.claude/plugins/`)은 Claude Code가 자체 레지스트리로 설치·갱신하므로
-> lshed는 "어떤 플러그인이 켜져 있는지" 목록만 프로필에 기록한다(v0.2, `settings.enabledPlugins`).
+> **플러그인**(`~/.claude/plugins/`)은 Claude Code가 자체 레지스트리로 설치·갱신하므로 내용을 담지 않는다.
+> §3.7 의 "설치한 것"으로, `claude-marketplace:<owner/repo>`·`claude-plugin:<name>@<marketplace>` 패키지로 기록한다(0.3.0, §7.5).
+> `settings.json` 의 `enabledPlugins`·`extraKnownMarketplaces` 는 설치기가 만드는 상태라 담지 않는다(§7.6).
 > 프로젝트 스캐폴드는 **범위 밖**이다. 하네스 휴대와 무관하고 degit·cookiecutter의 영역이다.
 
 ---
@@ -144,8 +145,6 @@ components:
   skills:
     - id: paper-review
       source: file:./skills/paper-review
-    - id: superpowers
-      source: github:obra/superpowers@v2.1     # v0.2: 원격 리졸버
   agents:
     - id: reviewer
       source: file:./agents/reviewer.md
@@ -158,9 +157,15 @@ components:
     - id: research-style
       source: file:./instructions/research.md
 
+packages:                     # 남의 코드(원격 출처)는 부품이 아니라 패키지로 (§3.7)
+  - id: superpowers
+    source: github:obra/superpowers@v2.1
+    into: skills/superpowers
+
 profiles:                     # 이름은 예시. 사용자가 정의한다
   research:
-    skills: [paper-review, superpowers]
+    skills: [paper-review]
+    packages: [superpowers]
     agents: [reviewer]
     instructions: [base, research-style]      # 순서대로
   teaching:
@@ -173,20 +178,26 @@ profiles:                     # 이름은 예시. 사용자가 정의한다
 
 관례: `source`를 생략하면 `file:./<category>/<id>`로 간주한다. `init`이 만드는 매니페스트는 대부분 이 형태다.
 
+부품의 출처는 `file:` 뿐이다. 초안은 부품에도 `github:` 원격 리졸버를 두려 했으나, 0.2.0 에서 원격 코드는 **패키지**(`packages:` + `into:`, §3.7)로 풀었고 부품용 원격 출처는 구현하지 않았다. 매니페스트 검증이 부품의 `github:`/`git:` 출처를 거부하고 `packages:` 를 쓰라고 안내한다.
+
 ### 3.3 지침 파일 — 병합하지 않고 import 한다
 
 Claude Code의 `CLAUDE.md`는 `@path` 문법으로 다른 파일을 불러올 수 있다.
 따라서 조각을 이어붙이는 대신 **import 목록을 생성**한다.
 
 ```markdown
-<!-- ~/.claude/CLAUDE.md — generated by lshed (profile: research) -->
-@/home/me/.claude/lshed/instructions/base.md
-@/home/me/.claude/lshed/instructions/research.md
+<!-- generated by lshed; profile: research -->
+<!-- Do not edit this file. Edit the fragments in your shed and run 'lshed restore'. -->
+
+@lshed/instructions/base.md
+@lshed/instructions/research-style.md
 ```
+
+조각은 `<root>/lshed/instructions/<id>.md` 에 놓이고(파일 이름은 창고 쪽 파일명이 아니라 조각 id), import 경로는 CLAUDE.md 기준 상대 경로라 홈이 달라도 그대로다(§11).
 
 - 섹션 충돌 병합 문제(구 §7.2)가 사라진다.
 - 조각을 편집하면 그대로 반영된다.
-- import를 지원하지 않는 어댑터는 **단순 연결**로 폴백한다.
+- import를 지원하지 않는 어댑터는 **단순 연결**로 폴백한다. `<!-- <id> -->` 머리를 단 조각 본문을 순서대로 잇는다.
 - 기존 `CLAUDE.md`가 lshed 생성물이 아니면 백업 후 교체하고 경고한다.
 
 ### 3.4 소유권 규칙 — 창고가 진실이다
@@ -195,10 +206,10 @@ Claude Code의 `CLAUDE.md`는 `@path` 문법으로 다른 파일을 불러올 �
 
 | 출처 | 로컬에서 편집 | `save` | 갱신 |
 |---|---|---|---|
-| `file:` | 가능 | 로컬 → 창고 반영 | 해당 없음 |
-| `github:` 등 원격 | 읽기 전용 취급 (편집하면 `diff`에서 경고) | 거부 | `update`로 재해석 |
+| `file:` 부품 | 가능 | 로컬 → 창고 반영 | 해당 없음 |
+| 패키지 (`github:`/`git:`/플러그인, §3.7) | 사용자 몫 (clone 은 건드리지 않음, 락과 다르면 `status` 가 알림) | 대상 아님 | `lshed update` 가 pull + 락 갱신 |
 
-`save`는 "로컬에서 고친 것을 창고로 되가져오기"이며 `file:` 부품에만 적용된다.
+`save`는 "로컬에서 고친 것을 창고로 되가져오기"이며 `file:` 부품에만 적용된다. 원격 출처는 부품이 아니라 패키지다.
 
 ### 3.5 상태 모델 — 관리 집합
 
@@ -209,44 +220,17 @@ lshed는 기기별 상태 파일에 **자기가 놓은 경로 목록**(관리 �
 {
   "profile": "research",
   "shed": "/home/me/harness",
-  "managed": ["skills/paper-review", "agents/reviewer.md", "CLAUDE.md"],
-  "appliedAt": "2026-09-02T10:00:00Z"
+  "managed": ["skills/paper-review", "agents/reviewer.md", "lshed/instructions/base.md", "CLAUDE.md", "mcp:exa"],
+  "appliedAt": "2026-09-02T10:00:00Z",
+  "link": true,                    // 선택. restore --link 로 놓았으면 (§3.6)
+  "failedInstalls": ["gstack"]     // 선택. 마지막 restore 에서 install: 이 실패한 패키지 (0.17.4)
 }
 ```
 
 - 프로필 전환 시 **관리 집합에 있는 경로만** 제거한다. 사용자가 손으로 둔 파일은 건드리지 않는다.
 - 관리 집합에 없는데 대상 경로에 이미 무언가 있으면 **백업 후 덮어쓴다**(§5.1).
 - `status`, `diff`는 이 파일을 기준으로 동작한다.
-
-### 3.7 하네스의 세 종류 ★ (도그푸딩에서 나옴, §14)
-
-| 종류 | 예 | npm 비유 | lshed |
-|---|---|---|---|
-| 내가 쓴 것 | add-drivers, CLAUDE.md 조각 | 소스 | 내용을 복사한다 (§3.4) |
-| 설치한 것 | gstack(git clone), 플러그인 | package.json 의존성 | 출처·커밋만 기록. 복원 시 clone + install |
-| 설치가 만들어낸 것 | gstack 스텁 53개 | node_modules, dist | 담지도 관리하지도 않는다 |
-
-```yaml
-packages:
-  - id: gstack
-    source: github:garrytan/gstack@main      # 또는 git:<url>#ref
-    into: skills/gstack                       # 어댑터 루트 기준
-    install: ./setup                          # 선택. --yes 일 때만 실행 (이미 있는 패키지에도)
-```
-
-**감지 규칙 (init)**
-- 부품 안에 `.git`이 있고 origin이 있으면 → 설치한 것. 원격 URL과 HEAD를 읽어 `source`와 락을 채운다.
-- 부품 최상위의 심볼릭 링크가 어떤 패키지 안을 가리키면 → 그 패키지가 만들어낸 것. 끊어진 링크도 목적지는 안다.
-- 설치 관리자가 링크 없이 만드는 별칭 디렉터리는 잡을 수 없다. `--exclude`로 뺀다. (gstack의 `_gstack-command`, `connect-chrome`)
-- `install:`은 자동으로 알 수 없다. 주석으로 자리만 남긴다.
-
-**복원 규칙**
-- 패키지가 없으면 `lshed.lock`의 커밋으로 clone한다. 락이 없으면 clone된 HEAD를 락에 적는다.
-- 이미 있으면 절대 건드리지 않는다. 사용자가 올렸을 수 있다. 락과 다르면 `status`가 알려준다.
-- `install:`은 임의 셸 명령이다. 창고는 어디서든 clone될 수 있으므로 **`--yes` 없이는 보여주기만 하고 실행하지 않는다.** `--yes`는 "install 명령을 돌려라"는 뜻이라 이미 있는 패키지에도 돌린다 — 첫 restore가 "rerun with '--yes'"라고 안내하므로 그 말이 참이어야 하고, `update --yes`가 pull마다 다시 돌리므로 install 스크립트는 어차피 멱등이어야 한다. `--dry-run`이면 돌리지 않는다.
-- 패키지는 **관리 집합에 넣지 않는다.** 프로필 전환이 clone을 지우지 않는다. 백업하며 지우려면 저장소를 통째로 복사해야 하는데 그건 잘못된 도구다.
-
-**`lshed update [id]`** — `git pull --ff-only` 후 락 갱신. `--yes`이면 `install:`을 다시 돌린다 (커밋이 바뀌었든 이미 최신이든).
+- 스키마 전체는 `src/state.ts`.
 
 ### 3.6 배치 방식 — 기본은 복사, 기기별로 `--link`
 
@@ -264,6 +248,39 @@ packages:
 - 복사본→링크 전환은 내용이 같으면 백업 없이, 다르면(저장 안 한 편집) 백업하고 바꾼다. 링크→복사는 백업이 필요 없다(내용이 창고에 있다).
 - Claude Code 가 링크된 스킬을 읽는 근거: gstack 의 `./setup` 이 스킬을 심볼릭 링크로 놓고, 그 상태로 사용되고 있었다. 지침 조각은 `@import` 가 일반 파일 읽기라 링크를 따라간다.
 
+### 3.7 하네스의 세 종류 ★ (도그푸딩에서 나옴, §14)
+
+| 종류 | 예 | npm 비유 | lshed |
+|---|---|---|---|
+| 내가 쓴 것 | add-drivers, CLAUDE.md 조각 | 소스 | 내용을 복사한다 (§3.4) |
+| 설치한 것 | gstack(git clone), 플러그인 | package.json 의존성 | 출처·커밋만 기록. 복원 시 clone + install |
+| 설치가 만들어낸 것 | gstack 스텁 53개 | node_modules, dist | 담지도 관리하지도 않는다 |
+
+```yaml
+packages:
+  - id: gstack
+    source: github:garrytan/gstack@main      # 또는 git:<url>#ref
+    into: skills/gstack                       # 어댑터 루트 기준
+    install: ./setup                          # 선택. --yes 일 때만 실행 (이미 있는 패키지에도)
+```
+
+`github:` 출처의 `#path` 하위 경로는 패키지에 쓸 수 없다(검증에서 거부). 저장소 전체를 `into` 에 clone 한다.
+
+**감지 규칙 (init)**
+- 부품 안에 `.git`이 있고 origin이 있으면 → 설치한 것. 원격 URL과 HEAD를 읽어 `source`와 락을 채운다.
+- 부품 최상위의 심볼릭 링크가 어떤 패키지 안을 가리키면 → 그 패키지가 만들어낸 것. 끊어진 링크도 목적지는 안다.
+- 설치 관리자가 링크 없이 만드는 별칭 디렉터리는 잡을 수 없다. `--exclude`로 뺀다. (gstack의 `_gstack-command`, `connect-chrome`)
+- `install:`은 자동으로 알 수 없다. 주석으로 자리만 남긴다.
+
+**복원 규칙**
+- 패키지가 없으면 `lshed.lock`의 커밋으로 clone한다. 락이 없으면 clone된 HEAD를 락에 적는다.
+- 이미 있으면 절대 건드리지 않는다. 사용자가 올렸을 수 있다. 락과 다르면 `status`가 알려준다.
+- `install:`은 임의 셸 명령이다. 창고는 어디서든 clone될 수 있으므로 **`--yes` 없이는 보여주기만 하고 실행하지 않는다.** `--yes`는 "install 명령을 돌려라"는 뜻이라 이미 있는 패키지에도 돌린다 — 첫 restore가 "rerun with '--yes'"라고 안내하므로 그 말이 참이어야 하고, `update --yes`가 pull마다 다시 돌리므로 install 스크립트는 어차피 멱등이어야 한다. `--dry-run`이면 돌리지 않는다.
+- 패키지는 **관리 집합에 넣지 않는다.** 프로필 전환이 clone을 지우지 않는다. 백업하며 지우려면 저장소를 통째로 복사해야 하는데 그건 잘못된 도구다.
+- **실패해도 나머지는 계속한다(0.17.2~0.17.4).** clone·플러그인 설치가 실패한 패키지, `install:` 이 실패한 패키지를 모아 끝에 한꺼번에 알리고, 부품 배치와 state 기록은 끝까지 한다. 종료 코드는 1. `install:` 실패는 state 의 `failedInstalls` 에 남아 `status` 가 보여 준다(없으면 멀쩡한 기기와 구별되지 않는다). `update` 도 pull 못 한 패키지를 건너뛰고 나머지를 올린 뒤 락을 쓴다.
+
+**`lshed update [id]`** — `git pull --ff-only` 후 락 갱신. `--yes`이면 `install:`을 다시 돌린다 (커밋이 바뀌었든 이미 최신이든).
+
 ---
 
 ## 4. 범용 도구로서의 요구사항 ★
@@ -279,8 +296,9 @@ packages:
 lshed init --shed ~/harness     # 현재 ~/.claude를 스캔 → 창고에 복사 + lshed.yaml 생성
 ```
 
-- 발견한 모든 부품을 `file:` 출처로 등록하고 `default` 프로필 하나에 전부 넣는다.
-- 출처를 알 수 없는 것(마켓플레이스에서 설치된 스킬 등)도 일단 `file:`로 가져온다. 나중에 사용자가 `github:`로 바꾸면 된다.
+- 발견한 것을 세 종류로 가른다(§3.7, 0.2.0): 내가 쓴 것은 `file:` 부품으로 창고에 복사, 설치한 것(git clone·플러그인·마켓플레이스)은 출처·버전만 적은 패키지, 설치가 만들어낸 것(패키지 안을 가리키는 링크)은 건너뜀. 전부 `default` 프로필(`--profile` 로 바꿀 수 있음) 하나에 넣는다.
+- 링크 없이 만든 별칭은 감지되지 않으므로 `--exclude` 로 뺀다. 뺀 것은 매니페스트의 `exclude:` 에 남아 `add`/`status` 가 따른다.
+- 에이전트 루트가 없으면 빈 창고를 쓰지 않고 거부한다(있는 루트를 들어 `--agent` 를 권함, 0.17.0). 창고에 `lshed.yaml` 이 이미 있으면 거부하고 `add` 나 `restore` + `save` 를 안내한다.
 - 빈 매니페스트를 손으로 채우게 하면 대부분 이탈한다.
 
 ### 4.3 문서가 제품의 일부
@@ -301,7 +319,7 @@ commit → pull --rebase → push 를 묶고, 충돌이면 rebase 를 되돌려 
 | 홈 디렉터리 | `os.homedir()` 단일 창구 |
 | 줄바꿈 | 지침 파일은 그대로 복사, 생성 파일은 LF |
 
-플랫폼 의존 코드는 한 모듈에 모은다(`fsutil.ts`). 0.7.4~0.7.5 에서 CI 가 macOS·Windows 러너에서 실제로 돌며 경로 비교 버그 셋을 잡았고(§10.1), 지금은 ubuntu/macos/windows × node 20/22 매트릭스와 각 OS 의 CLI 스모크가 push 마다 돈다. Windows 는 `--link` 에 junction, 파일 링크는 개발자 모드 없으면 복사 폴백.
+경로 비교는 `fsutil.ts`(`normalizePath`/`isInside`/`realpathish`), 자식 프로세스 호출은 `shell.ts`(`invocation`/`commandLine`: Windows 명령줄은 `""` 이스케이프, `%`·줄바꿈이 든 인자는 거부)에 모은다. 그 밖의 win32 분기는 `core/check.ts`(PATHEXT, `taskkill` 로 프로세스 트리 종료), `core/report.ts`(PowerShell 로 브라우저 열기, 홈·8.3 이름 가림), `core/entries.ts`(`${HOME}` 의 `C:/` 표기), `core/restore.ts`(링크 폴백)에 있다. 0.7.4~0.7.5 에서 CI 가 macOS·Windows 러너에서 실제로 돌며 경로 비교 버그 셋을 잡았고(§10.1), 지금은 ubuntu/macos/windows × node 20/22 매트릭스와 각 OS 의 CLI 스모크가 push 마다 돈다(단독 실행파일은 태그 때만 빌드되고 linux-x64 하나로 스모크). Windows 는 `--link` 에 junction, 파일 링크는 개발자 모드 없으면 복사 폴백.
 
 ### 4.6 에이전트 어댑터
 
@@ -327,19 +345,56 @@ AgentAdapter
 
 카테고리 루트는 어댑터 루트 기준 상대 경로라 `../.agents/skills` 처럼 위로 갈 수 있고, 백업은 `..` 을 `__` 로 바꿔 백업 디렉터리 안에 머문다. 창고 쪽 경로는 카테고리 *이름* 으로만 만든다.
 
+**어느 어댑터를 쓰나** (`src/cli.ts` `adapterFromOpts`, `src/core/detect.ts`, 0.17.0):
+
+1. `--agent <name>`, 없으면 `LSHED_AGENT`
+2. `--shed` 나 `LSHED_HOME` 이 주어졌으면 그 창고 `lshed.yaml` 의 `agent:` (창고 위치를 state 에서 가져오는 경우는 어댑터가 먼저 필요하므로 보지 않는다)
+3. `--root` 가 없으면 이 기기의 lshed 상태: claude-code 에 상태가 있으면 claude-code, 없으면 상태가 있는 유일한 에이전트, 둘 이상이면 오류("More than one agent here has lshed state … Say which")
+4. 그래도 없으면 `claude-code`
+
+`restore --agent installed` 는 PATH 에 CLI 가 있는 에이전트 전부에 차례로 복원한다(0.17.5, 컨테이너·셸 부트스트랩용. `--shed`/`LSHED_HOME` 필수, `--pick`·`--root` 와 함께 못 씀).
+
+### 4.7 코드 지도
+
+```
+src/cli.ts                 commander 진입점. 전역 옵션, 어댑터 선택(§4.6), 실패 뒤 report 제안
+src/core/                  명령별 로직
+  init · add · discover · ingest     스캔 → 세 종류 분류(§3.7) → 창고에 담기 (init/add 공용)
+  restore · pick · instructions      계획 → 패키지 → 제거 → 배치 → 지침 생성, --pick 체크리스트
+  status · diff · save · sync        드리프트, 되가져오기, git 래퍼
+  list · remove                      창고 관리, prune
+  packages                           패키지 감지·생성물 감지·ensure/update·락
+  entries                            항목형 JSON: 마스킹·확장·비교, ${HOME} 처리 (§7.4)
+  context                            Ctx, 매니페스트 읽기, 프로필 계획, 경로 규칙
+  detect                             에이전트 자동 감지, --agent installed
+  check · report                     lshed check / lshed report (§5)
+src/adapters/              registry → ClaudeCodeAdapter | SkillsDirAdapter(스펙 6개)
+                           json-entries · toml-entries · mcp-forms (도구별 MCP 형식 변환)
+src/installers/            git.ts(core, github:/git:) · claude-plugin.ts(Claude Code 어댑터가 제공: claude-marketplace·claude-plugin)
+src/resolvers/file.ts      file: 만 창고 경로로 (§6.1)
+src/manifest.ts · source.ts · state.ts · lock.ts · ignore.ts · fsutil.ts · git.ts · shell.ts
+```
+
 ---
 
 ## 5. 명령어 설계
 
+설계상 의미 있는 명령만 적는다. 플래그까지 전부는 README 의 Reference 절(`lshed --help` 와 같음)이 기준이다.
+
 ```bash
 # ── 초기화 ──
-lshed init [--shed <dir>]        # 현재 환경 스캔 → 창고 + 매니페스트 생성           v0.1
+lshed init [--shed <dir>] [--profile <name>] [--exclude <id...>]   # 스캔 → 창고 + 매니페스트    v0.1
 lshed add [<key>...] [--all]     # init 이후 생긴 것을 창고에 (키 없으면 목록만)        v0.5
+lshed scan                       # 루트에 무엇이 있는지만 (쓰지 않음)                   v0.7.2
 
 # ── 적용 ──
 lshed restore <profile>          # 프로필 적용 (관리 집합 교체)                       v0.1
-lshed restore                    # 마지막 프로필 재적용                                v0.1
-lshed status                     # 현재 프로필, 관리 집합, 드리프트 요약               v0.1
+lshed restore                    # 마지막 프로필 재적용 (처음이고 터미널이면 --pick)   v0.1
+  --pick                         # 카테고리별 체크리스트 → 프로필 저장                 v0.8
+  --link | --no-link             # 파일 부품을 창고로 가는 링크로 (기기별 기억)        v0.10
+  --yes                          # 패키지 install: 실행 (§3.7)                          v0.2
+  --fresh-only                   # 상태가 이미 있는 루트는 그대로 (exit 0)              v0.17.5
+lshed status                     # 현재 프로필, 관리 집합, 드리프트, 패키지 요약        v0.1
 lshed diff                       # 로컬 vs 창고 파일 차이                              v0.1
 
 # ── 되가져오기 ──
@@ -347,19 +402,29 @@ lshed save [<id>...]             # 로컬 편집을 창고로 (file: 출처만) 
 
 # ── 창고 관리 ──
 lshed list [--unused]            # 창고 목록 / 어떤 프로필에도 안 쓰이는 부품          v0.2
-lshed remove <id>                # 창고에서 삭제 (프로필 참조가 있으면 거부)           v0.2
-lshed prune                      # 미사용 부품 일괄 정리 (확인 후)                     v0.2
-lshed update [<id>...]           # 원격 출처 재해석 + 락파일 갱신                       v0.2
-lshed sync [-m] [--no-push]      # 창고 commit + pull --rebase + push                    v0.6
+lshed remove <key>               # 창고에서 삭제 (프로필 참조가 있으면 거부)           v0.2
+lshed prune [--yes]              # 미사용 부품 일괄 정리 (--yes 없으면 목록만)         v0.2
+lshed update [<id>...] [--dry-run] [--yes]   # 패키지 pull + 락 갱신; --dry-run 은 업스트림만 조회   v0.2
+lshed sync [-m] [--no-push] [--dry-run]      # 창고 commit + pull --rebase + push   v0.6
+
+# ── 확인·보고 ──
+lshed check [--attempts <n>] [--timeout <s>] # 암호어 스킬을 놓고 에이전트 CLI 에 물어 실제로 읽는지 (기본 2회, 120초)   v0.17
+lshed report [--open | --url]    # 이슈에 붙일 요약 (홈 경로 가림); 실패 뒤 제안         v0.16
+
+# ── 전역 ──
+--shed <dir> (LSHED_HOME)  --agent <name> (LSHED_AGENT, restore 에선 installed 도)  --root <dir>  -V/--version
 ```
+
+`check`·`report` 는 조용한 실패(에이전트가 부품을 안 읽는데 lshed 는 성공이라 말하는 것)에 대한 답이다. 텔레메트리는 두지 않는다: 확인은 사용자가 `check` 로 하고, 보고는 사용자가 `report` 요약을 보고 직접 이슈에 붙인다. 어느 명령이든 오류로 끝나면 터미널에서는 요약을 채운 이슈 폼을 열지 묻고(기본 아니오, `LSHED_REPORT=0` 이면 묻지 않음), restore 가 안내 줄을 냈을 때만 "If any of the above is not what you expected: lshed report" 를 붙인다. lshed 가 어딘가로 보내는 것은 없다 — 브라우저를 열 뿐이다.
 
 프로필 편집 명령은 두지 않는다. `lshed.yaml`을 직접 고치는 편이 어떤 UI보다 낫다.
 
 ### 5.1 restore 안전 장치
 
 ```
---dry-run        바뀔 목록만 출력
+--dry-run        바뀔 목록만 출력 (install: 도 플러그인 설치도 돌리지 않음)
 --no-backup      백업 생략 (기본은 ~/.claude/lshed/backups/<timestamp>/ 에 백업)
+--yes            패키지의 install: 셸 명령을 실행. 없으면 보여주기만 한다 (§3.7). clone·플러그인 설치는 이것과 무관
 ```
 
 > 백업이 기본이다. 남의 설정을 날리는 도구가 되면 끝이다.
@@ -371,21 +436,21 @@ lshed sync [-m] [--no-push]      # 창고 commit + pull --rebase + push         
 
 ### 6.1 리졸버 인터페이스
 
-```
-Resolver.resolve(source) → 로컬 디렉터리/파일 경로
-├── FileResolver      v0.1
-├── GitHubResolver    v0.2
-└── RegistryResolver  미정
-```
+초안은 `Resolver.resolve(source)` 인터페이스 아래 `FileResolver`(v0.1)·`GitHubResolver`(v0.2)·`RegistryResolver`(미정)를 두려 했다. 실제로는:
 
-매니페스트를 읽는 코드가 네트워크를 직접 호출하지 않는다.
+- `resolvers/file.ts` 는 함수 둘(`resolveSource`, `isSaveable`)이고 `file:` 만 창고 안 경로로 바꾼다.
+- 원격 출처는 리졸버가 아니라 **설치기**(`Installer`, §7.5)로 구현했다. 원격 코드는 부품이 아니라 패키지이기 때문이다(§3.7). `github:`/`git:` 은 core 의 git 설치기, 플러그인은 어댑터의 설치기가 맡는다.
+- 부품용 원격 리졸버는 계획에 없다.
+
+매니페스트를 읽는 코드가 네트워크를 직접 호출하지 않는다는 원칙은 그대로다.
 
 ### 6.2 식별자에 스킴 포함 — v0.1부터
 
 ```yaml
-source: file:./skills/x
-source: github:user/repo@v1.0
-source: github:user/repo@v1.0#path/in/repo
+source: file:./skills/x                      # 부품
+source: github:user/repo@v1.0                # 패키지
+source: git:https://gitlab.com/u/r.git#v1.0  # 패키지 (github 이 아닌 git 원격)
+source: github:user/repo@v1.0#path/in/repo   # 문법은 파싱되지만 패키지에서는 거부 (하위 경로 clone 미구현)
 ```
 
 스킴 문법은 공짜이므로 v0.1부터 쓴다. 나중에 도입하면 호환성 문제가 생긴다.
@@ -429,8 +494,10 @@ Claude Code의 사용자 레벨 MCP는 `~/.claude.json`에 다른 상태값(mach
 파일 단위 부품이 아니라서 **항목형 카테고리**(`EntryCategory`)를 어댑터 경계에 추가했다.
 
 ```
-EntryCategory { name, kind: "entry", secretKeys, expandsEnv, read(), write(id, value|null) }
+EntryCategory { name, kind: "entry", secretKeys, secretRootIds?, expandsEnv, homeStaysPlaceholder?, read(), write(id, value|null) }
 ```
+
+(전체와 각 멤버의 뜻은 `src/adapters/types.ts`)
 
 - 창고에는 `mcp/<id>.json`. 배치는 `mcpServers.<id>` 키 하나만 바꾸고 파일은 임시 파일 → rename.
 - 관리 집합에는 `mcp:<id>` 로 적는다. 경로 구간에 `:` 이 못 오므로 파일과 구분된다.
@@ -448,7 +515,7 @@ Claude Code 플러그인은 §3.7의 "설치한 것"이다. clone이 아니라 `
 **설치기(installer) 인터페이스**를 두고 어댑터가 자기 설치기를 제공한다.
 
 ```
-Installer { schemes, priority, detect, status, install, update }
+Installer { name, schemes, priority, detect, status, install, update, upstream?, describe, cwd }   // 전체는 src/installers/types.ts
 ├── git              core      github: / git:            priority 0
 ├── claude-marketplace  어댑터  claude-marketplace:<owner/repo>   10
 └── claude-plugin       어댑터  claude-plugin:<name>@<marketplace> 20
@@ -458,7 +525,7 @@ Installer { schemes, priority, detect, status, install, update }
 - 플러그인은 버전 고정이 안 된다. 락은 "실제 설치된 것"을 적고, 다르면 status가 알린다.
 - 플러그인 설치는 에이전트 자신의 패키지 관리자이므로 `--yes` 없이 실행한다. `--yes`는 `-y`로 넘어간다.
 - 프로젝트 범위 플러그인은 그 프로젝트의 몫이라 기록하지 않는다(§1.3).
-- 이 사용자 환경에서는 exa·notion 플러그인이 MCP 서버를 실어 온다. 손으로 넣은 MCP는 여전히 미지원.
+- 이 사용자 환경에서는 exa·notion 플러그인이 MCP 서버를 실어 온다. 손으로 넣은 MCP 는 0.4.0 부터 `mcp` 항목형 부품(§7.4)이다.
 
 ---
 
@@ -515,9 +582,17 @@ v0.4  다른 도구
    ✓ CI Windows 잡의 sync 테스트 5초 타임아웃 플레이크 (테스트에 30초 여유)
    ✓ update --dry-run 이 업스트림을 안 봄 (설치기 upstream(), git ls-remote)      ← 0.14.2
 
-검증 (사용자 기기·키 필요)
-   - Gemini CLI · Copilot CLI · Cursor 를 VM probe 로 (§10.2, scripts/vm/README.md 런북)
-   - 실제 Windows 기기에서 §10.1 3층
+v0.5  조용한 실패와 보고
+   ✓ CLI 출력 영어화, Windows 실기기 검증이 잡은 것들                    ← 0.15.0~0.15.5
+   ✓ lshed report · 이슈 템플릿 · 실패 뒤 질문                            ← 0.16.0~0.16.1
+   ✓ lshed check · 에이전트 자동 감지                                    ← 0.17.0
+   ✓ 보안 수정 셋, 실패해도 계속하는 restore/update                       ← 0.17.1~0.17.4
+   ✓ restore --fresh-only · --agent installed, 컨테이너 probe             ← 0.17.5
+
+검증 (사용자 기기·키 필요, 기록은 docs/VERIFICATION.md)
+   ✓ Gemini CLI · Cursor probe, 모델 질문까지 (컨테이너, 2026-09-18)
+   - Copilot CLI 모델 질문 (배치·형식은 통과, COPILOT_GITHUB_TOKEN 대기)
+   ✓ 실제 Windows 기기에서 §10.1 3층 (0.15.1~0.17.3)
 
 이후 (선택)
    - 시크릿 B~D 옵션
@@ -538,6 +613,8 @@ v0.4  다른 도구
 | 스키마 | `zod` + `yaml` | 매니페스트 검증 오류를 사람이 읽을 수 있게 |
 | 테스트 | `vitest` | 임시 디렉터리를 HOME으로 잡는 통합 테스트 중심 |
 | 빌드 | `tsup` | 단일 파일 번들, `bin` 하나 |
+| 프롬프트 | `@clack/prompts` | `restore --pick` 체크리스트(0.8.0), 실패 뒤 report 질문 |
+| TOML | `smol-toml` | Codex `config.toml` 읽기와 표 블록 생성(0.12.0). 쓰기는 블록을 잘라 붙여 주석을 보존 |
 
 ### 9.1 "사용자는 이미 Node를 갖고 있다" 는 틀렸다 (0.7.3)
 
@@ -547,20 +624,18 @@ v0.1의 런타임 결정 근거는 "대상 사용자가 이미 Node를 갖고 �
 
 대응은 두 가지다. 배포 방식을 늘리는 것이지 런타임을 바꾸는 것이 아니다.
 
-- **의존성을 번들에 넣는다.** `dist/cli.js` 하나에 commander·yaml·zod가 들어간다(627KB).
+- **의존성을 번들에 넣는다.** `dist/cli.js` 하나에 commander·yaml·zod·@clack/prompts·smol-toml 이 들어간다(0.7.3 에 627KB, 0.17.5 에 약 690KB).
   npm 설치가 가벼워지고(zod만 7.9MB였다), 실행파일로 묶기도 쉬워진다.
   대신 ESM 출력에 `require` 셔임이 필요하고, 버전은 빌드 시점에 박는다(실행파일 안에는 package.json이 없다).
 - **단일 실행파일.** `bun build --compile` 이 한 대에서 5개 플랫폼을 교차 컴파일한다. 태그를 밀면 릴리스에 붙는다.
-  런타임이 통째로 들어가 60~85MB다. 82KB 도구치고 크지만, Node를 못 깔거나 안 깔 사람에게는 이것뿐이다.
+  런타임이 통째로 들어가 60~85MB다. 번들 1MB 도 안 되는 도구치고 크지만, Node를 못 깔거나 안 깔 사람에게는 이것뿐이다.
   코드 서명은 하지 않는다(macOS 공증·Windows 인증서는 비용과 절차가 따로다). 첫 실행 경고를 문서에 적는다.
 
 **하지 않은 것:** Homebrew·Scoop·winget·apt. 전부 위 실행파일이 먼저 있어야 가능하고,
 그다음은 각 저장소의 등재 절차(인지도 요건, 매니페스트 PR)라 도구의 문제가 아니다.
 수요가 확인되면 Scoop 버킷과 Homebrew tap이 가장 싸다.
 
-> `npm` 은 여전히 기본 경로다. Node가 있으면 627KB만 받고 자동 갱신도 된다.
-
-> 현재 `package.json`은 commonjs·JS 상태다. 스캐폴딩 시 위 결정으로 교체한다.
+> `npm` 은 여전히 기본 경로다. Node가 있으면 번들 하나(1MB 미만)만 받고 자동 갱신도 된다.
 
 ---
 
@@ -593,46 +668,29 @@ Windows 에서 알려진 차이: 홈이 `C:\Users\me`, Claude Code 루트는 `%U
 경로 비교는 `fsutil.ts` 의 `normalizePath`/`isInside`/`realpathish` 한 곳으로 모았고,
 링크된 디렉터리를 만들어 리눅스에서도 이 부류를 재현하는 회귀 테스트를 두었다.
 
-### 10.2 다른 에이전트 검증: VM probe (2026-09-05, 재실행 2026-09-08)
+### 10.2 다른 에이전트 검증: probe
 
-> 실행 절차(런북)는 `scripts/vm/README.md` 의 "Runbook" 절에 있다. 사용자가 OpenStack 과 OS 이미지를 준비하면 그 절차대로 바로 돌린다.
+> 도구별 버전·결과·실행 날짜는 `docs/VERIFICATION.md` 가 기준이다. 실행 절차(런북)는 `scripts/vm/README.md`.
 
-`--agent codex|gemini|copilot|cursor|agents` 는 각 도구의 문서를 보고 만들었으므로, 도구 자체로 확인하는 층이 하나 더 필요하다.
-`scripts/vm/` 에 셋이 있다. `install-tools.sh` 로 이미지를 한 번 굽고(Node 22, Codex, Gemini CLI, Copilot CLI, Cursor CLI, lshed, 이 저장소 `/opt/lshed`),
-`cloud-init.yaml` 로 부팅하면서 API 키만 넣으면 `probe.sh` 가 도구마다 돌고 `/var/lib/lshed-probe/` 에 결과를 남긴다.
+`--agent codex|gemini|copilot|cursor|agy|agents` 는 각 도구의 문서를 보고 만들었으므로, 도구 자체로 확인하는 층이 하나 더 필요하다. `scripts/vm/probe.sh` 가 그 층이다. 일회용 VM(`install-tools.sh` 로 굽고 `cloud-init.yaml` 로 부팅), 로컬 컨테이너(`Dockerfile.probe` + `probe-docker.sh`, 2026-09-18), 스크래치 `HOME` 을 둔 이 기기, 주간 GitHub 워크플로(`probe.yml`) 어디서든 같은 스크립트가 돈다.
 
 probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 지침 조각, `${VAR}` 시크릿을 가진 MCP 둘) 를 `restore --agent <tool>` 로 실제 루트에 놓고 파일을 확인하고,
 (2) 도구 자체의 파서가 있으면 그것으로도 본다(`codex mcp list`, `gemini mcp list`, `codex debug prompt-input` 은 모델 없이 스킬 루트를 보여 준다),
-(3) `codex exec` / `gemini -p` / `copilot -p` / `agent -p` 로 암호어를 물어 실제로 읽는지 보고,
+(3) `codex exec` / `gemini -p` / `copilot -p` / `agent -p --trust` 로 암호어를 물어 실제로 읽는지 보고,
 (4) `restore --link` 뒤 창고를 고쳐 다시 물어 링크를 따라가는지 보고,
 (5) 빈 프로필로 `restore none` 해 흔적을 지운다. 암호어는 실행마다 난수라 이전 실행의 잔재로 통과할 수 없다.
 
-이 기기(Codex 0.153.2 설치됨)에서 VM 전에 알게 된 것:
-- Codex 는 `$CODEX_HOME/skills` 와 `$HOME/.agents/skills` **둘 다** 스킬 루트로 읽는다(`codex debug prompt-input` 의 skill roots 표). 다만 소스는 `$CODEX_HOME/skills` 를 *deprecated, 호환용* 이라 적고 현재 문서는 `.agents/skills` 만 말한다. lshed 의 `codex` 대상은 0.13 까지 `~/.codex/skills` 에 놓았고, **0.14.0 에서 `~/.agents/skills` 로 옮겼다** (스펙 `skillsHome`, 카테고리 루트는 어댑터 루트 기준 상대 경로 `../.agents/skills`; `--root` 를 준 경우 홈은 그 부모라 테스트가 진짜 홈에 쓰지 않는다). 같은 기기에서 `agents` 대상과 스킬 디렉터리를 공유하므로 둘 중 하나만 쓰라고 README 에 적었다.
-- `$CODEX_HOME/AGENTS.md` 이어붙임, `config.toml` 의 `[mcp_servers.*]`(env_vars, bearer_token_env_var) 를 Codex 가 파싱, 스킬·링크된 스킬 읽기까지 Codex probe 전부 통과.
-- Codex 읽기 전용 샌드박스(bubblewrap)가 user namespace 를 못 만드는 호스트에서는 모델이 스킬 파일을 못 열고 문맥의 다른 값을 답한다. probe 는 일회용 VM 전제로 `--sandbox danger-full-access` 를 쓴다.
-- 지침 코드워드가 문맥에 있으면 저추론 모델이 스킬 질문에 그것을 답하기도 한다. probe 는 스킬 질문을 스킬만 있는 프로필에서 하고(지침 조각 배치 전, 그리고 `--link` 도 스킬 프로필로), 질문마다 최대 3회(120초) 시도한다. `codex exec` 가 세션 배너를 찍기 전에 chatgpt.com 연결을 쥔 채 멈추는 일이 이따금 있어서(lshed 와 무관) 재시도가 필요했다.
-- 도구 호출은 `setsid` 로 터미널에서 떼고 stdin 을 닫는다. 가짜 MCP 서버는 DNS 가 끼지 않도록 닫힌 로컬 포트(127.0.0.1:9)를 가리킨다.
-- 최종: Codex 대상 probe 17개 검사 전부 통과, `agents` 대상(~/.agents/skills 를 Codex 가 읽음, 링크 포함) 통과.
-- **agy(0.13.0)**: 사용자에게 Antigravity CLI(agy 1.1.26)가 있어 어댑터를 추가하고 같은 probe 로 확인했다. agy 의 `/skills` 가 보여 준 전역 스킬 위치는 `~/.gemini/config/skills`(IDE·CLI 공용), `~/.gemini/skills`, `~/.gemini/antigravity-cli/skills` 이고 `~/.agents/skills` 는 아니다. 전역 규칙은 `~/.gemini/AGENTS.md` 와 `GEMINI.md` 둘 다 읽는다(각각 다른 코드워드로 확인). 그래서 루트는 `~/.gemini/config`, 지침은 `../AGENTS.md`(Gemini CLI 와 GEMINI.md 를 다투지 않도록), MCP 는 `config/mcp_config.json`(type 없음, http 는 serverUrl, `disabled` 는 도구 상태). 루트 위의 부품은 백업 경로에서 `..` 을 `__` 로 바꿔 백업 디렉터리 안에 둔다. 격리 HOME + 복사한 OAuth 토큰으로 probe 전부 1회 시도에 통과. VM 에선 `modelProvider: "gemini"` + GEMINI_API_KEY 로 헤드리스 로그인.
-- probe 를 `claude-code` 대상으로 격리된 `CLAUDE_CONFIG_DIR` 에 돌리다 **lshed 버그 하나를 잡았다(0.12.1)**: Claude Code 를 아직 한 번도 안 돌린 기기에서 `CLAUDE_CONFIG_DIR` 가 있으면 어댑터가 안쪽 `.claude.json` 이 없다는 이유로 형제 `<dir>.json` 에 MCP 를 썼고, `claude mcp list` 는 그것을 읽지 않았다. 환경변수로 루트가 정해졌으면 언제나 안쪽 파일을 쓰도록 고침. 기본 `~/.claude` 에서는 변화 없음.
-- **재실행(2026-09-08, 0.14.1)**: Codex 0.153.2 는 17개, agy 1.1.27 은 16개 검사 전부 통과, 질문마다 1회 시도로 회수. gemini/copilot/cursor/agents/claude-code 는 `LSHED_PROBE_ASK=0` 으로 빈 HOME 에 배치·형식·정리만 확인해 전부 통과. 이 기기에서 probe 를 돌리는 법: 실제 루트를 건드리지 않도록 스크래치 `HOME` 을 만들고 로그인 파일만 복사한다 — Codex 는 `~/.codex/auth.json`(+ `config.toml`, `installation_id`), agy 는 `~/.gemini/antigravity-cli/antigravity-oauth-token`(+ `settings.json`, `installation_id`). 끝나면 복사본을 지운다. Codex 0.153.2 의 스킬 루트는 `~/.agents/skills` 와 `~/.codex/skills/.system`(내장) 둘이며 실제 창고의 스킬 7개 중 `disable-model-invocation: true` 인 둘(grill-me, grill-with-docs)을 뺀 5개가 프롬프트에 실린다 — 정상.
-
-- **컨테이너 실행(2026-09-18)**: OpenStack VM 을 기다리지 않고 같은 `install-tools.sh` 로 도커 이미지를 굽는 `scripts/vm/Dockerfile.probe` 와 `probe-docker.sh` 를 두었다. 키 없이 돈 첫 실행에서 gemini(0.60.0)·copilot(1.0.86)·cursor(2026.09.15) 셋의 배치·형식·링크·정리 검사가 전부 통과하고 `gemini mcp list` 가 lshed 의 settings.json 을 파싱했다. 같은 날 사용자가 무료 키(AI Studio, cursor.com/dashboard/api)를 넣어 **Gemini 16/16, Cursor 14/14** 로 모델 질문까지 닫혔다(둘 다 첫 답변 기록; Cursor 는 `agent -p --trust` 가 없으면 신뢰 프롬프트만 내고 답이 비어 probe.sh 와 check.ts 에 넣음). Copilot 만 토큰 대기. 같은 날 사용자의 agent-box 개발 컨테이너(Claude Code 2.1.275·Codex 0.155.0·agy 1.2.5 로그인 상태)에서 격리 HOME 으로 probe 를 돌려 **agy 16/16, claude-code 16/16 — Claude Code 가 모델 질문 셋에 답한 첫 기록**, 전부 1회 시도. codex·agents 는 모델 없이 통과(OpenAI 키 401). 부수 수정: `gemini mcp list` 에 `GEMINI_CLI_TRUST_WORKSPACE=true`(질문에는 이미 있었음). 이 컨테이너를 "새 기기" 로 삼은 종단 테스트(agent-box `test-fresh`: 빈 state + 로그인만 → init 의 restore → status/drift/스킬/`mcp list`/`lshed check`/플러그인 확인, 재시작 시 멱등)도 FAIL 0 이었고, 거기서 둘이 나왔다: Claude Code 2.1 이 스스로 만드는 `~/.claude/skills/synced` 를 `outside` 로 세던 것(스캔에서 제외), 그리고 컨테이너 init 이 에이전트별 state 경로를 하드코딩하던 것 → `restore --fresh-only` 와 `--agent installed`.
+설계에 남은 것(자세한 경위는 `docs/VERIFICATION.md`, 각 수정은 `CHANGELOG.md`):
+- Codex 는 `$CODEX_HOME/skills`(deprecated)와 `~/.agents/skills` 를 둘 다 읽는다 → `codex` 대상은 0.14.0 부터 `~/.agents/skills` 에 놓는다(스펙 `skillsHome`, 카테고리 루트 `../.agents/skills`; `--root` 를 주면 홈은 그 부모라 테스트가 진짜 홈에 쓰지 않는다). `agents` 대상과 스킬 폴더를 공유하므로 둘 중 하나만 쓰라고 README 에 적었다.
+- agy 의 전역 스킬은 `~/.gemini/config/skills` 이고 `~/.agents/skills` 는 아니다. 전역 규칙은 `~/.gemini/AGENTS.md` 와 `GEMINI.md` 를 둘 다 읽는다 → 루트 `~/.gemini/config`, 지침 `../AGENTS.md`(Gemini CLI 와 GEMINI.md 를 다투지 않도록), MCP `mcp_config.json`(serverUrl). 루트 위 부품의 백업은 `..` 을 `__` 로.
+- 격리된 `CLAUDE_CONFIG_DIR` 에서 `.claude.json` 이 디렉터리 밖에 쓰이던 버그(0.12.1), Claude Code 2.1 이 스스로 만드는 `~/.claude/skills/synced` 를 스캔에서 제외(0.17.5), Cursor 의 `agent -p` 는 `--trust` 가 필요(0.17.5, `check` 도).
+- 저추론 모델은 문맥에 있는 지침 코드워드를 스킬 질문에 답하기도 한다 → 스킬 질문은 스킬만 있는 프로필에서, 질문마다 최대 3회(120초). 도구 호출은 `setsid` 로 터미널에서 떼고 stdin 을 닫는다. 가짜 MCP 서버는 닫힌 로컬 포트(127.0.0.1:9)를 가리킨다.
+- Codex 의 읽기 전용 샌드박스는 user namespace 를 못 만드는 호스트에서 스킬 파일을 못 연다 → probe 는 일회용 기기 전제로 `--sandbox danger-full-access`.
+- 컨테이너를 "새 기기" 로 삼은 종단 테스트(agent-box `test-fresh`)가 bootstrap 이 에이전트별 state 경로를 알아야 하는 문제를 드러냄 → `restore --fresh-only`, `--agent installed`(0.17.5).
 
 ### 10.3 전수 테스트 (2026-09-08, 0.14.1)
 
-코드를 바꾸지 않은 상태에서 이 기기에서 할 수 있는 검사를 전부 돌린 기록. 층은 §10.1 의 셋에 probe 를 더한 넷이다.
-
-| 층 | 검사 | 결과 |
-|---|---|---|
-| 1 | `npm run typecheck`, `npm test` (147) | 통과 |
-| 2 | `npm run build` → `npm run smoke`, `npm run binaries`(5종) → `LSHED_CLI=build/lshed-linux-x64 npm run smoke` | 통과 |
-| 3 | 실제 창고 `~/harness` 에 대해 claude-code·codex·agy 셋 다 `status`(드리프트 없음)·`diff`(일치)·`restore --dry-run`(변경 0)·`scan`·`add`(후보 없음)·`sync --dry-run`(커밋할 것 없음) | 통과 |
-| 3 | `restore --pick` 을 실제 pty 로 구동(스크래치 창고): 스킬 2개 선택 → 프로필 `pickbox` 저장 → 배치 2 | 통과 |
-| 4 | §10.2 probe: Codex·agy 전체, 나머지는 배치만 | 통과 |
-
-여기서 나온 **문제 둘**은 §11 에 적었다(둘 다 같은 날 해결, 0.14.2): (1) CI 의 마지막 main 런(6b7b77e, 문서만 바꾼 커밋)에서 windows-22 잡이 `test/sync.test.ts` 두 테스트의 5초 타임아웃으로 실패 — 같은 런의 windows-20 과 직전 런의 windows 잡 둘은 통과했으므로 러너에서 git 자식 프로세스 spawn 이 느린 날 터지는 플레이크이고, 뒤따른 `EBUSY rmdir` 는 타임아웃 뒤 afterEach 가 아직 도는 git 밑을 지우려다 난 연쇄다; (2) `lshed update --dry-run` 이 실환경에서 9개 패키지 전부에 `~ (update)` 를 찍는데 `status` 는 전부 `= lock` 이라 모순처럼 보인다.
+§10.1 의 세 층에 probe 를 더한 넷을 코드 변경 없이 전부 돌린 기록(단위·스모크·실행파일 스모크·실제 창고에 대한 claude-code/codex/agy `status`·`diff`·`restore --dry-run`·`add`·`sync --dry-run`, `--pick` pty, Codex·agy probe). 전부 통과했고, 여기서 나온 **문제 둘**(CI Windows 잡의 sync 테스트 타임아웃 플레이크, `update --dry-run` 이 업스트림을 안 봄)은 §11 에 적었다(둘 다 같은 날 해결, 0.14.2). 이후의 실행 기록은 `docs/VERIFICATION.md`.
 
 ## 11. 미결 질문
 
@@ -640,7 +698,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - ~~**`update --dry-run` 이 업스트림을 확인하지 않는다**~~ — **해결 (2026-09-08, 0.14.2).** `updatePackages` 가 dryRun 이면 조회 없이 `~ package X (… update)` 만 찍었다. 설치기 인터페이스에 선택적 `upstream(ctx, pkg) → { current, latest }` 를 두고, git 설치기는 `git ls-remote`(출처 브랜치·태그; `refs/heads/<ref>`, `refs/tags/<ref>^{}`, `refs/tags/<ref>` 를 명시해 주석 태그는 커밋으로, 같은 이름은 브랜치 우선) 와 clone 의 HEAD 를, 마켓플레이스 설치기는 `installLocation` 이 git 저장소일 때만 그 origin 과 견준다. 플러그인과 공식 마켓플레이스(.gcs-sha 배포, 저장소 아님)는 미리 알 수 없어 `?`. 플러그인 버전은 마켓 커밋 sha 이기도 하고 semver 이기도 해서(installed_plugins.json) Claude Code 의 판정을 흉내내지 않기로 했다 — §7.3 사양 변경에 약하다. 조회 실패는 그 줄에서 `?` 로 알리고 다음으로 넘어간다. 실제 창고에서 `~ gstack 0d1bd56 → 0530392`, `= llm-guidelines`, 나머지 `?` 가 1.3초.
 - ~~**비ASCII 이름의 부품이 매니페스트에서 거부된다**~~ — **해결 (2026-09-08).** `init`/`add` 는 `skills/논문리뷰` 를 그대로 적는데 `ID_RE` 가 `\w` 라 검증에서 걸려 이후 모든 명령이 죽었다. 에이전트는 디렉터리 이름을 그대로 읽으므로 id·프로필 이름 규칙을 `\p{L}\p{N}_.-` 로 넓혔고, 스캔한 이름은 NFC 로 정규화해 id 로 쓴다(macOS 가 NFD 를 돌려줘도 창고의 바이트는 같도록). 스모크에 한글 스킬을 넣어 macOS/Windows CI 에서도 본다. 같은 날 `restore --yes` 가 이미 있는 패키지의 `install:` 을 건너뛰던 것도 고쳤다(첫 restore 의 "rerun with --yes" 안내가 거짓이었다).
 
-- ~~**다른 에이전트 어댑터**~~ — **해결 (2026-09-04, 0.11.0).** Codex·Gemini CLI·Copilot CLI·Cursor 가 전부 Agent Skills 표준(`<root>/skills/<name>/SKILL.md`)을 쓰고 공용 `~/.agents/skills/` 도 읽으므로, 도구별 어댑터 대신 `SkillsDirAdapter` 하나에 루트·지침 파일만 다른 스펙 5개(codex/gemini/copilot/cursor/agents)를 넣었다. 창고는 하나이고 `--agent` 로 배치 대상을 고른다(`$LSHED_AGENT`, 창고의 `agent:` 는 기본값). 매니페스트 검증은 현재 어댑터가 아니라 **창고를 만든 에이전트** 기준이라 다른 에이전트로 열어도 오류가 아니며, 모르는 카테고리(mcp, settings, agents, instructions 없음)와 설치기 없는 패키지(claude-plugin:)는 알리고 건너뛴다. state 는 에이전트 루트마다 따로. 지침은 Codex/Gemini/Copilot 모두 이어붙임(Codex 는 import 문법이 없고, Gemini 는 @import 의 허용 디렉터리가 문서에 불명확, Copilot 은 저장소 안에서만). Cursor·~/.agents 는 사용자 지침 파일이 없어 `instructionsFileName()` 이 null. 실환경: 사용자의 `~/.agents/skills` 에 `skills` CLI 로 설치한 5개가 이미 있고 창고와 내용이 같아 dry-run 이 `=` 5, `+` 1(add-drivers) 로 나왔다. MCP 는 0.12.0 에서 추가: 창고 형식은 Claude Code 것 그대로 두고 `adapters/mcp-forms.ts` 가 도구별로 바꾼다(gemini: type 없음·httpUrl, copilot: type local·tools, cursor: `${env:VAR}`·`${userHome}`, codex: env_vars·bearer_token_env_var·env_http_headers 로 변수 *이름*을 적음). 변환은 어댑터의 read/write 안에서만 일어나 core 는 모른다. Codex 의 config.toml 은 `TomlEntries` 가 `[mcp_servers.<id>]` 표 블록만 잘라 붙여 주석·다른 표를 보존(smol-toml 은 읽기와 블록 생성에만). expandsEnv 는 codex·cursor true(이름으로 표현), gemini·copilot false(restore 가 채움). 이름이 다른 자리표시자(env.K = "${OTHER}")는 Codex 로 표현할 수 없어 문자열 그대로 남는다.
+- ~~**다른 에이전트 어댑터**~~ — **해결 (2026-09-04, 0.11.0).** Codex·Gemini CLI·Copilot CLI·Cursor 가 전부 Agent Skills 표준(`<root>/skills/<name>/SKILL.md`)을 쓰고 공용 `~/.agents/skills/` 도 읽으므로, 도구별 어댑터 대신 `SkillsDirAdapter` 하나에 루트·지침 파일만 다른 스펙 5개(codex/gemini/copilot/cursor/agents)를 넣었다(0.13.0 에서 agy 가 더해져 지금은 6개, §4.6). 창고는 하나이고 `--agent` 로 배치 대상을 고른다(`$LSHED_AGENT`, 창고의 `agent:` 는 기본값). 매니페스트 검증은 현재 어댑터가 아니라 **창고를 만든 에이전트** 기준이라 다른 에이전트로 열어도 오류가 아니며, 모르는 카테고리(mcp, settings, agents, instructions 없음)와 설치기 없는 패키지(claude-plugin:)는 알리고 건너뛴다. state 는 에이전트 루트마다 따로. 지침은 Codex/Gemini/Copilot 모두 이어붙임(Codex 는 import 문법이 없고, Gemini 는 @import 의 허용 디렉터리가 문서에 불명확, Copilot 은 저장소 안에서만). Cursor·~/.agents 는 사용자 지침 파일이 없어 `instructionsFileName()` 이 null. 실환경: 사용자의 `~/.agents/skills` 에 `skills` CLI 로 설치한 5개가 이미 있고 창고와 내용이 같아 dry-run 이 `=` 5, `+` 1(add-drivers) 로 나왔다. MCP 는 0.12.0 에서 추가: 창고 형식은 Claude Code 것 그대로 두고 `adapters/mcp-forms.ts` 가 도구별로 바꾼다(gemini: type 없음·httpUrl, copilot: type local·tools, cursor: `${env:VAR}`·`${userHome}`, codex: env_vars·bearer_token_env_var·env_http_headers 로 변수 *이름*을 적음). 변환은 어댑터의 read/write 안에서만 일어나 core 는 모른다. Codex 의 config.toml 은 `TomlEntries` 가 `[mcp_servers.<id>]` 표 블록만 잘라 붙여 주석·다른 표를 보존(smol-toml 은 읽기와 블록 생성에만). expandsEnv 는 codex·cursor true(이름으로 표현), gemini·copilot false(restore 가 채움). 이름이 다른 자리표시자(env.K = "${OTHER}")는 Codex 로 표현할 수 없어 문자열 그대로 남는다.
 - ~~**프로필 상속** (`extends: base`)~~ — **해결 (2026-09-04, 0.9.0).** `extends: base` 또는 `extends: [a, b]`. 부모를 먼저 풀고 자기 것을 뒤에 붙이며 중복은 한 번, 빼기는 없다(덜 원하면 상속하지 말고 나열). 지침은 순서가 의미라 부모 조각이 먼저 import 된다. 없는 부모·순환은 lshed.yaml 참조 오류. 프로필을 읽는 곳(restore 계획, 패키지, list 의 사용처, add 힌트, `--pick` 기준 체크)은 전부 해석된 프로필을 쓴다. `--pick` 이 기기별 프로필을 만들기 시작하면서 "공통 + 기기 차이" 표현이 필요해져 도입.
 - ~~**`agents/`·`commands/`의 하위 디렉터리**~~ — **해결 (2026-09-03, 0.7.6).** 문서 기준: `agents/` 는 하위 디렉터리를 **재귀적으로 읽고**, 이름은 경로가 아니라 frontmatter `name` 에서 온다. `commands/` 는 문서가 침묵. 스킬은 사용자 루트에서 `skills/<name>/SKILL.md` 한 단계다.
   lshed 는 최상위 `.md` 만 스캔했으므로 폴더로 정리한 에이전트가 창고에서 조용히 빠졌다. 파일형 카테고리를 재귀 스캔하고 id 에 경로를 그대로 담는다(`team/reviewer`).
@@ -683,7 +741,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 0.2.1 list / remove / prune — 2026-09-02
 - [x] 0.3.0 플러그인 설치기 — 2026-09-02
 - [x] 0.4.0 MCP 항목형 부품 + ${VAR} 마스킹 — 2026-09-03 (실제 Claude Code 가 사용자 범위에서 확장하는지 프로브로 검증)
-- [x] npm 발행 — 0.4.0 은 2026-09-03, 이후 0.6.0·0.7.0·0.7.2·0.7.4·0.8.0·0.10.0·0.12.0·0.13.0·0.14.0·0.14.1·0.14.2·0.15.0·0.15.1·0.15.3·0.15.4·0.15.5·0.16.0·0.16.1·0.17.0·0.17.1 (0.15.2 와 0.1.1~0.3.0 중 0.2.1·0.3.0 발행, 나머지는 건너뜀; 0.17.2 는 발행 대기); GitHub 릴리스는 v0.17.2 까지 실행파일 5종 게시
+- [x] npm 발행 — 0.4.0 은 2026-09-03 부터 릴리스마다 사용자가 수동 발행(일부 버전은 건너뜀), latest 는 0.17.5; GitHub 릴리스는 v0.17.5(2026-09-18)까지 실행파일 5종 게시
 - [x] 0.5.0 `lshed add` — init 의 분류(discover)·수집(ingest)을 공용화해 증분으로. `exclude:` 를 매니페스트에 기록 — 2026-09-03
 - [x] 0.6.0 `lshed sync` + README 사용 안내 개정 — 2026-09-03
 - [x] 0.7.0 settings 항목형 + ${HOME} + 시크릿 단어 단위 — 2026-09-03
@@ -699,22 +757,23 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 - [x] 2026-09-08 전수 테스트 (§10.3): 단위·스모크·바이너리·`--pick` pty·실환경 dry-run·Codex/agy probe 전부 통과, 코드 변경 없음
 - [x] CI Windows 잡의 sync 테스트 타임아웃 여유 (§11) — 2026-09-08, 테스트만
 - [x] `update --dry-run` 이 업스트림을 확인하도록 (§11) — 2026-09-08, 0.14.2
-- [ ] Gemini CLI·Copilot CLI·Cursor 를 VM 에서 probe (§10.2) — 사용자: 이미지 굽고 cloud-init 으로 부팅
-- [ ] 사용자 실제 Windows 노트북에서 §10.1 3층 (실행파일로 restore --dry-run, --link 의 junction·복사 폴백)
+- [x] Gemini CLI·Cursor probe, 모델 질문까지 (§10.2) — 2026-09-18, VM 대신 로컬 컨테이너
+- [ ] Copilot CLI probe 의 모델 질문 — COPILOT_GITHUB_TOKEN 대기 (배치·형식은 통과)
+- [x] 사용자 실제 Windows 노트북에서 §10.1 3층 (실행파일로 restore --dry-run, --link 의 junction·복사 폴백) — 0.15.1~0.17.3, `docs/VERIFICATION.md`
 - [x] 실제 창고 ~/harness 를 `--agent agy`·`--agent codex` 로 이 기기에 적용 (도그푸딩, `tools` 프로필 + --link) — 2026-09-05. 잡은 것: 한 플러그인짜리 마켓플레이스의 id 충돌, `extraKnownMarketplaces` 를 후보로 잡던 것, Antigravity 의 빈 mcp_config.json 을 못 읽던 것 (0.14.1)
 
 ---
 
 ## 13. 개정 요지 (2026-09-02)
 
-초안(`notes/overview.v0.1-draft.md`) 대비 바뀐 것.
+초안(`notes/overview.v0.1-draft.md`, 작성자의 비공개 로컬 노트로 저장소에는 없다) 대비 바뀐 것.
 
 | 항목 | 초안 | 개정 | 이유 |
 |---|---|---|---|
 | 차별점 | 시크릿 포함이 핵심 | 프로필·관리 집합·출처 참조가 핵심 | 시크릿은 v0.2에도 dotfiles와 동급. 논리 모순 제거 |
 | dotfiles 비교 | "선택 설치 불가" | "가능하지만 하네스 단위가 아님" | Stow·chezmoi에 반박당함 |
 | 저장소 백엔드 | `StorageBackend` 인터페이스 | 없음. 창고 = 디렉터리 | 불필요한 추상화 |
-| 락파일 | v0.1 | v0.2 (원격 리졸버와 함께) | `file:`만 있으면 잠글 게 없음 |
+| 락파일 | v0.1 | v0.2 (패키지와 함께, §6.3) | `file:`만 있으면 잠글 게 없음 |
 | 프로필 복수 | v0.2 | v0.1 | 창고/레시피 분리의 전제 |
 | 스캐폴드 | v0.3 | 범위 밖 | 하네스 휴대와 무관 |
 | 관리 대상 | skills/mcp/instructions/scaffolds | 어댑터 정의. v0.1은 skills/agents/commands/instructions | 실제 `~/.claude` 구조 반영 |
@@ -725,7 +784,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 | 배치 방식 | 미정 | 복사, 기기별 `--link` (0.10.0) | 크로스 플랫폼·검증 부담 |
 | 범위 | 미정 | 사용자 레벨만 | 프로젝트 레벨은 git이 이미 해결 |
 | 기술 스택·테스트 | 없음 | §9, §10 | 구현 착수 전 필수 |
-| 비용·수익·연구·폐기 대안 | 본문 | `notes/background.md` | 설계 문서 성격 분리 |
+| 비용·수익·연구·폐기 대안 | 본문 | `notes/background.md` (비공개 로컬 노트) | 설계 문서 성격 분리 |
 
 ---
 
@@ -746,7 +805,7 @@ probe 한 번은 (1) 임시 창고(암호어가 든 스킬, 코드워드가 든 
 
 - **`dist`는 기본 무시 대상이 아니다.** 어떤 스킬은 `dist`가 곧 실행 대상이다. 기본값으로 빼면 restore된 스킬이 조용히 동작하지 않는다. 무시하려면 매니페스트의 `ignore:`로 사용자가 명시한다.
 - **모든 스킬이 휴대 대상은 아니다.** 자체 설치 관리자와 벤더링된 바이너리 457MB를 가진 툴킷은 창고에 담는 것보다 각 환경에서 재설치하는 편이 맞다. `init --exclude`로 뺀다.
-  이는 v0.2의 원격 출처(§6.1)가 풀어야 할 문제의 실제 사례다.
+  이는 v0.2의 원격 출처가 풀어야 할 문제의 실제 사례였고, 0.2.0 의 패키지(§3.7)가 답이 되었다.
 
 ### 결과
 

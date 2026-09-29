@@ -97,7 +97,7 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
       if (seen.has(c.id)) problems.push(`${cat}: duplicate id "${c.id}"`);
       seen.add(c.id);
       try {
-        if (!isComponentSource(parseSource(effectiveSource(cat, c)))) problems.push(`${cat}/${c.id}: a part's source must be file:, github: or git:`);
+        if (!isComponentSource(parseSource(effectiveSource(cat, c)))) problems.push(`${cat}/${c.id}: a part's source must be file: (put github:/git: code under packages:)`);
       } catch (e) {
         problems.push(`${cat}/${c.id}: ${(e as Error).message}`);
       }
@@ -114,6 +114,8 @@ export function parseManifest(text: string, knownCategories?: readonly string[],
       if (scheme === "file") problems.push(`packages/${p.id}: a package source cannot be file:`);
       else if (knownSchemes && !knownSchemes.includes(scheme)) problems.push(`packages/${p.id}: no installer handles scheme "${scheme}" (known: ${knownSchemes.join(", ")})`);
       if ((scheme === "github" || scheme === "git") && !p.into) problems.push(`packages/${p.id}: a ${scheme}: package needs into`);
+      // #path 는 파싱되지만 설치기가 저장소 전체를 clone 한다. 조용히 무시하지 않고 거부한다.
+      if (src.scheme === "github" && src.subpath) problems.push(`packages/${p.id}: a #subpath is not supported for packages (the whole repository is cloned)`);
     } catch (e) {
       problems.push(`packages/${p.id}: ${(e as Error).message}`);
     }

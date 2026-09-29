@@ -1,11 +1,11 @@
 # VM probe: do the other agents really read what lshed places?
 
-`--agent codex|gemini|copilot|cursor|agents` (0.11.0, 0.12.0) was written from each tool's documentation.
+`--agent codex|gemini|copilot|cursor|agy|agents|claude-code` (0.11.0–0.13.0) was written from each tool's documentation.
 This directory checks it against the tools themselves, on a throwaway VM, without touching any real setup.
 
 | file | role |
 |---|---|
-| `install-tools.sh` | bake the image once: Node 22, Codex, Gemini CLI, Copilot CLI, Cursor CLI, lshed, this repo under `/opt/lshed` |
+| `install-tools.sh` | bake the image once: Node 22, Codex, Gemini CLI, Copilot CLI, Cursor CLI, Antigravity CLI (agy), lshed, this repo under `/opt/lshed` |
 | `cloud-init.yaml` | boot-time user data: API keys into `/etc/lshed-probe.env`, then run the probe and leave results in `/var/lib/lshed-probe/` |
 | `probe.sh` | the probe: `probe.sh <codex|gemini|copilot|cursor|agy|agents|claude-code|all>` |
 
@@ -28,7 +28,7 @@ Results: `<probe dir>/results/<tool>-<timestamp>.md` plus the tools' stderr next
 scripts/vm/probe-docker.sh build                                   # ~2 min after the first time; lshed comes from this checkout
 export GEMINI_API_KEY=... COPILOT_GITHUB_TOKEN=... CURSOR_API_KEY=... # whichever you have; none → model-free run
 scripts/vm/probe-docker.sh gemini copilot cursor                   # or: all
-ls probe-results/<date>/results/                                   # <tool>-<timestamp>.md + .stderr
+ls probe-results/<date>-<HHMM>/results/                            # <tool>-<timestamp>.md + .stderr
 ```
 
 Keys are passed through only when set in the environment, or read from `~/.config/lshed-probe.env` (`PROBE_KEYS` to point elsewhere; `VAR=value` lines, `chmod 600`, outside any repository) when that file exists, so nothing needs exporting. Codex's read-only sandbox cannot create user namespaces inside an unprivileged container (`unshare -Ur` fails), so its questions rely on `--sandbox danger-full-access` as on the VM — the container is disposable, so that is fine, but do not mount a shed you care about.
@@ -58,11 +58,13 @@ HOME=/tmp/h LSHED_PROBE_ASK=0 LSHED_BIN="node $PWD/dist/cli.js" scripts/vm/probe
 
 ## What is known before the VM (2026-09-05, re-run 2026-09-08 on this Linux machine)
 
+The current, dated record of every run is [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md); the notes below are what the early runs taught about each tool.
+
 - Codex 0.153.2 lists skills from **both** `$CODEX_HOME/skills` and `$HOME/.agents/skills` (`codex debug prompt-input` shows both as skill roots). Its source calls `$CODEX_HOME/skills` a *deprecated* location kept for compatibility, and the current docs mention only `.agents/skills`. Since 0.14.0 lshed's `codex` target places skills in `~/.agents/skills`; on a fresh HOME the roots Codex reports are `~/.agents/skills` and its built-in `~/.codex/skills/.system`.
 - The full Codex probe passes here: `$CODEX_HOME/AGENTS.md` is read, `config.toml` written by lshed parses in `codex mcp list`, the skill and the linked skill are read.
 - Codex's read-only sandbox (bubblewrap) cannot create user namespaces on some hosts; then the model cannot open the skill file and answers from whatever is in context. The probe therefore runs `codex exec --sandbox danger-full-access` — acceptable on a disposable VM, not elsewhere.
 - The `agents` target passes with Codex too: a skill lshed puts in `~/.agents/skills` is listed, read, and read again through the `--link` symlink after an edit in the shed.
-- A low-effort model that already has the instructions codeword in context sometimes answers with it instead of opening the skill. The probe therefore asks the skill question under a skill-only profile, before and after the instructions fragment is placed, and gives every question two attempts.
+- A low-effort model that already has the instructions codeword in context sometimes answers with it instead of opening the skill. The probe therefore asks the skill question under a skill-only profile, before and after the instructions fragment is placed, and gives every question up to three attempts.
 - `codex exec` occasionally stalls before printing its session banner, holding an open connection to chatgpt.com (ChatGPT login) — independent of lshed. Every question therefore gets up to three attempts of 120 s.
 - Antigravity CLI (`agy` 1.1.26, re-run with 1.1.27 on 2026-09-08) is installed and signed in here, so the `agy` target ran for real from an isolated `HOME` with a copied OAuth token: skill in `~/.gemini/config/skills`, rules in `~/.gemini/AGENTS.md`, `agy mcp list` parsing lshed's `mcp_config.json`, and the linked skill all passed on the first attempt. agy's `/skills` lists `~/.gemini/config/skills`, `~/.gemini/skills` and `~/.gemini/antigravity-cli/skills`, not `~/.agents/skills`. Headless on a VM, agy needs `modelProvider: "gemini"` in `~/.gemini/antigravity-cli/settings.json` plus `GEMINI_API_KEY` (1.1.13+); `cloud-init.yaml` writes that when the key is given.
 - `claude-code` also passes for file placement under an isolated `CLAUDE_CONFIG_DIR`, which is how the 0.12.1 `.claude.json` bug was found.
@@ -154,7 +156,7 @@ The probe is a bash script for Linux. The Windows layer (§10.1 in `overview.md`
 
 1. Download `lshed-windows-x64.exe` from the release, rename to `lshed.exe`, put it on `PATH`.
 2. Get a shed onto the machine. `~/harness` on the Linux box has no remote today, so either push it to a private repository first (`git remote add origin … && lshed sync`) or copy it with `git bundle`.
-3. `lshed restore tools --shed C:\path\to\harness --agent agents --dry-run`, then without `--dry-run`. Then `lshed restore --link`: `dir %USERPROFILE%\.agents\skills` must show `<JUNCTION>` entries, and editing a `SKILL.md` through the junction must change the file in the shed. `lshed status` → `배치 link`, `드리프트 없음`. `lshed restore --no-link` goes back to copies.
+3. `lshed restore tools --shed C:\path\to\harness --agent agents --dry-run`, then without `--dry-run`. Then `lshed restore --link`: `dir %USERPROFILE%\.agents\skills` must show `<JUNCTION>` entries, and editing a `SKILL.md` through the junction must change the file in the shed. `lshed status` → `placement  links …`, `drift      none`. `lshed restore --no-link` goes back to copies.
 4. If Claude Code is installed and signed in there, repeat with the default target (`lshed restore default --shed …`) and check `claude mcp list` and a skill through `claude -p`.
 
 What to look for: `.cmd` wrappers being found (`claude.cmd`, `codex.cmd`), backslash paths in `state.json` and backups, and the file-part copy fallback message when Developer Mode is off.

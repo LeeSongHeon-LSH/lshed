@@ -4,7 +4,7 @@ The README keeps a one-table summary. This file is the record behind it: every p
 
 ## Continuous checks (every push)
 
-- Unit tests (216), a CLI smoke run and the standalone binaries on **Ubuntu, macOS and Windows**, Node 20 and 22 (`.github/workflows/ci.yml`). Windows uses junctions for `--link` and `claude.cmd` for plugin installs. The smoke run includes a skill with a Korean name, so a filename-normalization difference on macOS or a code-page problem on Windows fails in CI, not on a user's machine. The smoke also walks the quick start on a home folder that has only `~/.codex`, `--fresh-only` on an applied and on a fresh root, and the no-CLI path of `--agent installed`.
+- Unit tests (218) and a CLI smoke run on **Ubuntu, macOS and Windows**, Node 20 and 22 (`.github/workflows/ci.yml`). The standalone binaries are not built on push: each release tag (`v*`) cross-compiles the five of them on Ubuntu and runs the smoke suite against `lshed-linux-x64` (`.github/workflows/release.yml`); the macOS and Windows binaries are built but not run in CI. Windows uses junctions for `--link` and `claude.cmd` for plugin installs. The smoke run includes a skill with a Korean name, so a filename-normalization difference on macOS or a code-page problem on Windows fails in CI, not on a user's machine. The smoke also walks the quick start on a home folder that has only `~/.codex`, `--fresh-only` on an applied and on a fresh root, and the no-CLI path of `--agent installed`.
 - Weekly, and on demand: the **probe** workflow (`.github/workflows/probe.yml`) builds the container below on a GitHub runner and runs the six Linux targets against the real agent CLIs, model-free unless the agent keys are repository secrets.
 
 ## The probe: do the agents read what lshed places?
@@ -37,7 +37,7 @@ Things the probe taught, which are now in the adapters or the probe itself:
 
 The [agent-box](https://github.com/LeeSongHeon-LSH/agent-box) devcontainer (Claude Code, Codex, agy, lshed, Node 24) plays a brand-new machine: an empty state directory holding only the logins, a shed mounted at `/shed`, and an entrypoint that runs `lshed restore default --shed /shed --agent installed --fresh-only` on every start. Its `test-fresh` starts the box twice and asserts inside: `state.json` and profile per agent, `lshed status` with `drift none` / `packages … in sync` / `env all set`, every shed skill in each agent's skills folder, `claude|codex|agy mcp list` parsing what lshed wrote, `lshed check` for each agent, the Claude plugins installed, `lshed report`; and on the restart, that the restore was skipped and `appliedAt` did not move.
 
-2026-09-18, lshed 0.17.5 with the unreleased `--fresh-only` / `--agent installed`: FAIL 0 on both starts for claude-code, codex and agy (codex's `lshed check` tolerated, stored key 401). This run is what found the `skills/synced` false positive and motivated the two flags.
+2026-09-18, lshed 0.17.5 (then unreleased; `--fresh-only` / `--agent installed` shipped in 0.17.5): FAIL 0 on both starts for claude-code, codex and agy (codex's `lshed check` tolerated, stored key 401). This run is what found the `skills/synced` false positive and motivated the two flags.
 
 ## Windows, on a real PC
 

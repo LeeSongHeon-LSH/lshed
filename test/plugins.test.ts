@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -46,6 +46,11 @@ function fakeExec(root: string) {
 }
 const ctxFor = (root: string): Ctx => ({ adapter: new ClaudeCodeAdapter(root), shed, log: (l) => logs.push(l), exec: fakeExec(root) });
 
+// 테스트마다 실제 git·파일 작업이 몰린다. Windows CI 러너는 spawn 한 번에 수백 ms 라 vitest 기본 5초에 이따금 걸렸고,
+// 끊긴 테스트 밑에서 git 이 아직 돌면 다음 정리가 EBUSY 를 내며 줄줄이 실패했다 (2026-11-02 windows-latest Node 22).
+const SLOW = 30_000;
+vi.setConfig({ testTimeout: SLOW, hookTimeout: SLOW });
+
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-plg-"));
   rootA = path.join(tmp, "A"); rootB = path.join(tmp, "B"); shed = path.join(tmp, "shed"); logs = []; calls = [];
@@ -58,7 +63,8 @@ beforeEach(async () => {
   } }));
   await w(path.join(rootA, "skills/mine/SKILL.md"), "authored");
 });
-afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
+// 타임아웃으로 끊긴 테스트 밑에서 git 이 아직 돌면 Windows 는 EBUSY 를 낸다 — 몇 번 더 시도한다
+afterEach(() => fs.rm(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }));
 
 describe("init: 플러그인과 마켓플레이스를 패키지로 기록", () => {
   it("플러그인 하나짜리 마켓플레이스: 이름이 같아도 id 가 겹치지 않고, 둘 다 새 기기에 설치된다", async () => {

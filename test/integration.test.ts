@@ -17,6 +17,11 @@ let tmp: string, root: string, shed: string, ctx: Ctx, logs: string[];
 const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).then(() => fs.writeFile(p, c));
 const r = (p: string) => fs.readFile(p, "utf8");
 
+// 테스트마다 실제 git·파일 작업이 몰린다. Windows CI 러너는 spawn 한 번에 수백 ms 라 vitest 기본 5초에 이따금 걸렸고,
+// 끊긴 테스트 밑에서 git 이 아직 돌면 다음 정리가 EBUSY 를 내며 줄줄이 실패했다 (2026-11-02 windows-latest Node 22).
+const SLOW = 30_000;
+vi.setConfig({ testTimeout: SLOW, hookTimeout: SLOW });
+
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-it-"));
   root = path.join(tmp, "claude");
@@ -31,7 +36,8 @@ beforeEach(async () => {
   await w(path.join(root, "CLAUDE.md"), "# my rules\nbe nice\n");
   await w(path.join(root, "settings.json"), "{}"); // lshed 가 절대 건드리면 안 되는 파일
 });
-afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
+// 타임아웃으로 끊긴 테스트 밑에서 git 이 아직 돌면 Windows 는 EBUSY 를 낸다 — 몇 번 더 시도한다
+afterEach(() => fs.rm(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }));
 
 describe("init", () => {
   it("스캔한 부품을 창고에 복사하고 매니페스트·state 를 만든다", async () => {

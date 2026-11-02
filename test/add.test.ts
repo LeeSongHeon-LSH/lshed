@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -17,6 +17,11 @@ const w = (p: string, c = "") => fs.mkdir(path.dirname(p), { recursive: true }).
 const r = (p: string) => fs.readFile(p, "utf8");
 const J = (o: unknown) => JSON.stringify(o, null, 2);
 
+// 테스트마다 실제 git·파일 작업이 몰린다. Windows CI 러너는 spawn 한 번에 수백 ms 라 vitest 기본 5초에 이따금 걸렸고,
+// 끊긴 테스트 밑에서 git 이 아직 돌면 다음 정리가 EBUSY 를 내며 줄줄이 실패했다 (2026-11-02 windows-latest Node 22).
+const SLOW = 30_000;
+vi.setConfig({ testTimeout: SLOW, hookTimeout: SLOW });
+
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), "lshed-add-"));
   root = path.join(tmp, "claude"); shed = path.join(tmp, "shed"); logs = [];
@@ -29,7 +34,8 @@ beforeEach(async () => {
   await fs.writeFile(path.join(shed, "lshed.yaml"), (await r(path.join(shed, "lshed.yaml"))).replace("    - id: alpha", "    - id: alpha   # my first skill"));
   logs = [];
 });
-afterEach(() => fs.rm(tmp, { recursive: true, force: true }));
+// 타임아웃으로 끊긴 테스트 밑에서 git 이 아직 돌면 Windows 는 EBUSY 를 낸다 — 몇 번 더 시도한다
+afterEach(() => fs.rm(tmp, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }));
 
 async function appear() {
   await w(path.join(root, "skills/beta/SKILL.md"), "beta");

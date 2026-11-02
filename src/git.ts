@@ -6,9 +6,14 @@ import { exists } from "./fsutil.js";
 const x = promisify(execFile);
 
 export async function git(args: string[], cwd?: string): Promise<string> {
+  return (await gitRaw(args, cwd)).trim();
+}
+
+/** git 출력을 손대지 않고 돌려준다. 앞 공백이 뜻을 갖는 출력(`status --porcelain` 의 ` M path`)은 이걸로 읽는다. */
+export async function gitRaw(args: string[], cwd?: string): Promise<string> {
   try {
     const { stdout } = await x("git", args, { cwd, maxBuffer: 1 << 24 });
-    return stdout.trim();
+    return stdout;
   } catch (e) {
     // execFile 의 메시지는 "Command failed: git clone --quiet -- <url> <dir>" 뿐이라 왜 실패했는지가 빠진다.
     // 이유는 stderr 의 `fatal:` 줄에 있다. 마지막 줄이 아니다 — `git pull` 은 그 뒤에 "Please make sure you have

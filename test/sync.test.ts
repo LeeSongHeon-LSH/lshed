@@ -6,7 +6,7 @@ import { ClaudeCodeAdapter } from "../src/adapters/claude-code.js";
 import type { Ctx } from "../src/core/context.js";
 import { init } from "../src/core/init.js";
 import { restore } from "../src/core/restore.js";
-import { sync } from "../src/core/sync.js";
+import { parsePorcelainZ, sync } from "../src/core/sync.js";
 import { git } from "../src/git.js";
 
 let tmp: string, rootA: string, rootB: string, shedA: string, shedB: string, bare: string, logs: string[];
@@ -49,6 +49,23 @@ describe("lshed sync", { timeout: SLOW }, () => {
     expect(again).toMatchObject({ committed: [], pulled: 0, pushed: false });
     expect(logs.join("\n")).toContain("nothing to commit in the shed");
     expect(logs.join("\n")).toContain("same as remote");
+  });
+
+  it("수정만 된 파일의 경로를 자르지 않는다 (첫 줄 ` M path` 의 앞 공백)", async () => {
+    await sync(ctxFor(rootA, shedA));
+    await w(path.join(shedA, "skills/alpha/SKILL.md"), "alpha v2");
+    logs = [];
+    const res = await sync(ctxFor(rootA, shedA));
+    expect(res.committed).toEqual(["skills/alpha/SKILL.md"]);
+    expect(logs.join("\n")).toContain("commit 1: skills/alpha/SKILL.md");
+    expect(await git(["log", "-1", "--format=%s"], bare)).toBe("lshed sync: skills/alpha");
+  });
+
+  it("공백·한글 경로를 따옴표나 이스케이프 없이 그대로 적는다", async () => {
+    await sync(ctxFor(rootA, shedA));
+    await w(path.join(shedA, "skills/한글 스킬/SKILL.md"), "x");
+    const res = await sync(ctxFor(rootA, shedA));
+    expect(res.committed).toEqual(["skills/한글 스킬/SKILL.md"]);
   });
 
   it("origin 이 없으면 커밋만 한다", async () => {
@@ -97,5 +114,17 @@ describe("lshed sync", { timeout: SLOW }, () => {
     expect(await git(["status", "--porcelain"], shedB)).toBe("");
     expect(await r(path.join(shedB, "skills/alpha/SKILL.md"))).toBe("from B"); // 내 커밋은 남아 있다
     expect(await fs.access(path.join(shedB, ".git/rebase-merge")).catch(() => "none")).toBe("none");
+  });
+});
+
+describe("parsePorcelainZ", () => {
+  it("상태 칸이 공백으로 시작해도 경로를 온전히 읽는다", () => {
+    expect(parsePorcelainZ(" M lshed.yaml\0?? skills/a/SKILL.md\0M  settings/model.json\0")).toEqual(["lshed.yaml", "skills/a/SKILL.md", "settings/model.json"]);
+  });
+  it("이름 바꾸기는 새 경로만 남기고 뒤따르는 옛 경로를 건너뛴다", () => {
+    expect(parsePorcelainZ("R  skills/new/SKILL.md\0skills/old/SKILL.md\0 D gone.md\0")).toEqual(["skills/new/SKILL.md", "gone.md"]);
+  });
+  it("빈 출력은 빈 목록", () => {
+    expect(parsePorcelainZ("")).toEqual([]);
   });
 });

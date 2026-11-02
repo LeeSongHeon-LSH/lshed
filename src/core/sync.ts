@@ -1,6 +1,6 @@
 import os from "node:os";
 import type { Ctx } from "./context.js";
-import { git, isRepo } from "../git.js";
+import { git, gitRaw, isRepo } from "../git.js";
 import { readState } from "../state.js";
 import { diff } from "./diff.js";
 
@@ -35,7 +35,7 @@ export async function sync(ctx: Ctx, opts: SyncOptions = {}): Promise<SyncResult
   }
 
   // 1) 커밋
-  const dirty = (await git(["status", "--porcelain", "--untracked-files=all"], shed)).split("\n").filter(Boolean).map((l) => l.slice(3).trim());
+  const dirty = parsePorcelainZ(await gitRaw(["status", "--porcelain", "-z", "--untracked-files=all"], shed));
   if (dirty.length) {
     const msg = opts.message ?? defaultMessage(dirty, (await readState(ctx.adapter))?.profile);
     ctx.log(`  ${opts.dryRun ? "(dry-run) " : ""}commit ${dirty.length}: ${dirty.slice(0, 5).join(", ")}${dirty.length > 5 ? ` and ${dirty.length - 5} more` : ""}`);
@@ -98,6 +98,24 @@ export async function sync(ctx: Ctx, opts: SyncOptions = {}): Promise<SyncResult
 
   if (res.pulled) ctx.log(`\nThe shed changed. To apply it on this machine: lshed restore`);
   return res;
+}
+
+/**
+ * `git status --porcelain -z` 의 경로들. 항목은 `XY path` 이고 NUL 로 끝난다.
+ * 출력을 trim 하면 첫 항목의 상태 칸 공백(` M path`)이 사라져 경로 첫 글자가 잘리므로 날것을 받는다.
+ * -z 라서 공백·한글 경로도 따옴표나 8진 이스케이프 없이 그대로 온다.
+ * 이름 바꾸기·복사(R/C)는 새 경로 다음 항목에 옛 경로가 따로 오므로 건너뛴다.
+ */
+export function parsePorcelainZ(out: string): string[] {
+  const entries = out.split("\0");
+  const paths: string[] = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (e.length < 4) continue;
+    paths.push(e.slice(3));
+    if (/[RC]/.test(e.slice(0, 2))) i++;
+  }
+  return paths;
 }
 
 function defaultMessage(paths: string[], profile?: string): string {

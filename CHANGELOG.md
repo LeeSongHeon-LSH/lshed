@@ -4,6 +4,7 @@
 
 - A part's source must now be `file:`, and a `github:`/`git:` source on a part is refused when `lshed.yaml` is read, with a hint to put that code under `packages:`. Before, the manifest accepted it and `restore`, `status` and `diff` failed later, because parts have never had a remote resolver.
 - A `github:` package source with a `#subpath` is refused when `lshed.yaml` is read. The installer clones the whole repository, so the subpath was silently ignored.
+- `sync` cut the first letter off a path when the first changed file was only modified, not new: `commit 1: ettings/model.json`, and the default commit message said `shed.yaml` for `lshed.yaml`. The git helper trims its output, which removed the leading space of ` M path`, and `sync` then dropped three more characters. It now reads `git status --porcelain -z` untrimmed, which also keeps paths with spaces or non-ASCII names (a Korean skill folder) as they are instead of git's quoted octal form. The commits themselves were always complete, since they use `git add -A`; only the listed paths and the default message were wrong.
 - `probe-docker.sh` makes the results directory writable for a container user with another uid (GitHub runners are uid 1001).
 - Docs: `overview.md`, both READMEs, `docs/VERIFICATION.md` and the probe runbook brought in line with the code; new `CONTRIBUTING.md` for the development scripts and the release steps.
 
